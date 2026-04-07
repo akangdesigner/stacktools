@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { getArticlesDb } from '@/lib/articlesDb';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
