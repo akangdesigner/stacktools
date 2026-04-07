@@ -44,9 +44,10 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
   const { upsertClient } = useClients();
   const isEdit = !!initial;
 
-  const [form, setForm] = useState<FormData>(() =>
-    initial ? toFormData(initial) : toFormData(createDefaultClient(""))
-  );
+  const [form, setForm] = useState<FormData>(() => {
+    const defaults = toFormData(createDefaultClient(""));
+    return initial ? { ...defaults, ...toFormData(initial) } : defaults;
+  });
   const [name, setName] = useState(initial?.name ?? "");
   const [nameError, setNameError] = useState("");
 
@@ -94,8 +95,16 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
         <div className="space-y-3">
           <ColorPicker label="H2 顏色" value={form.h2Color} onChange={(v) => set("h2Color", v)} />
           <SizeInput label="H2 大小" value={form.h2FontSize} onChange={(v) => set("h2FontSize", v)} />
+          <label className="flex items-center gap-3 cursor-pointer">
+            <span className="text-sm text-gray-600 w-32 shrink-0">H2 粗體</span>
+            <input type="checkbox" checked={form.h2Bold ?? true} onChange={(e) => set("h2Bold", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+          </label>
           <ColorPicker label="H3 顏色" value={form.h3Color} onChange={(v) => set("h3Color", v)} />
           <SizeInput label="H3 大小" value={form.h3FontSize} onChange={(v) => set("h3FontSize", v)} />
+          <label className="flex items-center gap-3 cursor-pointer">
+            <span className="text-sm text-gray-600 w-32 shrink-0">H3 粗體</span>
+            <input type="checkbox" checked={form.h3Bold ?? true} onChange={(e) => set("h3Bold", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+          </label>
         </div>
       </section>
 
@@ -237,21 +246,28 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
       <section>
         <p className="text-sm font-semibold text-gray-800 mb-3 pb-1 border-b border-gray-100">進階轉換</p>
         <div className="space-y-3">
-          <label className="flex items-center gap-3">
-            <span className="text-sm text-gray-600 w-32 shrink-0">斜體轉色</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={!!form.emColor}
-                onChange={(e) => set("emColor", e.target.checked ? "#ff0000" : "")}
-                className="w-4 h-4 rounded accent-blue-600"
-              />
-              {form.emColor && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 w-32 shrink-0">斜體轉換</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={form.emBold ? "bold" : form.emColor ? "color" : "off"}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "bold")  { set("emBold", true);  set("emColor", ""); }
+                  if (v === "color") { set("emBold", false); set("emColor", form.emColor || "#ff0000"); }
+                  if (v === "off")   { set("emBold", false); set("emColor", ""); }
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="off">關閉（保留斜體）</option>
+                <option value="color">轉色</option>
+                <option value="bold">轉粗體（黑色不變）</option>
+              </select>
+              {!form.emBold && form.emColor && (
                 <ColorPicker label="" value={form.emColor} onChange={(v) => set("emColor", v)} />
               )}
-              {!form.emColor && <span className="text-xs text-gray-400">將 &lt;em&gt; 轉為指定顏色（關閉=保留原樣）</span>}
             </div>
-          </label>
+          </div>
           <label className="flex items-center gap-3 cursor-pointer">
             <span className="text-sm text-gray-600 w-32 shrink-0">生成目錄</span>
             <input
@@ -273,6 +289,19 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
               />
             </label>
           )}
+          <div className="flex items-start gap-3">
+            <span className="text-sm text-gray-600 w-32 shrink-0 pt-2">文章網址前綴</span>
+            <div className="flex-1 space-y-1">
+              <input
+                type="url"
+                value={form.blogBaseUrl}
+                onChange={(e) => set("blogBaseUrl", e.target.value)}
+                placeholder="https://www.tantanwow.com/blog/posts/"
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-400">上架時只需填入文章 slug，系統自動補全目錄連結網址</p>
+            </div>
+          </div>
           <label className="flex items-center gap-3 cursor-pointer">
             <span className="text-sm text-gray-600 w-32 shrink-0">去重列表項</span>
             <input

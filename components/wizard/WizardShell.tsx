@@ -5,11 +5,12 @@ import { useClients } from "@/hooks/useClients";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { Step1GetSnippet } from "./Step1GetSnippet";
 import { Step2PasteHtml } from "./Step2PasteHtml";
+import { Step3ImageReplace } from "./Step3ImageReplace";
 import { Step3SelectClient } from "./Step3SelectClient";
 import { Step4CopyResult } from "./Step4CopyResult";
 
 export function WizardShell() {
-  const { state, setRawHtml, setSelectedClientId, goNext, goBack, submitForCleaning, reset } = useWizard();
+  const { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, goNext, goBack, submitForCleaning, reset } = useWizard();
   const { getClient } = useClients();
 
   function validateStep2(): string | null {
@@ -19,7 +20,7 @@ export function WizardShell() {
     return null;
   }
 
-  function validateStep3(): string | null {
+  function validateStep4(): string | null {
     if (!state.selectedClientId) return "請選擇客戶設定";
     if (!getClient(state.selectedClientId)) return "找不到客戶資料，請重新選擇";
     return null;
@@ -30,13 +31,12 @@ export function WizardShell() {
       goNext();
     } else if (state.currentStep === 2) {
       const err = validateStep2();
-      if (err) {
-        // Pass error up (handled inline in step component already)
-        return;
-      }
+      if (err) return;
       goNext();
     } else if (state.currentStep === 3) {
-      const err = validateStep3();
+      goNext();
+    } else if (state.currentStep === 4) {
+      const err = validateStep4();
       if (err) return;
       const client = getClient(state.selectedClientId!);
       if (!client) return;
@@ -45,12 +45,12 @@ export function WizardShell() {
   }
 
   const step2Error = state.currentStep === 2 && state.error ? state.error : null;
-  const step3Error = state.currentStep === 3 && state.error ? state.error : null;
+  const step4Error = state.currentStep === 4 && state.error ? state.error : null;
 
   function canGoNext(): boolean {
     if (state.isLoading) return false;
     if (state.currentStep === 2) return !!state.rawHtml.trim() && state.rawHtml.includes("<") && state.rawHtml.length <= 500000;
-    if (state.currentStep === 3) return !!state.selectedClientId;
+    if (state.currentStep === 4) return !!state.selectedClientId;
     return true;
   }
 
@@ -77,13 +77,22 @@ export function WizardShell() {
             />
           )}
           {state.currentStep === 3 && (
+            <Step3ImageReplace
+              rawHtml={state.rawHtml}
+              replacements={state.imageReplacements}
+              onChange={setImageReplacements}
+            />
+          )}
+          {state.currentStep === 4 && (
             <Step3SelectClient
               selectedClientId={state.selectedClientId}
               onSelect={setSelectedClientId}
-              error={step3Error}
+              articleSlug={state.articleSlug}
+              onArticleSlugChange={setArticleSlug}
+              error={step4Error}
             />
           )}
-          {state.currentStep === 4 && state.cleanedHtml && (
+          {state.currentStep === 5 && state.cleanedHtml && (
             <Step4CopyResult cleanedHtml={state.cleanedHtml} onReset={reset} />
           )}
         </div>
@@ -104,8 +113,8 @@ export function WizardShell() {
 
             <button
               onClick={handleNext}
-              disabled={!canGoNext() || state.currentStep === 4}
-              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${state.currentStep === 4 ? "invisible" : ""}`}
+              disabled={!canGoNext() || state.currentStep === 5}
+              className={`flex items-center gap-2 px-6 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${state.currentStep === 5 ? "invisible" : ""}`}
             >
               {state.isLoading ? (
                 <>
@@ -115,7 +124,7 @@ export function WizardShell() {
                   </svg>
                   處理中...
                 </>
-              ) : state.currentStep === 3 ? (
+              ) : state.currentStep === 4 ? (
                 <>
                   開始處理
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

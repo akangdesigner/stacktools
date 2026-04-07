@@ -355,8 +355,8 @@ export default function IGPage() {
       if (reportData.error) {
         setError(reportData.error);
       } else {
-        const posts = reportData.posts ?? [];
-        const owners = [...new Set(posts.map((p: Post) => p.owner))];
+        const posts = (reportData.posts ?? []) as Post[];
+        const owners: string[] = [...new Set<string>(posts.map((p) => p.owner))];
         setUsernameMap(buildUsernameMap(owners, trackData.accounts ?? []));
         setPosts(posts);
         setGenerated(true);
@@ -386,10 +386,10 @@ export default function IGPage() {
     if (sortBy === 'time') {
       return new Date(b.publishedAt.replace(/\//g, '-')).getTime() - new Date(a.publishedAt.replace(/\//g, '-')).getTime();
     }
-    const key: Record<typeof sortBy, keyof Post> = {
-      time: 'publishedAt', likes: 'likes', comments: 'commentCount', views: 'views', plays: 'plays',
+    const key: Record<Exclude<typeof sortBy, 'time'>, keyof Post> = {
+      likes: 'likes', comments: 'commentCount', views: 'views', plays: 'plays',
     };
-    return (b[key[sortBy]] as number) - (a[key[sortBy]] as number);
+    return (b[key[sortBy as Exclude<typeof sortBy, 'time'>]] as number) - (a[key[sortBy as Exclude<typeof sortBy, 'time'>]] as number);
   });
 
   return (

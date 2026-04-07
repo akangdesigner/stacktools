@@ -1,0 +1,148 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { ImageReplacement } from "@/types";
+
+interface Props {
+  rawHtml: string;
+  replacements: ImageReplacement[];
+  onChange: (replacements: ImageReplacement[]) => void;
+}
+
+function decodeHtmlEntities(str: string): string {
+  return str.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+// Extracts src from every <img> tag — used to detect images in the original pasted HTML
+function parseImageSrcs(html: string): string[] {
+  const srcs: string[] = [];
+  const seen = new Set<string>();
+  const imgTagRegex = /<img\s[^>]*>/gi;
+  let tagMatch: RegExpExecArray | null;
+  while ((tagMatch = imgTagRegex.exec(html)) !== null) {
+    const srcMatch = /\bsrc="([^"]+)"/.exec(tagMatch[0]);
+    if (srcMatch && !seen.has(srcMatch[1])) {
+      seen.add(srcMatch[1]);
+      srcs.push(srcMatch[1]);
+    }
+  }
+  return srcs;
+}
+
+// Extracts src from <figure class="image"><img src="..."> blocks — used to parse replacement URLs
+function parseFigureSrcs(html: string): string[] {
+  const srcs: string[] = [];
+  const figureRegex = /<figure\s[^>]*class="image"[^>]*>[\s\S]*?<\/figure>/gi;
+  let fig: RegExpExecArray | null;
+  while ((fig = figureRegex.exec(html)) !== null) {
+    const srcMatch = /\bsrc="([^"]+)"/.exec(fig[0]);
+    if (srcMatch) srcs.push(decodeHtmlEntities(srcMatch[1]));
+  }
+  return srcs;
+}
+
+export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
+  // Bulk textarea value — one URL per line
+  const [bulkText, setBulkText] = useState("");
+
+  useEffect(() => {
+    const srcs = parseImageSrcs(rawHtml);
+    const existingMap = new Map(replacements.map((r) => [r.original, r.replacement]));
+    const next: ImageReplacement[] = srcs.map((src) => ({
+      original: src,
+      replacement: existingMap.get(src) ?? "",
+    }));
+    const prevOriginals = replacements.map((r) => r.original).join("\0");
+    const nextOriginals = next.map((r) => r.original).join("\0");
+    if (prevOriginals !== nextOriginals) {
+      onChange(next);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawHtml]);
+
+  function handleBulkChange(text: string) {
+    setBulkText(text);
+    // Accept <figure class="image"> blocks — extract src from each; fallback to plain URLs (one per line)
+    const extractedUrls = parseFigureSrcs(text);
+    const urls = extractedUrls.length > 0
+      ? extractedUrls
+      : text.split("\n").map((l) => l.trim()).filter(Boolean);
+    const next: ImageReplacement[] = replacements.map((r, i) => ({
+      ...r,
+      replacement: urls[i] ? decodeHtmlEntities(urls[i]) : "",
+    }));
+    onChange(next);
+  }
+
+  if (replacements.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">替換圖片網址</h2>
+          <p className="text-sm text-gray-500 mt-1">將草稿站圖片替換為正式圖片網址</p>
+        </div>
+        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-500">
+          <svg className="w-5 h-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          未偵測到圖片，可直接下一步
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">替換圖片網址</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          偵測到 {replacements.length} 張圖片，依序貼上新網址（一行一個，留空保留原圖）
+        </p>
+      </div>
+
+      {/* Image preview row */}
+      <div className="flex gap-2 flex-wrap">
+        {replacements.map((item, idx) => (
+          <div key={item.original} className="flex flex-col items-center gap-1">
+            <div className="w-16 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={decodeHtmlEntities(item.original)}
+                alt={`圖片 ${idx + 1}`}
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            </div>
+            <span className="text-xs text-gray-400">{idx + 1}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Bulk input */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">
+          請至 Shopline 先上傳圖片並貼上文章以獲得圖片原始碼網址（需排列圖片順序），再貼上至此
+        </label>
+        <textarea
+          value={bulkText}
+          onChange={(e) => handleBulkChange(e.target.value)}
+          rows={6}
+          placeholder={`<figure class="image"><img src="圖片1網址" ...></figure>\n<figure class="image"><img src="圖片2網址" ...></figure>`}
+          className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 font-mono resize-none"
+        />
+      </div>
+
+      {/* Match status */}
+      <div className="flex gap-2 flex-wrap">
+        {replacements.map((item, idx) => (
+          <span
+            key={item.original}
+            className={`text-xs px-2 py-0.5 rounded-full ${item.replacement.trim() ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400"}`}
+          >
+            圖片 {idx + 1} {item.replacement.trim() ? "✓" : "保留原圖"}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

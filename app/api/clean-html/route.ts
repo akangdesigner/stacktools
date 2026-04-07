@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "無效的 JSON 格式" }, { status: 400 });
   }
 
-  const { html, client } = body;
+  const { html, client, articleUrl } = body;
 
   if (!html || typeof html !== "string") {
     return NextResponse.json({ error: "html 欄位不能為空" }, { status: 400 });
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const cleanedHtml = cleanHtml(html, client);
+    const cleanedHtml = cleanHtml(html, client, articleUrl);
     return NextResponse.json({ cleanedHtml });
   } catch (err) {
     console.error("HTML 清洗失敗:", err);

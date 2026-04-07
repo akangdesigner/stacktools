@@ -4,9 +4,11 @@ export const DEFAULT_CLIENT_PROFILE: Omit<ClientProfile, "id" | "name" | "create
   h2Color: "#000000",
   h2FontSize: "32px",
   h2LineHeight: "1.4",
+  h2Bold: true,
   h3Color: "#E67E22",
   h3FontSize: "24px",
   h3LineHeight: "1.4",
+  h3Bold: true,
   paragraphFontSize: "18px",
   paragraphColor: "#454f5e",
   paragraphLineHeight: "1.8",
@@ -24,17 +26,21 @@ export const DEFAULT_CLIENT_PROFILE: Omit<ClientProfile, "id" | "name" | "create
   imageMaxWidth: "100%",
   imageBorderRadius: "0px",
   emColor: "#ff0000",
+  emBold: false,
   generateToc: true,
   tocTitle: "目錄❯",
+  blogBaseUrl: "",
 };
 
 export const VJEWELRY_PRESET: Omit<ClientProfile, "id" | "name" | "createdAt" | "updatedAt"> = {
   h2Color: "#000000",
   h2FontSize: "24px",
   h2LineHeight: "1.4",
+  h2Bold: true,
   h3Color: "#800080",
   h3FontSize: "20px",
   h3LineHeight: "1.4",
+  h3Bold: true,
   paragraphFontSize: "17px",
   paragraphColor: "#454f5e",
   paragraphLineHeight: "1.8",
@@ -52,8 +58,10 @@ export const VJEWELRY_PRESET: Omit<ClientProfile, "id" | "name" | "createdAt" | 
   imageMaxWidth: "100%",
   imageBorderRadius: "0px",
   emColor: "#ff0000",
+  emBold: false,
   generateToc: true,
   tocTitle: "目錄❯",
+  blogBaseUrl: "",
 };
 
 export function createDefaultClient(name: string): ClientProfile {

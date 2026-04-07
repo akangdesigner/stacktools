@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { WizardState, ClientProfile } from "@/types";
+import type { WizardState, ClientProfile, ImageReplacement } from "@/types";
 
 const INITIAL_STATE: WizardState = {
   currentStep: 1,
   rawHtml: "",
+  imageReplacements: [],
   selectedClientId: null,
+  articleSlug: "",
   cleanedHtml: null,
   isLoading: false,
   error: null,
@@ -19,6 +21,14 @@ export function useWizard() {
     setState((s) => ({ ...s, rawHtml, error: null }));
   }, []);
 
+  const setImageReplacements = useCallback((imageReplacements: ImageReplacement[]) => {
+    setState((s) => ({ ...s, imageReplacements }));
+  }, []);
+
+  const setArticleSlug = useCallback((articleSlug: string) => {
+    setState((s) => ({ ...s, articleSlug }));
+  }, []);
+
   const setSelectedClientId = useCallback((selectedClientId: string) => {
     setState((s) => ({ ...s, selectedClientId, error: null }));
   }, []);
@@ -29,7 +39,7 @@ export function useWizard() {
 
   const goNext = useCallback(() => {
     setState((s) => {
-      if (s.currentStep < 4) {
+      if (s.currentStep < 5) {
         return { ...s, currentStep: (s.currentStep + 1) as WizardState["currentStep"], error: null };
       }
       return s;
@@ -48,10 +58,24 @@ export function useWizard() {
   const submitForCleaning = useCallback(async (client: ClientProfile) => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
+      // Apply image URL replacements before sending
+      let html = state.rawHtml;
+      for (const { original, replacement } of state.imageReplacements) {
+        if (replacement.trim()) {
+          html = html.split(`src="${original}"`).join(`src="${replacement.trim()}"`);
+        }
+      }
+
       const res = await fetch("/api/clean-html", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: state.rawHtml, client }),
+        body: JSON.stringify({
+          html,
+          client,
+          articleUrl: state.articleSlug
+            ? (client.blogBaseUrl ? client.blogBaseUrl.replace(/\/$/, "") + "/" + state.articleSlug : state.articleSlug)
+            : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -62,17 +86,17 @@ export function useWizard() {
         ...s,
         isLoading: false,
         cleanedHtml: data.cleanedHtml,
-        currentStep: 4,
+        currentStep: 5,
         error: null,
       }));
     } catch {
       setState((s) => ({ ...s, isLoading: false, error: "網路錯誤，請稍後再試" }));
     }
-  }, [state.rawHtml]);
+  }, [state.rawHtml, state.imageReplacements, state.articleSlug]);
 
   const reset = useCallback(() => {
     setState(INITIAL_STATE);
   }, []);
 
-  return { state, setRawHtml, setSelectedClientId, goToStep, goNext, goBack, submitForCleaning, reset };
+  return { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, goToStep, goNext, goBack, submitForCleaning, reset };
 }

@@ -7,10 +7,12 @@ import { ClientManagerModal } from "@/components/client-manager/ClientManagerMod
 interface Step3SelectClientProps {
   selectedClientId: string | null;
   onSelect: (id: string) => void;
+  articleSlug: string;
+  onArticleSlugChange: (slug: string) => void;
   error: string | null;
 }
 
-export function Step3SelectClient({ selectedClientId, onSelect, error }: Step3SelectClientProps) {
+export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onArticleSlugChange, error }: Step3SelectClientProps) {
   const { clients, isLoaded } = useClients();
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -70,6 +72,36 @@ export function Step3SelectClient({ selectedClientId, onSelect, error }: Step3Se
           )}
         </div>
       )}
+
+      {/* Article slug for TOC anchors */}
+      <div className="space-y-1.5">
+        <label className="block text-sm font-medium text-gray-700">
+          文章 Slug <span className="text-gray-400 font-normal">（選填，用於目錄錨點連結）</span>
+        </label>
+        {selected?.blogBaseUrl ? (
+          <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
+            <span className="px-3 py-2 text-sm text-gray-400 bg-gray-50 border-r border-gray-300 whitespace-nowrap">
+              {selected.blogBaseUrl.replace(/\/$/, "")}/
+            </span>
+            <input
+              type="text"
+              value={articleSlug}
+              onChange={(e) => onArticleSlugChange(e.target.value)}
+              placeholder="分泌物顏色怎麼看"
+              className="flex-1 px-3 py-2 text-sm focus:outline-none bg-white placeholder-gray-400"
+            />
+          </div>
+        ) : (
+          <input
+            type="url"
+            value={articleSlug}
+            onChange={(e) => onArticleSlugChange(e.target.value)}
+            placeholder="https://example.com/blog/posts/文章標題（或至客戶設定填入網址前綴）"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400"
+          />
+        )}
+        <p className="text-xs text-gray-400">填入後目錄連結將使用完整網址，避免 Shopline 跳回首頁</p>
+      </div>
 
       {error && (
         <p className="text-sm text-red-600 flex items-center gap-1">

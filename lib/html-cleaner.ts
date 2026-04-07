@@ -31,17 +31,21 @@ function isButtonAnchor(style: string): boolean {
   return style.includes("background-color") || style.includes("padding");
 }
 
-function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string): string {
+function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, articleUrl?: string): string {
+  const base = articleUrl ? articleUrl.replace(/#.*$/, "") : ".";
   const links = items
-    .map((item) => `<li><a href="#${item.id}" style="color: ${linkColor}; text-decoration: underline; font-weight: 400;">${item.text}</a></li>`)
+    .map((item) => `<li><a href="${base}#${item.id}" target="_self" style="color: ${linkColor}; text-decoration: underline; font-weight: 400;">${item.text}</a></li>`)
     .join("");
   return `<div class="catalog-box" style="background-color: #f9f9f9; padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
 }
 
-export function cleanHtml(rawHtml: string, client: ClientProfile): string {
+export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: string): string {
   const root = parse(rawHtml);
 
-  // ── 1. H2: restructure to <h2 id="title-N" style="..."><span style="color:..."><strong>text</strong></span></h2>
+  // ── 0. Remove <h1>
+  root.querySelectorAll("h1").forEach((el) => el.remove());
+
+  // ── 1. H2: id goes on inner <span> so CMS won't strip it
   const tocItems: { id: string; text: string }[] = [];
   let h2Count = 1;
   root.querySelectorAll("h2").forEach((el) => {
@@ -50,7 +54,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile): string {
     const id = `title-${h2Count++}`;
     el.setAttribute("id", id);
     el.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
-    el.innerHTML = `<span style="color: ${client.h2Color};"><strong>${text}</strong></span>`;
+    el.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
     tocItems.push({ id, text });
   });
 
@@ -59,7 +63,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile): string {
     const text = el.innerText.trim();
     if (!text) return;
     el.setAttribute("style", `font-size: ${client.h3FontSize}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
-    el.innerHTML = `<span style="color: ${client.h3Color};"><strong>${text}</strong></span>`;
+    el.innerHTML = `<span style="color: ${client.h3Color};">${client.h3Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
   });
 
   // ── 3. p > span (font-size / color / line-height)
@@ -113,8 +117,13 @@ export function cleanHtml(rawHtml: string, client: ClientProfile): string {
     }
   });
 
-  // ── 6. em → colored non-italic span (if emColor is set)
-  if (client.emColor) {
+  // ── 6. em → bold or colored non-italic span
+  if (client.emBold) {
+    root.querySelectorAll("em").forEach((em) => {
+      const content = em.innerHTML;
+      em.replaceWith(`<strong style="font-style: normal;">${content}</strong>`);
+    });
+  } else if (client.emColor) {
     root.querySelectorAll("em").forEach((em) => {
       const content = em.innerHTML;
       em.replaceWith(`<span style="color: ${client.emColor}; font-style: normal; font-weight: 400;">${content}</span>`);
@@ -147,13 +156,15 @@ export function cleanHtml(rawHtml: string, client: ClientProfile): string {
     });
   }
 
-  // ── 9. Insert TOC before first H2
+  // ── 9. Insert TOC before first H2 (via string replace to preserve onclick)
+  let result = root.toString();
   if (client.generateToc && tocItems.length > 0) {
-    const firstH2 = root.querySelector("h2");
-    if (firstH2) {
-      firstH2.insertAdjacentHTML("beforebegin", generateTocHtml(tocItems, client.linkColor, client.tocTitle) + "\n");
+    const firstH2Match = result.match(/<h2[\s>]/i);
+    if (firstH2Match && firstH2Match.index !== undefined) {
+      const toc = generateTocHtml(tocItems, client.linkColor, client.tocTitle, articleUrl) + "\n";
+      result = result.slice(0, firstH2Match.index) + toc + result.slice(firstH2Match.index);
     }
   }
 
-  return root.toString();
+  return result;
 }

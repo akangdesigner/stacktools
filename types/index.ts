@@ -8,9 +8,11 @@ export interface ClientProfile {
   h2Color: string;
   h2FontSize: string;
   h2LineHeight: string;
+  h2Bold: boolean;
   h3Color: string;
   h3FontSize: string;
   h3LineHeight: string;
+  h3Bold: boolean;
 
   // Paragraph / body
   paragraphFontSize: string;
@@ -40,14 +42,23 @@ export interface ClientProfile {
 
   // Extra transformations
   emColor: string;           // convert <em> to colored span; "" = keep as-is
+  emBold: boolean;           // convert <em> to bold black (takes priority over emColor)
   generateToc: boolean;      // prepend auto-generated table of contents
   tocTitle: string;          // heading text for the TOC box
+  blogBaseUrl: string;       // e.g. https://www.tantanwow.com/blog/posts/
+}
+
+export interface ImageReplacement {
+  original: string;
+  replacement: string;
 }
 
 export interface WizardState {
-  currentStep: 1 | 2 | 3 | 4;
+  currentStep: 1 | 2 | 3 | 4 | 5;
   rawHtml: string;
+  imageReplacements: ImageReplacement[];
   selectedClientId: string | null;
+  articleSlug: string;
   cleanedHtml: string | null;
   isLoading: boolean;
   error: string | null;
@@ -56,6 +67,7 @@ export interface WizardState {
 export interface CleanHtmlRequest {
   html: string;
   client: ClientProfile;
+  articleUrl?: string;
 }
 
 export interface CleanHtmlResponse {
