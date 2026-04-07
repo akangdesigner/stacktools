@@ -4,9 +4,10 @@ import { getArticlesDb } from '@/lib/articlesDb';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-export default function AIArticlePage({ params }: { params: { id: string } }) {
+export default async function AIArticlePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const db = getArticlesDb();
-  const article = db.prepare('SELECT * FROM articles WHERE id = ? AND category = ?').get(params.id, 'ai') as any;
+  const article = db.prepare('SELECT * FROM articles WHERE id = ? AND category = ?').get(id, 'ai') as any;
   if (!article) notFound();
 
   return (
