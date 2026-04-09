@@ -45,32 +45,47 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   // ── 0. Remove <h1>
   root.querySelectorAll("h1").forEach((el) => el.remove());
 
-  // ── 1. H2: id goes on inner <span> so CMS won't strip it
+  // ── 1+2. H2 & H3 in document order (single pass)
   const tocItems: { id: string; text: string }[] = [];
   let h2Count = 1;
-  root.querySelectorAll("h2").forEach((el) => {
-    const text = el.innerText.trim();
-    if (!text) return;
-    const id = `title-${h2Count++}`;
-    el.setAttribute("id", id);
-    el.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
-    el.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
-    tocItems.push({ id, text });
-  });
+  let h3Count = 1;
+  let faqSectionActive = false;
 
-  // ── 2. H3: restructure to <h3 style="..."><span style="color:..."><strong>text</strong></span></h3>
-  root.querySelectorAll("h3").forEach((el) => {
+  root.querySelectorAll("h2, h3").forEach((el) => {
+    const tag = el.tagName.toLowerCase();
     const text = el.innerText.trim();
     if (!text) return;
-    el.setAttribute("style", `font-size: ${client.h3FontSize}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
-    el.innerHTML = `<span style="color: ${client.h3Color};">${client.h3Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
+
+    if (tag === "h2") {
+      const id = `title-${h2Count++}`;
+      el.setAttribute("id", id);
+      el.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
+      el.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
+      tocItems.push({ id, text });
+      if (client.faqEnabled && /faq/i.test(text)) {
+        faqSectionActive = true;
+        h3Count = 1;
+      }
+    } else {
+      el.setAttribute("style", `font-size: ${client.h3FontSize}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
+      let inner = text;
+      if (client.faqEnabled && faqSectionActive) {
+        const labelColor = client.faqLabelColor || client.h3Color;
+        const labelSize = client.faqLabelFontSize || client.h3FontSize;
+        inner = `<span style="color: ${labelColor}; font-size: ${labelSize};">Q${h3Count}：</span>` + text;
+        h3Count++;
+      }
+      el.innerHTML = `<span style="color: ${client.h3Color};">${client.h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
+    }
   });
 
   // ── 3. p > span (font-size / color / line-height)
+  // Skip spans that are inside <a> to avoid overriding link color
   root.querySelectorAll("p").forEach((p) => {
     const spans = p.querySelectorAll("span");
     if (spans.length > 0) {
       spans.forEach((span) => {
+        if (span.closest("a")) return;
         const existing = span.getAttribute("style") || "";
         span.setAttribute("style", mergeStyles(existing, {
           "font-size": client.paragraphFontSize,

@@ -105,6 +105,21 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
             <span className="text-sm text-gray-600 w-32 shrink-0">H3 粗體</span>
             <input type="checkbox" checked={form.h3Bold ?? true} onChange={(e) => set("h3Bold", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
           </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <span className="text-sm text-gray-600 w-32 shrink-0">FAQ 模式</span>
+            <input type="checkbox" checked={form.faqEnabled ?? false} onChange={(e) => set("faqEnabled", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+            <span className="text-xs text-gray-400">H3 自動加 Q1：Q2：前綴</span>
+          </label>
+          <ColorPicker
+            label="Q 標籤顏色"
+            value={form.faqLabelColor || form.h3Color}
+            onChange={(v) => set("faqLabelColor", v === form.h3Color ? "" : v)}
+          />
+          <SizeInput
+            label="Q 標籤大小"
+            value={form.faqLabelFontSize || form.h3FontSize}
+            onChange={(v) => set("faqLabelFontSize", v === form.h3FontSize ? "" : v)}
+          />
         </div>
       </section>
 

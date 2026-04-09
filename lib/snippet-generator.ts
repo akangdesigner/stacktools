@@ -56,7 +56,7 @@ export function getConsoleSnippet(): string {
             if (node.naturalWidth > 0 && node.naturalWidth < 50) return;
             if (node.width > 0 && node.width < 50) return;
             var altText = node.alt ? node.alt.trim() : "";
-            var originalFilename = node.src.substring(node.src.lastIndexOf('/') + 1);
+            var originalFilename = node.src.substring(node.src.lastIndexOf('/') + 1).replace(/-\\d+[xX]\\d+(?=[^?#]*$)/, '');
             imageUrls.push({ url: node.src, name: originalFilename });
             resultHtml += \`<img src="\${node.src}" alt="\${altText.replace(/"/g, '&quot;')}" style="max-width:100%; height:auto; display:block; margin: 10px auto;"><br>\\n\`;
         }

@@ -40,6 +40,11 @@ export interface ClientProfile {
   imageMaxWidth: string;
   imageBorderRadius: string;
 
+  // FAQ mode
+  faqEnabled: boolean;       // prefix each H3 with Q1: Q2: ...
+  faqLabelColor: string;     // label color; "" = inherit h3Color
+  faqLabelFontSize: string;  // label font-size; "" = inherit h3FontSize
+
   // Extra transformations
   emColor: string;           // convert <em> to colored span; "" = keep as-is
   emBold: boolean;           // convert <em> to bold black (takes priority over emColor)

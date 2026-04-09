@@ -28,10 +28,6 @@ export function ClientList({ onEdit }: ClientListProps) {
           className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white hover:border-gray-300 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-full border border-gray-200 shrink-0"
-              style={{ background: `linear-gradient(135deg, ${client.h2Color}, ${client.h3Color})` }}
-            />
             <div>
               <p className="text-sm font-semibold text-gray-800">{client.name}</p>
               <p className="text-xs text-gray-400">H2: {client.h2FontSize} · H3: {client.h3FontSize} · 段落: {client.paragraphFontSize}</p>

@@ -33,6 +33,7 @@ function PostCard({ post, username }: { post: Post; username: string }) {
               src={avatarUrl}
               alt={post.owner}
               className="w-8 h-8 rounded-full object-cover shrink-0"
+              referrerPolicy="no-referrer"
               onError={() => setImgError(true)}
             />
           ) : (
@@ -179,6 +180,7 @@ function TrackList() {
                     src={`https://unavatar.io/instagram/${a.url.match(/instagram\.com\/([^/?#]+)/)?.[1] ?? ''}`}
                     alt={a.name || a.url}
                     className="w-5 h-5 rounded-full object-cover shrink-0"
+                    referrerPolicy="no-referrer"
                     onError={e => {
                       const el = e.currentTarget;
                       el.style.display = 'none';
