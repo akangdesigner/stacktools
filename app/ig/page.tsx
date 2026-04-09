@@ -17,11 +17,9 @@ interface Post {
   duration:     string;
 }
 
-function PostCard({ post, username }: { post: Post; username: string }) {
+function PostCard({ post }: { post: Post }) {
   const [expanded, setExpanded] = useState(false);
-  const [imgError, setImgError] = useState(false);
   const shortContent = post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content;
-  const avatarUrl = username ? `https://wsrv.nl/?url=${encodeURIComponent(`https://unavatar.io/instagram/${username}`)}&w=80&h=80&fit=cover` : '';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3 text-sm">
@@ -29,18 +27,6 @@ function PostCard({ post, username }: { post: Post; username: string }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {avatarUrl && !imgError ? (
-            <img
-              src={avatarUrl}
-              alt={post.owner}
-              className="w-8 h-8 rounded-full object-cover shrink-0"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {post.owner.slice(0, 1).toUpperCase()}
-            </div>
-          )}
           <div>
             <div className="font-semibold text-gray-900">{post.owner}</div>
             <div className="text-xs text-gray-400">{post.publishedAt}</div>
@@ -181,19 +167,6 @@ function TrackList() {
                   key={i}
                   className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full hover:bg-purple-50 hover:border-purple-300 transition-colors group"
                 >
-                  <img
-                    src={`https://wsrv.nl/?url=${encodeURIComponent(`https://unavatar.io/instagram/${a.url.match(/instagram\.com\/([^/?#]+)/)?.[1] ?? ''}`)}&w=40&h=40&fit=cover`}
-                    alt={a.name || a.url}
-                    className="w-5 h-5 rounded-full object-cover shrink-0"
-                    onError={e => {
-                      const el = e.currentTarget;
-                      el.style.display = 'none';
-                      (el.nextElementSibling as HTMLElement | null)?.style.setProperty('display', 'flex');
-                    }}
-                  />
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ display: 'none' }}>
-                    {(a.name || a.url).slice(0, 1).toUpperCase()}
-                  </div>
                   <a
                     href={a.url}
                     target="_blank"
@@ -295,10 +268,6 @@ function TrackForm() {
   );
 }
 
-function extractUsername(profileUrl: string): string {
-  const match = profileUrl.match(/instagram\.com\/([^/?#]+)/);
-  return match?.[1] ?? '';
-}
 
 function charOverlap(a: string, b: string): number {
   const setA = new Set(a);
@@ -341,17 +310,6 @@ function remapPostOwners(posts: Post[], accounts: Account[]): Post[] {
   });
 }
 
-function buildUsernameMap(owners: string[], accounts: { url: string; name: string }[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const owner of owners) {
-    const matched = accounts.find(acc => fuzzyMatch(owner, acc.name));
-    if (matched) {
-      const username = extractUsername(matched.url);
-      if (username) map[owner] = username;
-    }
-  }
-  return map;
-}
 
 export default function IGPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -360,7 +318,6 @@ export default function IGPage() {
   const [error, setError] = useState('');
   const [selectedOwner, setSelectedOwner] = useState('全部');
   const [sinceDate, setSinceDate] = useState('');
-  const [usernameMap, setUsernameMap] = useState<Record<string, string>>({});
   const [sortBy, setSortBy] = useState<'time' | 'likes' | 'comments' | 'views' | 'plays'>('time');
 
   async function handleGenerate() {
@@ -380,8 +337,6 @@ export default function IGPage() {
       } else {
         const rawPosts = (reportData.posts ?? []) as Post[];
         const posts = remapPostOwners(rawPosts, trackData.accounts ?? []);
-        const owners: string[] = [...new Set<string>(posts.map((p) => p.owner))];
-        setUsernameMap(buildUsernameMap(owners, trackData.accounts ?? []));
         setPosts(posts);
         setGenerated(true);
       }
@@ -503,7 +458,7 @@ export default function IGPage() {
           <p className="text-xs text-gray-400 mb-4">共 {filtered.length} 則貼文{sinceDate ? `（${sinceDate} 之後）` : ''}</p>
           <div className="flex flex-col gap-4">
             {filtered.map((post, i) => (
-              <PostCard key={i} post={post} username={usernameMap[post.owner] ?? ''} />
+              <PostCard key={i} post={post} />
             ))}
           </div>
           {filtered.length === 0 && (
