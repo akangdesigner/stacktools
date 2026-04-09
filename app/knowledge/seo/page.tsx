@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
 import { getArticlesDb } from '@/lib/articlesDb';
+import DeleteArticleButton from '../_components/DeleteArticleButton';
 
 type Article = { id: number; title: string; summary: string; sender: string; source_url: string; published_at: string; created_at: string };
 
@@ -34,12 +35,15 @@ export default function SEOListPage() {
               >
                 <div className="flex items-start justify-between gap-4 mb-2">
                   <div className="font-semibold text-gray-900">{a.title}</div>
-                  {a.sender && (
-                    <span className="text-xs text-gray-400 shrink-0">{a.sender}</span>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {a.sender && (
+                      <span className="text-xs text-gray-400">{a.sender}</span>
+                    )}
+                    <DeleteArticleButton id={a.id} />
+                  </div>
                 </div>
                 {a.summary && (
-                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">{a.summary}</p>
+                  <p className="text-sm text-gray-500 leading-relaxed">{a.summary}</p>
                 )}
                 <div className="mt-2 text-xs text-gray-300">
                   {a.published_at || a.created_at}
