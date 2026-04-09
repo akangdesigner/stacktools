@@ -20,7 +20,7 @@ function PostCard({ post, username }: { post: Post; username: string }) {
   const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const shortContent = post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content;
-  const avatarUrl = username ? `/api/avatar?username=${encodeURIComponent(username)}` : '';
+  const avatarUrl = username ? `https://wsrv.nl/?url=${encodeURIComponent(`https://unavatar.io/instagram/${username}`)}&w=80&h=80&fit=cover` : '';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3 text-sm">
@@ -176,7 +176,7 @@ function TrackList() {
                   className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full hover:bg-purple-50 hover:border-purple-300 transition-colors group"
                 >
                   <img
-                    src={`/api/avatar?username=${encodeURIComponent(a.url.match(/instagram\.com\/([^/?#]+)/)?.[1] ?? '')}`}
+                    src={`https://wsrv.nl/?url=${encodeURIComponent(`https://unavatar.io/instagram/${a.url.match(/instagram\.com\/([^/?#]+)/)?.[1] ?? ''}`)}&w=40&h=40&fit=cover`}
                     alt={a.name || a.url}
                     className="w-5 h-5 rounded-full object-cover shrink-0"
                     onError={e => {
