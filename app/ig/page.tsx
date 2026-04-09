@@ -327,6 +327,41 @@ export default function IGPage() {
   const [selectedOwner, setSelectedOwner] = useState('全部');
   const [sinceDate, setSinceDate] = useState('');
   const [sortBy, setSortBy] = useState<'time' | 'likes' | 'comments' | 'views' | 'plays'>('time');
+  const [triggering, setTriggering] = useState(false);
+  const [triggerMsg, setTriggerMsg] = useState('');
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  async function handleTrigger() {
+    setTriggering(true);
+    setTriggerMsg('');
+    setCountdown(null);
+    try {
+      const res = await fetch('/api/ig-n8n-trigger', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && !data.error) {
+        // 開始倒數 60 秒，結束後自動產生報告
+        const TOTAL = 60;
+        setCountdown(TOTAL);
+        let remaining = TOTAL;
+        const timer = setInterval(() => {
+          remaining -= 1;
+          setCountdown(remaining);
+          if (remaining <= 0) {
+            clearInterval(timer);
+            setCountdown(null);
+            setTriggerMsg('同步完成，自動載入最新報告...');
+            handleGenerate();
+          }
+        }, 1000);
+      } else {
+        setTriggerMsg(data.error || '觸發失敗，請稍後再試');
+      }
+    } catch (e) {
+      setTriggerMsg(String(e));
+    } finally {
+      setTriggering(false);
+    }
+  }
 
   async function handleGenerate() {
     setLoading(true);
@@ -409,7 +444,10 @@ export default function IGPage() {
 
       {/* 產生報告 */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
-        <h2 className="font-semibold text-gray-800 mb-3 text-sm">產生貼文報告</h2>
+        <h2 className="font-semibold text-gray-800 mb-1 text-sm">產生貼文報告</h2>
+        <p className="text-xs text-gray-400 mb-3">
+          每天早上 11 點會自動更新追蹤名單與貼文。若需立即更新，可點「重新抓取貼文」（約 1 分鐘），完成後會自動載入報告。
+        </p>
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-400">發佈日期在此之後</label>
@@ -421,13 +459,25 @@ export default function IGPage() {
             />
           </div>
           <button
+            onClick={handleTrigger}
+            disabled={triggering || countdown !== null}
+            className="px-5 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
+          >
+            {triggering ? '觸發中...' : countdown !== null ? `抓取中 ${countdown}s...` : '重新抓取貼文'}
+          </button>
+          <button
             onClick={handleGenerate}
-            disabled={loading}
+            disabled={loading || countdown !== null}
             className="px-5 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {loading ? '載入中...' : '產生報告'}
           </button>
         </div>
+        {triggerMsg && (
+          <p className={`mt-2 text-xs ${triggerMsg.includes('失敗') || triggerMsg.includes('error') || triggerMsg.includes('未設定') ? 'text-red-500' : 'text-green-600'}`}>
+            {triggerMsg}
+          </p>
+        )}
       </div>
 
       {/* Filters — 只在有資料後顯示 */}

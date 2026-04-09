@@ -25,6 +25,14 @@ const tools = [
     color: "bg-emerald-50 border-emerald-200 hover:border-emerald-400",
     iconBg: "bg-emerald-100",
   },
+  {
+    href: "/recommendation",
+    title: "推薦文生成器",
+    description: "填入被推薦人資訊與事蹟，AI 自動生成一封正式、有說服力的推薦文。",
+    icon: "✉️",
+    color: "bg-orange-50 border-orange-200 hover:border-orange-400",
+    iconBg: "bg-orange-100",
+  },
 ];
 
 export default function HomePage() {
