@@ -43,7 +43,7 @@ export default function SEOListPage() {
                   </div>
                 </div>
                 {a.summary && (
-                  <p className="text-sm text-gray-500 leading-relaxed">{a.summary}</p>
+                  <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap">{a.summary.replace(/\\n/g, '\n')}</p>
                 )}
                 <div className="mt-2 text-xs text-gray-300">
                   {a.published_at || a.created_at}
