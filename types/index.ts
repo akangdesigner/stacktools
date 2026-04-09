@@ -40,10 +40,14 @@ export interface ClientProfile {
   imageMaxWidth: string;
   imageBorderRadius: string;
 
-  // FAQ mode
-  faqEnabled: boolean;       // prefix each H3 with Q1: Q2: ...
-  faqLabelColor: string;     // label color; "" = inherit h3Color
-  faqLabelFontSize: string;  // label font-size; "" = inherit h3FontSize
+  // FAQ mode — applies to H3s under FAQ H2
+  faqEnabled: boolean;       // activate FAQ section detection
+  faqH3Color: string;        // FAQ H3 text color; "" = inherit h3Color
+  faqH3FontSize: string;     // FAQ H3 font-size; "" = inherit h3FontSize
+  faqH3Bold: boolean;        // FAQ H3 bold
+  faqLabelEnabled: boolean;  // prefix FAQ H3 with Q1: Q2: ...
+  faqLabelColor: string;     // Q label color; "" = inherit faqH3Color
+  faqLabelFontSize: string;  // Q label font-size; "" = inherit faqH3FontSize
 
   // Extra transformations
   emColor: string;           // convert <em> to colored span; "" = keep as-is

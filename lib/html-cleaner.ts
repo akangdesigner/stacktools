@@ -71,15 +71,19 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         const el = child as ReturnType<typeof root.querySelector>;
         const text = el!.innerText.trim();
         if (!text) { walkHeadings(child as any); continue; }
-        el!.setAttribute("style", `font-size: ${client.h3FontSize}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
+        const isFaq = client.faqEnabled && faqSectionActive;
+        const h3Color   = isFaq ? (client.faqH3Color   || client.h3Color)    : client.h3Color;
+        const h3Size    = isFaq ? (client.faqH3FontSize || client.h3FontSize) : client.h3FontSize;
+        const h3Bold    = isFaq ? client.faqH3Bold : client.h3Bold;
+        el!.setAttribute("style", `font-size: ${h3Size}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
         let inner = text;
-        if (client.faqEnabled && faqSectionActive) {
-          const labelColor = client.faqLabelColor || client.h3Color;
-          const labelSize = client.faqLabelFontSize || client.h3FontSize;
+        if (isFaq && client.faqLabelEnabled) {
+          const labelColor = client.faqLabelColor || h3Color;
+          const labelSize  = client.faqLabelFontSize || h3Size;
           inner = `<span style="color: ${labelColor}; font-size: ${labelSize};">Q${h3Count}：</span>` + text;
           h3Count++;
         }
-        el!.innerHTML = `<span style="color: ${client.h3Color};">${client.h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
+        el!.innerHTML = `<span style="color: ${h3Color};">${h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
       } else if ((child as any).childNodes?.length) {
         walkHeadings(child as any);
       }

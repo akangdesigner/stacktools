@@ -108,18 +108,29 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
           <label className="flex items-center gap-3 cursor-pointer">
             <span className="text-sm text-gray-600 w-32 shrink-0">FAQ 模式</span>
             <input type="checkbox" checked={form.faqEnabled ?? false} onChange={(e) => set("faqEnabled", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
-            <span className="text-xs text-gray-400">H3 自動加 Q1：Q2：前綴</span>
+            <span className="text-xs text-gray-400">套用於含「FAQ」的 H2 之後的 H3</span>
           </label>
-          <ColorPicker
-            label="Q 標籤顏色"
-            value={form.faqLabelColor || form.h3Color}
-            onChange={(v) => set("faqLabelColor", v === form.h3Color ? "" : v)}
-          />
-          <SizeInput
-            label="Q 標籤大小"
-            value={form.faqLabelFontSize || form.h3FontSize}
-            onChange={(v) => set("faqLabelFontSize", v === form.h3FontSize ? "" : v)}
-          />
+          {form.faqEnabled && (
+            <>
+              <ColorPicker label="FAQ H3 顏色" value={form.faqH3Color || form.h3Color} onChange={(v) => set("faqH3Color", v)} />
+              <SizeInput label="FAQ H3 大小" value={form.faqH3FontSize || form.h3FontSize} onChange={(v) => set("faqH3FontSize", v)} />
+              <label className="flex items-center gap-3 cursor-pointer">
+                <span className="text-sm text-gray-600 w-32 shrink-0">FAQ H3 粗體</span>
+                <input type="checkbox" checked={form.faqH3Bold ?? true} onChange={(e) => set("faqH3Bold", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <span className="text-sm text-gray-600 w-32 shrink-0">加 Q 前綴</span>
+                <input type="checkbox" checked={form.faqLabelEnabled ?? false} onChange={(e) => set("faqLabelEnabled", e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
+                <span className="text-xs text-gray-400">H3 自動加 Q1：Q2：</span>
+              </label>
+              {form.faqLabelEnabled && (
+                <>
+                  <ColorPicker label="Q 標籤顏色" value={form.faqLabelColor || form.faqH3Color || form.h3Color} onChange={(v) => set("faqLabelColor", v)} />
+                  <SizeInput label="Q 標籤大小" value={form.faqLabelFontSize || form.faqH3FontSize || form.h3FontSize} onChange={(v) => set("faqLabelFontSize", v)} />
+                </>
+              )}
+            </>
+          )}
         </div>
       </section>
 
