@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 interface Post {
   publishedAt:  string;
   owner:        string;
+  coauthors:    string;
   type:         string;
   content:      string;
   comment:      string;
@@ -45,9 +46,14 @@ function PostCard({ post, username }: { post: Post; username: string }) {
             <div className="text-xs text-gray-400">{post.publishedAt}</div>
           </div>
         </div>
-        {post.type && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0">{post.type}</span>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {post.type && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{post.type}</span>
+          )}
+          {post.coauthors && (
+            <span className="text-xs text-gray-400">合作：{post.coauthors}</span>
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -318,6 +324,23 @@ function fuzzyMatch(owner: string, accountName: string): boolean {
   return false;
 }
 
+// 若原發文者不在追蹤名單，但合作帳號在，則把合作帳號當 owner，原發文者變成 coauthors
+function remapPostOwners(posts: Post[], accounts: Account[]): Post[] {
+  return posts.map(post => {
+    const ownerIsTracked = accounts.some(acc => fuzzyMatch(post.owner, acc.name));
+    if (ownerIsTracked || !post.coauthors) return post;
+
+    const coauthorList = post.coauthors.split(/[,、，;；\s]+/).map(s => s.trim()).filter(Boolean);
+    for (const coauthor of coauthorList) {
+      const matched = accounts.find(acc => fuzzyMatch(coauthor, acc.name));
+      if (matched) {
+        return { ...post, owner: coauthor, coauthors: post.owner };
+      }
+    }
+    return post;
+  });
+}
+
 function buildUsernameMap(owners: string[], accounts: { url: string; name: string }[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const owner of owners) {
@@ -355,7 +378,8 @@ export default function IGPage() {
       if (reportData.error) {
         setError(reportData.error);
       } else {
-        const posts = (reportData.posts ?? []) as Post[];
+        const rawPosts = (reportData.posts ?? []) as Post[];
+        const posts = remapPostOwners(rawPosts, trackData.accounts ?? []);
         const owners: string[] = [...new Set<string>(posts.map((p) => p.owner))];
         setUsernameMap(buildUsernameMap(owners, trackData.accounts ?? []));
         setPosts(posts);

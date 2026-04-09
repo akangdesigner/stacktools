@@ -103,6 +103,7 @@ export async function GET() {
       originalUrl:  row['原始貼文網址'] ?? '',
       plays:        Number(row['播放次數']) || 0,
       duration:     row['影片長度'] ?? '',
+      coauthors:    row['合作帳號'] ?? '',
     }));
 
     return NextResponse.json({ posts });
