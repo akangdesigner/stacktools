@@ -17,8 +17,9 @@ interface Post {
   duration:     string;
 }
 
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, avatarUrl }: { post: Post; avatarUrl: string }) {
   const [expanded, setExpanded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const shortContent = post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content;
 
   return (
@@ -27,6 +28,18 @@ function PostCard({ post }: { post: Post }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
+          {avatarUrl && !imgError ? (
+            <img
+              src={avatarUrl}
+              alt={post.owner}
+              className="w-8 h-8 rounded-full object-cover shrink-0"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {post.owner.slice(0, 1).toUpperCase()}
+            </div>
+          )}
           <div>
             <div className="font-semibold text-gray-900">{post.owner}</div>
             <div className="text-xs text-gray-400">{post.publishedAt}</div>
@@ -95,6 +108,7 @@ function PostCard({ post }: { post: Post }) {
 interface Account {
   url: string;
   name: string;
+  avatar: string;
 }
 
 function TrackList() {
@@ -167,6 +181,14 @@ function TrackList() {
                   key={i}
                   className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full hover:bg-purple-50 hover:border-purple-300 transition-colors group"
                 >
+                  {a.avatar && (
+                    <img
+                      src={a.avatar}
+                      alt={a.name}
+                      className="w-5 h-5 rounded-full object-cover shrink-0"
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
                   <a
                     href={a.url}
                     target="_blank"
@@ -313,6 +335,7 @@ function remapPostOwners(posts: Post[], accounts: Account[]): Post[] {
 
 export default function IGPage() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [avatarMap, setAvatarMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [error, setError] = useState('');
@@ -335,8 +358,17 @@ export default function IGPage() {
       if (reportData.error) {
         setError(reportData.error);
       } else {
+        const accounts = (trackData.accounts ?? []) as Account[];
         const rawPosts = (reportData.posts ?? []) as Post[];
-        const posts = remapPostOwners(rawPosts, trackData.accounts ?? []);
+        const posts = remapPostOwners(rawPosts, accounts);
+        // Build avatar map: owner name → avatar URL (fuzzy match)
+        const map: Record<string, string> = {};
+        for (const post of posts) {
+          if (map[post.owner]) continue;
+          const matched = accounts.find(acc => fuzzyMatch(post.owner, acc.name));
+          if (matched?.avatar) map[post.owner] = matched.avatar;
+        }
+        setAvatarMap(map);
         setPosts(posts);
         setGenerated(true);
       }
@@ -458,7 +490,7 @@ export default function IGPage() {
           <p className="text-xs text-gray-400 mb-4">共 {filtered.length} 則貼文{sinceDate ? `（${sinceDate} 之後）` : ''}</p>
           <div className="flex flex-col gap-4">
             {filtered.map((post, i) => (
-              <PostCard key={i} post={post} />
+              <PostCard key={i} post={post} avatarUrl={avatarMap[post.owner] ?? ''} />
             ))}
           </div>
           {filtered.length === 0 && (
