@@ -20,7 +20,7 @@ function PostCard({ post, username }: { post: Post; username: string }) {
   const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const shortContent = post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content;
-  const avatarUrl = username ? `https://unavatar.io/instagram/${username}` : '';
+  const avatarUrl = username ? `/api/avatar?username=${encodeURIComponent(username)}` : '';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3 text-sm">
@@ -33,13 +33,11 @@ function PostCard({ post, username }: { post: Post; username: string }) {
               src={avatarUrl}
               alt={post.owner}
               className="w-8 h-8 rounded-full object-cover shrink-0"
-              referrerPolicy="no-referrer"
-              crossOrigin="anonymous"
               onError={() => setImgError(true)}
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {post.owner.slice(0, 1)}
+              {post.owner.slice(0, 1).toUpperCase()}
             </div>
           )}
           <div>
@@ -178,18 +176,16 @@ function TrackList() {
                   className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full hover:bg-purple-50 hover:border-purple-300 transition-colors group"
                 >
                   <img
-                    src={`https://unavatar.io/instagram/${a.url.match(/instagram\.com\/([^/?#]+)/)?.[1] ?? ''}`}
+                    src={`/api/avatar?username=${encodeURIComponent(a.url.match(/instagram\.com\/([^/?#]+)/)?.[1] ?? '')}`}
                     alt={a.name || a.url}
-                    className="w-5 h-5 rounded-full object-cover"
-                    referrerPolicy="no-referrer"
-                    crossOrigin="anonymous"
+                    className="w-5 h-5 rounded-full object-cover shrink-0"
                     onError={e => {
                       const el = e.currentTarget;
                       el.style.display = 'none';
-                      el.nextElementSibling?.removeAttribute('style');
+                      (el.nextElementSibling as HTMLElement | null)?.style.setProperty('display', 'flex');
                     }}
                   />
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-[10px] font-bold" style={{ display: 'none' }}>
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 items-center justify-center text-white text-[10px] font-bold shrink-0" style={{ display: 'none' }}>
                     {(a.name || a.url).slice(0, 1).toUpperCase()}
                   </div>
                   <a

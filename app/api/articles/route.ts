@@ -34,8 +34,12 @@ export async function POST(req: NextRequest) {
 
     const db = getArticlesDb();
     const result = db.prepare(
-      'INSERT INTO articles (category, title, content, summary, sender, source_url, published_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO articles (category, title, content, summary, sender, source_url, published_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(category, title, content, summary ?? null, sender ?? null, source_url ?? null, published_at ?? null);
+
+    if (result.changes === 0) {
+      return NextResponse.json({ success: false, duplicate: true, message: '文章已存在（source_url 重複）' });
+    }
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid });
   } catch (err) {

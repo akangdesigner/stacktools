@@ -23,11 +23,17 @@ export function getArticlesDb(): Database.Database {
       content      TEXT NOT NULL,
       summary      TEXT,
       sender       TEXT,
-      source_url   TEXT,
+      source_url   TEXT UNIQUE,
       published_at TEXT,
       created_at   TEXT DEFAULT (datetime('now','localtime'))
     )
   `);
+
+  // 舊資料庫遷移：補上 source_url UNIQUE index（若尚未存在）
+  const indexes = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='articles' AND name='idx_articles_source_url'").get();
+  if (!indexes) {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_source_url ON articles(source_url) WHERE source_url IS NOT NULL');
+  }
 
   // 舊資料庫遷移：補上新欄位
   const cols = db.pragma('table_info(articles)') as { name: string }[];
