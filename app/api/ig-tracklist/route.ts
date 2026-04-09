@@ -15,12 +15,13 @@ function parseCSVRow(line: string): string[] {
       else { cell += ch; }
     } else {
       if (ch === '"') { inQuotes = true; }
-      else if (ch === ',') { cols.push(cell.trim()); cell = ''; }
+      else if (ch === ',') { cols.push(cell); cell = ''; }
       else { cell += ch; }
     }
   }
-  cols.push(cell.trim());
-  return cols;
+  cols.push(cell);
+  // Strip any residual surrounding quotes and whitespace
+  return cols.map(c => c.trim().replace(/^"+|"+$/g, '').trim());
 }
 
 export async function GET() {
@@ -30,15 +31,16 @@ export async function GET() {
     if (!res.ok) throw new Error(`抓取失敗：${res.status}`);
 
     const text = await res.text();
-    const lines = text.split('\n').filter(Boolean).slice(1); // 跳過標題列
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean).slice(1);
 
     const accounts = lines
       .map(line => {
         const cols = parseCSVRow(line);
-        const rawUrl  = cols[0] ?? '';
-        const name    = cols[1] ?? '';
-        const avatar  = cols[2] ?? '';
-        return { url: rawUrl, name, avatar };
+        return {
+          url:    cols[0] ?? '',
+          name:   cols[1] ?? '',
+          avatar: cols[2] ?? '',
+        };
       })
       .filter(a => a.url.startsWith('http'));
 

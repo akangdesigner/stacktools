@@ -104,6 +104,7 @@ export async function GET() {
       plays:        Number(row['播放次數']) || 0,
       duration:     row['影片長度'] ?? '',
       coauthors:    row['合作帳號'] ?? '',
+      avatarUrl:    row['頭像圖片位址'] ?? '',
     }));
 
     return NextResponse.json({ posts });

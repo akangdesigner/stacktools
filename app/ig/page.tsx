@@ -6,6 +6,7 @@ interface Post {
   publishedAt:  string;
   owner:        string;
   coauthors:    string;
+  avatarUrl:    string;
   type:         string;
   content:      string;
   comment:      string;
@@ -17,7 +18,7 @@ interface Post {
   duration:     string;
 }
 
-function PostCard({ post, avatarUrl }: { post: Post; avatarUrl: string }) {
+function PostCard({ post }: { post: Post }) {
   const [expanded, setExpanded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const shortContent = post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content;
@@ -28,9 +29,9 @@ function PostCard({ post, avatarUrl }: { post: Post; avatarUrl: string }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {avatarUrl && !imgError ? (
+          {post.avatarUrl && !imgError ? (
             <img
-              src={avatarUrl}
+              src={`/api/avatar?url=${encodeURIComponent(post.avatarUrl)}`}
               alt={post.owner}
               className="w-8 h-8 rounded-full object-cover shrink-0"
               onError={() => setImgError(true)}
@@ -111,18 +112,22 @@ interface Account {
   avatar: string;
 }
 
-function TrackList() {
+function TrackList({ avatarMap: externalAvatarMap }: { avatarMap: Record<string, string> }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(true);
   const [deletingUrl, setDeletingUrl] = useState<string | null>(null);
+  const [ownersAvatarMap, setOwnersAvatarMap] = useState<Record<string, string>>({});
 
   function load() {
     setLoading(true);
-    fetch('/api/ig-tracklist')
-      .then(r => r.json())
-      .then(data => setAccounts(data.accounts ?? []))
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch('/api/ig-tracklist').then(r => r.json()),
+      fetch('/api/ig-avatars').then(r => r.json()),
+    ]).then(([trackData, avatarData]) => {
+      setAccounts(trackData.accounts ?? []);
+      setOwnersAvatarMap(avatarData ?? {});
+    }).finally(() => setLoading(false));
   }
 
   useEffect(() => { load(); }, []);
@@ -181,14 +186,19 @@ function TrackList() {
                   key={i}
                   className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full hover:bg-purple-50 hover:border-purple-300 transition-colors group"
                 >
-                  {a.avatar && (
-                    <img
-                      src={a.avatar}
-                      alt={a.name}
-                      className="w-5 h-5 rounded-full object-cover shrink-0"
-                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  )}
+                  {(() => {
+                    const raw = externalAvatarMap[a.name]
+                      ?? Object.entries(ownersAvatarMap).find(([owner]) => fuzzyMatch(owner, a.name))?.[1];
+                    if (!raw) return null;
+                    return (
+                      <img
+                        src={`/api/avatar?url=${encodeURIComponent(raw)}`}
+                        alt={a.name}
+                        className="w-5 h-5 rounded-full object-cover shrink-0"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    );
+                  })()}
                   <a
                     href={a.url}
                     target="_blank"
@@ -291,47 +301,22 @@ function TrackForm() {
 }
 
 
+
 function charOverlap(a: string, b: string): number {
-  const setA = new Set(a);
-  const setB = new Set(b);
-  const common = [...setA].filter(c => setB.has(c)).length;
-  return common / Math.min(setA.size, setB.size);
+  const sa = new Set(a), sb = new Set(b);
+  const common = [...sa].filter(c => sb.has(c)).length;
+  return common / Math.min(sa.size, sb.size);
 }
 
-function fuzzyMatch(owner: string, accountName: string): boolean {
-  const a = owner.toLowerCase();
-  const b = accountName.toLowerCase();
-
-  if (a === b || a.includes(b) || b.includes(a)) return true;
-
-  // 以分隔符號拆段（｜ | 空格 等）再逐段比對
-  const segments = b.split(/[｜|、，,\s]+/).filter(s => s.length >= 2);
-  for (const seg of segments) {
-    if (a === seg || a.includes(seg) || seg.includes(a)) return true;
-    // 中文字符重疊率 >= 60%
-    if (charOverlap(a, seg) >= 0.6) return true;
-  }
-
-  return false;
+function fuzzyMatch(a: string, b: string): boolean {
+  const x = a.toLowerCase().trim();
+  const y = b.toLowerCase().trim();
+  if (x === y || x.includes(y) || y.includes(x)) return true;
+  const segments = y.split(/[｜|、，,\s]+/).filter(s => s.length >= 2);
+  return segments.some(seg =>
+    x === seg || x.includes(seg) || seg.includes(x) || charOverlap(x, seg) >= 0.6
+  );
 }
-
-// 若原發文者不在追蹤名單，但合作帳號在，則把合作帳號當 owner，原發文者變成 coauthors
-function remapPostOwners(posts: Post[], accounts: Account[]): Post[] {
-  return posts.map(post => {
-    const ownerIsTracked = accounts.some(acc => fuzzyMatch(post.owner, acc.name));
-    if (ownerIsTracked || !post.coauthors) return post;
-
-    const coauthorList = post.coauthors.split(/[,、，;；\s]+/).map(s => s.trim()).filter(Boolean);
-    for (const coauthor of coauthorList) {
-      const matched = accounts.find(acc => fuzzyMatch(coauthor, acc.name));
-      if (matched) {
-        return { ...post, owner: coauthor, coauthors: post.owner };
-      }
-    }
-    return post;
-  });
-}
-
 
 export default function IGPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -358,15 +343,20 @@ export default function IGPage() {
       if (reportData.error) {
         setError(reportData.error);
       } else {
-        const accounts = (trackData.accounts ?? []) as Account[];
-        const rawPosts = (reportData.posts ?? []) as Post[];
-        const posts = remapPostOwners(rawPosts, accounts);
-        // Build avatar map: owner name → avatar URL (fuzzy match)
+        const posts = (reportData.posts ?? []) as Post[];
+        const accounts = (trackData?.accounts ?? []) as Account[];
+
+        // owner → raw avatarUrl
+        const ownerAvatar: Record<string, string> = {};
+        for (const p of posts) {
+          if (p.owner && p.avatarUrl && !ownerAvatar[p.owner])
+            ownerAvatar[p.owner] = p.avatarUrl;
+        }
+        // account name → raw avatar URL via fuzzy match to owner
         const map: Record<string, string> = {};
-        for (const post of posts) {
-          if (map[post.owner]) continue;
-          const matched = accounts.find(acc => fuzzyMatch(post.owner, acc.name));
-          if (matched?.avatar) map[post.owner] = matched.avatar;
+        for (const acc of accounts) {
+          const matched = Object.keys(ownerAvatar).find(owner => fuzzyMatch(owner, acc.name));
+          if (matched) map[acc.name] = ownerAvatar[matched];
         }
         setAvatarMap(map);
         setPosts(posts);
@@ -415,7 +405,7 @@ export default function IGPage() {
       <TrackForm />
 
       {/* Track List */}
-      <TrackList />
+      <TrackList avatarMap={avatarMap} />
 
       {/* 產生報告 */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
@@ -490,7 +480,7 @@ export default function IGPage() {
           <p className="text-xs text-gray-400 mb-4">共 {filtered.length} 則貼文{sinceDate ? `（${sinceDate} 之後）` : ''}</p>
           <div className="flex flex-col gap-4">
             {filtered.map((post, i) => (
-              <PostCard key={i} post={post} avatarUrl={avatarMap[post.owner] ?? ''} />
+              <PostCard key={i} post={post} />
             ))}
           </div>
           {filtered.length === 0 && (
