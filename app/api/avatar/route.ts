@@ -6,10 +6,18 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(`https://unavatar.io/instagram/${username}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Stacktools/1.0)' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://unavatar.io/',
+      },
     });
 
-    if (!res.ok) return new NextResponse(null, { status: 404 });
+    if (!res.ok) {
+      console.error(`[avatar] unavatar.io returned ${res.status} for ${username}`);
+      return new NextResponse(null, { status: res.status });
+    }
 
     const buffer = await res.arrayBuffer();
     const contentType = res.headers.get('content-type') ?? 'image/jpeg';
@@ -20,7 +28,8 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'public, max-age=86400',
       },
     });
-  } catch {
+  } catch (err) {
+    console.error(`[avatar] fetch error for ${username}:`, err);
     return new NextResponse(null, { status: 502 });
   }
 }

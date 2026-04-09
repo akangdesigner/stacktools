@@ -33,6 +33,12 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getArticlesDb();
+
+    const existing = db.prepare('SELECT id FROM articles WHERE title = ?').get(title);
+    if (existing) {
+      return NextResponse.json({ success: false, duplicate: true, message: '文章已存在（標題重複）' });
+    }
+
     const result = db.prepare(
       'INSERT OR IGNORE INTO articles (category, title, content, summary, sender, source_url, published_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(category, title, content, summary ?? null, sender ?? null, source_url ?? null, published_at ?? null);
