@@ -57,7 +57,7 @@ export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
   const [bulkText, setBulkText] = useState("");
   const [sourceBaseUrl, setSourceBaseUrl] = useState("");
 
-  const hasRelative = replacements.some((r) => isRelativePath(r.original));
+  const hasRelativeReplacement = replacements.some((r) => r.replacement.trim() && isRelativePath(r.replacement.trim()));
 
   useEffect(() => {
     const srcs = parseImageSrcs(rawHtml);
@@ -77,11 +77,11 @@ export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
   function handleBaseUrlChange(url: string) {
     setSourceBaseUrl(url);
     if (!url.trim()) return;
-    // Auto-resolve relative originals that have no replacement yet
+    // Auto-resolve relative replacement URLs
     const next = replacements.map((r) => ({
       ...r,
-      replacement: isRelativePath(r.original) && !r.replacement.trim()
-        ? resolveRelative(r.original, url.trim())
+      replacement: r.replacement.trim() && isRelativePath(r.replacement.trim())
+        ? resolveRelative(r.replacement.trim(), url.trim())
         : r.replacement,
     }));
     onChange(next);
@@ -127,7 +127,7 @@ export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
       </div>
 
       {/* 相對路徑警告 */}
-      {hasRelative && (
+      {hasRelativeReplacement && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
           <p className="text-sm font-medium text-amber-800 flex items-center gap-2">
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
