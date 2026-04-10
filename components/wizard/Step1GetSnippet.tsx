@@ -9,7 +9,7 @@ export function Step1GetSnippet() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟一：取得文章 HTML</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟二：取得文章 HTML</h2>
         <p className="text-gray-500 text-sm">先複製下方的程式碼，再前往草稿文章頁面執行</p>
       </div>
 

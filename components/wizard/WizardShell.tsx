@@ -13,14 +13,14 @@ export function WizardShell() {
   const { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, goNext, goBack, submitForCleaning, reset } = useWizard();
   const { getClient } = useClients();
 
-  function validateStep2(): string | null {
+  function validatePasteHtmlStep(): string | null {
     if (!state.rawHtml.trim()) return "請先貼入 HTML 內容";
     if (!state.rawHtml.includes("<")) return "內容看起來不像 HTML，請確認是否正確複製";
     if (state.rawHtml.length > 500000) return "HTML 內容超過 500,000 字元限制";
     return null;
   }
 
-  function validateStep4(): string | null {
+  function validateSelectClientStep(): string | null {
     if (!state.selectedClientId) return "請選擇客戶設定";
     if (!getClient(state.selectedClientId)) return "找不到客戶資料，請重新選擇";
     return null;
@@ -28,15 +28,17 @@ export function WizardShell() {
 
   async function handleNext() {
     if (state.currentStep === 1) {
-      goNext();
-    } else if (state.currentStep === 2) {
-      const err = validateStep2();
+      const err = validateSelectClientStep();
       if (err) return;
       goNext();
+    } else if (state.currentStep === 2) {
+      goNext();
     } else if (state.currentStep === 3) {
+      const err = validatePasteHtmlStep();
+      if (err) return;
       goNext();
     } else if (state.currentStep === 4) {
-      const err = validateStep4();
+      const err = validateSelectClientStep();
       if (err) return;
       const client = getClient(state.selectedClientId!);
       if (!client) return;
@@ -44,12 +46,13 @@ export function WizardShell() {
     }
   }
 
-  const step2Error = state.currentStep === 2 && state.error ? state.error : null;
-  const step4Error = state.currentStep === 4 && state.error ? state.error : null;
+  const step1Error = state.currentStep === 1 && state.error ? state.error : null;
+  const step3Error = state.currentStep === 3 && state.error ? state.error : null;
 
   function canGoNext(): boolean {
     if (state.isLoading) return false;
-    if (state.currentStep === 2) return !!state.rawHtml.trim() && state.rawHtml.includes("<") && state.rawHtml.length <= 500000;
+    if (state.currentStep === 1) return !!state.selectedClientId;
+    if (state.currentStep === 3) return !!state.rawHtml.trim() && state.rawHtml.includes("<") && state.rawHtml.length <= 500000;
     if (state.currentStep === 4) return !!state.selectedClientId;
     return true;
   }
@@ -68,28 +71,30 @@ export function WizardShell() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
-          {state.currentStep === 1 && <Step1GetSnippet />}
-          {state.currentStep === 2 && (
-            <Step2PasteHtml
-              value={state.rawHtml}
-              onChange={setRawHtml}
-              error={step2Error}
-            />
-          )}
-          {state.currentStep === 3 && (
-            <Step3ImageReplace
-              rawHtml={state.rawHtml}
-              replacements={state.imageReplacements}
-              onChange={setImageReplacements}
-            />
-          )}
-          {state.currentStep === 4 && (
+          {state.currentStep === 1 && (
             <Step3SelectClient
               selectedClientId={state.selectedClientId}
               onSelect={setSelectedClientId}
               articleSlug={state.articleSlug}
               onArticleSlugChange={setArticleSlug}
-              error={step4Error}
+              error={step1Error}
+            />
+          )}
+          {state.currentStep === 2 && (
+            <Step1GetSnippet />
+          )}
+          {state.currentStep === 3 && (
+            <Step2PasteHtml
+              value={state.rawHtml}
+              onChange={setRawHtml}
+              error={step3Error}
+            />
+          )}
+          {state.currentStep === 4 && (
+            <Step3ImageReplace
+              rawHtml={state.rawHtml}
+              replacements={state.imageReplacements}
+              onChange={setImageReplacements}
             />
           )}
           {state.currentStep === 5 && state.cleanedHtml && (

@@ -15,7 +15,7 @@ export function Step4CopyResult({ cleanedHtml, onReset }: Step4CopyResultProps) 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟四：複製處理結果</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟五：複製處理結果</h2>
         <p className="text-gray-500 text-sm">點擊「複製 HTML」後，貼到 CMS 的 HTML 編輯器中</p>
       </div>
 

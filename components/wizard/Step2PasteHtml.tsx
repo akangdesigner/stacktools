@@ -10,7 +10,7 @@ export function Step2PasteHtml({ value, onChange, error }: Step2PasteHtmlProps) 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟二：貼入原始 HTML</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟三：貼入原始 HTML</h2>
         <p className="text-gray-500 text-sm">將剛才從 Console 複製的 HTML 貼到下方的文字框</p>
       </div>
 

@@ -1,10 +1,10 @@
 "use client";
 
 const STEPS = [
-  { number: 1, label: "取得 HTML" },
-  { number: 2, label: "貼入原始碼" },
-  { number: 3, label: "替換圖片" },
-  { number: 4, label: "選擇客戶" },
+  { number: 1, label: "選擇客戶" },
+  { number: 2, label: "取得 HTML" },
+  { number: 3, label: "貼入原始碼" },
+  { number: 4, label: "替換圖片" },
   { number: 5, label: "複製結果" },
 ];
 

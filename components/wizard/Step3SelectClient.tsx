@@ -21,7 +21,7 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟三：選擇客戶設定</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">步驟一：選擇客戶設定</h2>
         <p className="text-gray-500 text-sm">選擇要套用的客戶樣式設定</p>
       </div>
 
