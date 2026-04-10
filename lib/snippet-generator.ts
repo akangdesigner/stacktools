@@ -44,6 +44,9 @@ export function getConsoleSnippet(): string {
                 resultHtml += \`<div style="text-align: center; margin: 30px 0;"><a href="\${href}" target="_blank" style="background-color: #333333; color: #ffffff; padding: 12px 30px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">\${btnText}</a></div>\\n\`;
             }
         }
+        else if (tagName === 'p' && node.closest('ul, ol')) {
+            return; // 跳過 ul/ol 內的 <p>，避免重複輸出
+        }
         else if (tagName === 'p' || tagName === 'ul' || tagName === 'ol') {
             var cleanInner = node.innerHTML.replace(/class=".*?"/g, '').replace(/style=".*?"/g, '');
             if (tagName === 'ul' || tagName === 'ol') {
@@ -51,6 +54,9 @@ export function getConsoleSnippet(): string {
             }
             var wrapper = (tagName === 'p') ? \`<span style="font-size:18px; color:#454f5e; line-height:1.8;">\${cleanInner}</span>\` : cleanInner;
             resultHtml += \`<\${tagName} style="margin-bottom:15px;">\${wrapper}</\${tagName}>\\n\`;
+        }
+        else if (tagName === 'img' && node.closest('ul, ol')) {
+            return; // 跳過 ul/ol 內的 <img>
         }
         else if (tagName === 'img') {
             if (node.naturalWidth > 0 && node.naturalWidth < 50) return;

@@ -328,16 +328,6 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
               <p className="text-xs text-gray-400">上架時只需填入文章 slug，系統自動補全目錄連結網址</p>
             </div>
           </div>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <span className="text-sm text-gray-600 w-32 shrink-0">去重列表項</span>
-            <input
-              type="checkbox"
-              checked={form.deduplicateLi}
-              onChange={(e) => set("deduplicateLi", e.target.checked)}
-              className="w-4 h-4 rounded accent-blue-600"
-            />
-            <span className="text-xs text-gray-400">移除重複的 &lt;li&gt; 項目</span>
-          </label>
         </div>
       </section>
 

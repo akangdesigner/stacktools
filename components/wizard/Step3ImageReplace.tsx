@@ -13,6 +13,10 @@ function decodeHtmlEntities(str: string): string {
   return str.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 }
 
+function isRelativePath(src: string): boolean {
+  return !src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("//") && !src.startsWith("data:");
+}
+
 // Extracts src from every <img> tag — used to detect images in the original pasted HTML
 function parseImageSrcs(html: string): string[] {
   const srcs: string[] = [];
@@ -41,9 +45,19 @@ function parseFigureSrcs(html: string): string[] {
   return srcs;
 }
 
+function resolveRelative(src: string, baseUrl: string): string {
+  try {
+    return new URL(src, new URL(baseUrl)).href;
+  } catch {
+    return src;
+  }
+}
+
 export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
-  // Bulk textarea value — one URL per line
   const [bulkText, setBulkText] = useState("");
+  const [sourceBaseUrl, setSourceBaseUrl] = useState("");
+
+  const hasRelative = replacements.some((r) => isRelativePath(r.original));
 
   useEffect(() => {
     const srcs = parseImageSrcs(rawHtml);
@@ -60,9 +74,21 @@ export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawHtml]);
 
+  function handleBaseUrlChange(url: string) {
+    setSourceBaseUrl(url);
+    if (!url.trim()) return;
+    // Auto-resolve relative originals that have no replacement yet
+    const next = replacements.map((r) => ({
+      ...r,
+      replacement: isRelativePath(r.original) && !r.replacement.trim()
+        ? resolveRelative(r.original, url.trim())
+        : r.replacement,
+    }));
+    onChange(next);
+  }
+
   function handleBulkChange(text: string) {
     setBulkText(text);
-    // Accept <figure class="image"> blocks — extract src from each; fallback to plain URLs (one per line)
     const extractedUrls = parseFigureSrcs(text);
     const urls = extractedUrls.length > 0
       ? extractedUrls
@@ -99,6 +125,26 @@ export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
           偵測到 {replacements.length} 張圖片，依序貼上新網址（一行一個，留空保留原圖）
         </p>
       </div>
+
+      {/* 相對路徑警告 */}
+      {hasRelative && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+          <p className="text-sm font-medium text-amber-800 flex items-center gap-2">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z" />
+            </svg>
+            偵測到相對路徑圖片
+          </p>
+          <p className="text-xs text-amber-700">貼入文章來源網址，工具會自動帶入完整圖片網址</p>
+          <input
+            type="url"
+            value={sourceBaseUrl}
+            onChange={(e) => handleBaseUrlChange(e.target.value)}
+            placeholder="https://example.com/admin/article/detail?id=86"
+            className="w-full text-sm px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white placeholder-gray-400"
+          />
+        </div>
+      )}
 
       {/* Image preview row */}
       <div className="flex gap-2 flex-wrap">
