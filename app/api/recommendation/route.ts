@@ -25,13 +25,21 @@ export async function POST(req: NextRequest) {
     const callbackBaseUrl = process.env.RECOMMENDATION_CALLBACK_BASE_URL || req.nextUrl.origin;
     const callbackUrl = `${callbackBaseUrl}/api/recommendation/callback`;
 
-    // JSON body：表單欄位與系統欄位分鍵，避免與純文字「標題：…」混在同一串造成 n8n 對錯欄位
+    // n8n：chatInput 為完整標籤字串；請在 extractContent 的 lookahead 加入「任務ID|狀態回傳網址」等標籤。
+    const brand = (requiredBrand ?? '').trim();
+    const intro = (introLink ?? '').trim();
+    const chatInput = [
+      `標題：${title}`,
+      `品牌：${brand}`,
+      `關鍵字：${keywords}`,
+      `搜尋項目：${searchTerm}`,
+      `前言連結：${intro}`,
+      `任務ID：${jobId}`,
+      `狀態回傳網址：${callbackUrl}`,
+    ].join('\n');
+
     const webhookPayload = {
-      title,
-      keywords,
-      searchTerm,
-      requiredBrand: requiredBrand ?? '',
-      introLink: introLink ?? '',
+      chatInput,
       jobId,
       callbackUrl,
     };
