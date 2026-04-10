@@ -24,23 +24,25 @@ export async function POST(req: NextRequest) {
     const jobId = crypto.randomUUID();
     const callbackBaseUrl = process.env.RECOMMENDATION_CALLBACK_BASE_URL || req.nextUrl.origin;
     const callbackUrl = `${callbackBaseUrl}/api/recommendation/callback`;
-    const contentLines = [
-      `標題：${title}`,
-      `關鍵字：${keywords}`,
-      `搜尋項目：${searchTerm}`,
-      `任務ID：${jobId}`,
-      `狀態回傳網址：${callbackUrl}`,
-    ];
-    if (requiredBrand) contentLines.push(`品牌：${requiredBrand}`);
-    if (introLink) contentLines.push(`前言連結：${introLink}`);
-    const contentBlock = contentLines.join('\n');
+
+    // JSON body：表單欄位與系統欄位分鍵，避免與純文字「標題：…」混在同一串造成 n8n 對錯欄位
+    const webhookPayload = {
+      title,
+      keywords,
+      searchTerm,
+      requiredBrand: requiredBrand ?? '',
+      introLink: introLink ?? '',
+      jobId,
+      callbackUrl,
+    };
+    const webhookBody = JSON.stringify(webhookPayload);
 
     let response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Type': 'application/json; charset=utf-8',
       },
-      body: contentBlock,
+      body: webhookBody,
     });
 
     // Fallback for local/dev usage when production webhook is not active yet.
@@ -48,9 +50,9 @@ export async function POST(req: NextRequest) {
       response = await fetch(webhookTestUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Type': 'application/json; charset=utf-8',
         },
-        body: contentBlock,
+        body: webhookBody,
       });
     }
 
