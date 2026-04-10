@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRecommendationJob, updateRecommendationJob } from '@/lib/recommendation-jobs';
 
+/** Zeabur / 面板常見：true 帶空白、大小寫、或包引號 */
+function envIsTruthy(raw: string | undefined): boolean {
+  if (raw == null) return false;
+  const v = raw.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
 export async function POST(req: NextRequest) {
   const {
     title,
@@ -16,7 +23,16 @@ export async function POST(req: NextRequest) {
 
   const webhookUrl = process.env.N8N_WEBHOOK_URL;
   const webhookTestUrl = process.env.N8N_WEBHOOK_TEST_URL;
-  if (!webhookUrl) {
+  const useTestWebhook = envIsTruthy(process.env.N8N_WEBHOOK_USE_TEST);
+
+  if (useTestWebhook) {
+    if (!webhookTestUrl) {
+      return NextResponse.json(
+        { error: '已開啟測試 Webhook（N8N_WEBHOOK_USE_TEST）但未設定 N8N_WEBHOOK_TEST_URL' },
+        { status: 500 }
+      );
+    }
+  } else if (!webhookUrl) {
     return NextResponse.json({ error: '尚未設定 N8N_WEBHOOK_URL' }, { status: 500 });
   }
 
@@ -45,7 +61,9 @@ export async function POST(req: NextRequest) {
     };
     const webhookBody = JSON.stringify(webhookPayload);
 
-    let response = await fetch(webhookUrl, {
+    const primaryUrl = useTestWebhook ? webhookTestUrl! : webhookUrl!;
+    console.log('[recommendation] webhook:', useTestWebhook ? 'TEST_URL' : 'PRODUCTION_URL');
+    let response = await fetch(primaryUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
@@ -53,8 +71,8 @@ export async function POST(req: NextRequest) {
       body: webhookBody,
     });
 
-    // Fallback for local/dev usage when production webhook is not active yet.
-    if (response.status === 404 && webhookTestUrl) {
+    // 正式網址回 404 時改打測試 Webhook（本機或尚未啟用正式 workflow 時）
+    if (!useTestWebhook && response.status === 404 && webhookTestUrl) {
       response = await fetch(webhookTestUrl, {
         method: 'POST',
         headers: {
@@ -83,6 +101,7 @@ export async function POST(req: NextRequest) {
       jobId,
       status: 'processing',
       letter: '需求已送出，文章生成中',
+      webhookMode: useTestWebhook ? 'test' : 'production',
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
