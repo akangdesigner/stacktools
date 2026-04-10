@@ -54,6 +54,7 @@ export interface ClientProfile {
   emBold: boolean;           // convert <em> to bold black (takes priority over emColor)
   generateToc: boolean;      // prepend auto-generated table of contents
   tocTitle: string;          // heading text for the TOC box
+  tocBgColor: string;        // TOC box background color; "" = transparent
   blogBaseUrl: string;       // e.g. https://www.tantanwow.com/blog/posts/
 }
 

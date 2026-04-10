@@ -305,15 +305,32 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
             <span className="text-xs text-gray-400">自動從 H2 生成文章目錄</span>
           </label>
           {form.generateToc && (
-            <label className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 w-32 shrink-0">目錄標題</span>
-              <input
-                type="text"
-                value={form.tocTitle}
-                onChange={(e) => set("tocTitle", e.target.value)}
-                className="w-36 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </label>
+            <>
+              <label className="flex items-center gap-3">
+                <span className="text-sm text-gray-600 w-32 shrink-0">目錄標題</span>
+                <input
+                  type="text"
+                  value={form.tocTitle}
+                  onChange={(e) => set("tocTitle", e.target.value)}
+                  className="w-36 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-600 w-32 shrink-0">目錄背景色</span>
+                <label className="flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!form.tocBgColor}
+                    onChange={(e) => set("tocBgColor", e.target.checked ? "" : "#f9f9f9")}
+                    className="w-4 h-4 rounded accent-blue-600"
+                  />
+                  透明
+                </label>
+                {form.tocBgColor && (
+                  <ColorPicker label="" value={form.tocBgColor} onChange={(v) => set("tocBgColor", v)} />
+                )}
+              </div>
+            </>
           )}
           <div className="flex items-start gap-3">
             <span className="text-sm text-gray-600 w-32 shrink-0 pt-2">文章網址前綴</span>

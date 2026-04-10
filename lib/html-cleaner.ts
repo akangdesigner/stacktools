@@ -31,12 +31,13 @@ function isButtonAnchor(style: string): boolean {
   return style.includes("background-color") || style.includes("padding");
 }
 
-function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, articleUrl?: string): string {
+function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, tocBgColor: string, articleUrl?: string): string {
   const base = articleUrl ? articleUrl.replace(/#.*$/, "") : ".";
   const links = items
     .map((item) => `<li><a href="${base}#${item.id}" target="_self" style="color: ${linkColor}; text-decoration: underline; font-weight: 400;">${item.text}</a></li>`)
     .join("");
-  return `<div class="catalog-box" style="background-color: #f9f9f9; padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
+  const bgStyle = tocBgColor ? `background-color: ${tocBgColor}; ` : "";
+  return `<div class="catalog-box" style="${bgStyle}padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
 }
 
 export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: string): string {
@@ -188,7 +189,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   if (client.generateToc && tocItems.length > 0) {
     const firstH2Match = result.match(/<h2[\s>]/i);
     if (firstH2Match && firstH2Match.index !== undefined) {
-      const toc = generateTocHtml(tocItems, client.linkColor, client.tocTitle, articleUrl) + "\n";
+      const toc = generateTocHtml(tocItems, client.linkColor, client.tocTitle, client.tocBgColor ?? "#f9f9f9", articleUrl) + "\n";
       result = result.slice(0, firstH2Match.index) + toc + result.slice(firstH2Match.index);
     }
   }

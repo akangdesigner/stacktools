@@ -36,6 +36,7 @@ export const DEFAULT_CLIENT_PROFILE: Omit<ClientProfile, "id" | "name" | "create
   emBold: false,
   generateToc: true,
   tocTitle: "目錄❯",
+  tocBgColor: "#f9f9f9",
   blogBaseUrl: "",
 };
 
@@ -75,6 +76,7 @@ export const VJEWELRY_PRESET: Omit<ClientProfile, "id" | "name" | "createdAt" | 
   emBold: false,
   generateToc: true,
   tocTitle: "目錄❯",
+  tocBgColor: "#f9f9f9",
   blogBaseUrl: "",
 };
 
