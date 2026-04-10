@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ClientList } from "./ClientList";
 import { ClientForm } from "./ClientForm";
+import { useClients } from "@/hooks/useClients";
 import type { ClientProfile } from "@/types";
 
 interface ClientManagerModalProps {
@@ -13,6 +14,37 @@ type View = { type: "list" } | { type: "form"; client?: ClientProfile };
 
 export function ClientManagerModal({ onClose }: ClientManagerModalProps) {
   const [view, setView] = useState<View>({ type: "list" });
+  const { clients, upsertClient } = useClients();
+  const importRef = useRef<HTMLInputElement>(null);
+
+  function handleExport() {
+    const json = JSON.stringify(clients, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "clients.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string) as ClientProfile[];
+        if (!Array.isArray(data)) throw new Error();
+        data.forEach((c) => upsertClient(c));
+        alert(`已匯入 ${data.length} 個客戶`);
+      } catch {
+        alert("檔案格式錯誤，請選擇正確的 clients.json");
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -59,6 +91,30 @@ export function ClientManagerModal({ onClose }: ClientManagerModalProps) {
               >
                 + 新增客戶
               </button>
+
+              {/* 匯出 / 匯入 */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleExport}
+                  disabled={clients.length === 0}
+                  className="flex-1 py-2 text-xs border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  匯出 JSON
+                </button>
+                <button
+                  onClick={() => importRef.current?.click()}
+                  className="flex-1 py-2 text-xs border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  匯入 JSON
+                </button>
+                <input
+                  ref={importRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={handleImport}
+                />
+              </div>
             </div>
           ) : (
             <ClientForm
