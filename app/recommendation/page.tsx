@@ -30,6 +30,7 @@ export default function RecommendationPage() {
   const [jobId, setJobId] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [dots, setDots] = useState(".");
 
   function handleChange(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -73,6 +74,14 @@ export default function RecommendationPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!isProcessing) { setDots("."); return; }
+    const id = setInterval(() => {
+      setDots((d) => (d.length >= 3 ? "." : d + "."));
+    }, 500);
+    return () => clearInterval(id);
+  }, [isProcessing]);
 
   useEffect(() => {
     if (!jobId || !isProcessing) return;
@@ -218,8 +227,9 @@ export default function RecommendationPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
               <h2 className="text-sm font-semibold text-gray-700">生成文章中</h2>
               <p className="text-sm text-gray-600 leading-relaxed">
-                {statusMessage || "需求已送出，等待 n8n 完成生成後回傳通知。"}
+                {statusMessage || "需求已送出，等待 n8n 完成生成後回傳通知。"}{dots}
               </p>
+              <p className="text-xs text-gray-400">預估完成時間：3～5 分鐘</p>
             </div>
           ) : success ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
