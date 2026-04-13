@@ -92,10 +92,14 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRege
         <ul className="text-sm text-amber-700 space-y-1 pl-6 list-disc">
           <li>表格：格式不固定，需手動複製貼上</li>
           <li>YouTube 影片內嵌：iframe 格式各異，需手動貼入</li>
-          {specialNotes.trim().split("\n").filter(Boolean).map((line, i) => (
-            <li key={i}>{line}</li>
-          ))}
         </ul>
+        {specialNotes.trim() && (
+          <div className="mt-2 text-sm text-amber-700 space-y-0.5">
+            {specialNotes.trim().split("\n").filter(Boolean).map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
