@@ -1,20 +1,6 @@
-import { google } from 'googleapis';
-
-const DEFAULT_SHEET_ID = '1adrGAZSynaJ12-XZM3gCLFMTuBpCKbef_LIRR36H9MI';
-const DEFAULT_RANGE = '工具箱回饋!A:C';
-
-function getServiceAccountCredentials() {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
-  if (!raw) {
-    throw new Error('尚未設定 GOOGLE_SERVICE_ACCOUNT_JSON');
-  }
-
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON 格式錯誤');
-  }
-}
+const APPS_SCRIPT_URL =
+  process.env.FEEDBACK_APPS_SCRIPT_URL ||
+  'https://script.google.com/macros/s/AKfycbxyhfuMyWkd-KZ5Qrhc432XZUYiksSybZHDZLYqvvU35aElwMbuyndRrWC0Sv_26dqlMw/exec';
 
 function formatDate(d: Date): string {
   const y = d.getFullYear();
@@ -24,22 +10,13 @@ function formatDate(d: Date): string {
 }
 
 export async function appendFeedbackRow(category: string, content: string) {
-  const credentials = getServiceAccountCredentials();
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date: formatDate(new Date()), category, content }),
   });
 
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.FEEDBACK_SHEET_ID?.trim() || DEFAULT_SHEET_ID;
-  const range = process.env.FEEDBACK_SHEET_RANGE?.trim() || DEFAULT_RANGE;
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: {
-      values: [[formatDate(new Date()), category, content]],
-    },
-  });
+  if (!res.ok) {
+    throw new Error(`Apps Script 回應異常：HTTP ${res.status}`);
+  }
 }
