@@ -33,6 +33,14 @@ const tools = [
     color: "bg-orange-50 border-orange-200 hover:border-orange-400",
     iconBg: "bg-orange-100",
   },
+  {
+    href: "/feedback",
+    title: "工具箱回饋",
+    description: "提交使用問題與功能建議，回饋會直接寫入指定 Google Sheet 供後續追蹤。",
+    icon: "💬",
+    color: "bg-rose-50 border-rose-200 hover:border-rose-400",
+    iconBg: "bg-rose-100",
+  },
 ];
 
 export default function HomePage() {
