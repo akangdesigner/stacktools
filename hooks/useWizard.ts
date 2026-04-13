@@ -9,7 +9,6 @@ const INITIAL_STATE: WizardState = {
   imageReplacements: [],
   selectedClientId: null,
   articleSlug: "",
-  specialNotes: "",
   cleanedHtml: null,
   isLoading: false,
   error: null,
@@ -28,10 +27,6 @@ export function useWizard() {
 
   const setArticleSlug = useCallback((articleSlug: string) => {
     setState((s) => ({ ...s, articleSlug }));
-  }, []);
-
-  const setSpecialNotes = useCallback((specialNotes: string) => {
-    setState((s) => ({ ...s, specialNotes }));
   }, []);
 
   const setSelectedClientId = useCallback((selectedClientId: string) => {
@@ -103,5 +98,5 @@ export function useWizard() {
     setState(INITIAL_STATE);
   }, []);
 
-  return { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, setSpecialNotes, goToStep, goNext, goBack, submitForCleaning, reset };
+  return { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, goToStep, goNext, goBack, submitForCleaning, reset };
 }

@@ -10,7 +10,7 @@ import { Step3SelectClient } from "./Step3SelectClient";
 import { Step4CopyResult } from "./Step4CopyResult";
 
 export function WizardShell() {
-  const { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, setSpecialNotes, goNext, goBack, submitForCleaning, reset } = useWizard();
+  const { state, setRawHtml, setImageReplacements, setSelectedClientId, setArticleSlug, goNext, goBack, submitForCleaning, reset } = useWizard();
   const { getClient } = useClients();
 
   function validatePasteHtmlStep(): string | null {
@@ -77,8 +77,6 @@ export function WizardShell() {
               onSelect={setSelectedClientId}
               articleSlug={state.articleSlug}
               onArticleSlugChange={setArticleSlug}
-              specialNotes={state.specialNotes}
-              onSpecialNotesChange={setSpecialNotes}
               error={step1Error}
             />
           )}
@@ -104,7 +102,6 @@ export function WizardShell() {
               cleanedHtml={state.cleanedHtml}
               onReset={reset}
               selectedClientId={state.selectedClientId}
-              specialNotes={state.specialNotes}
               onRegenerate={async () => {
                 const client = getClient(state.selectedClientId!);
                 if (client) await submitForCleaning(client);

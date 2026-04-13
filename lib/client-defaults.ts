@@ -39,6 +39,7 @@ export const DEFAULT_CLIENT_PROFILE: Omit<ClientProfile, "id" | "name" | "create
   tocBgColor: "#f9f9f9",
   tocBgOpacity: 100,
   blogBaseUrl: "",
+  specialNotes: "",
 };
 
 export const VJEWELRY_PRESET: Omit<ClientProfile, "id" | "name" | "createdAt" | "updatedAt"> = {
@@ -80,6 +81,7 @@ export const VJEWELRY_PRESET: Omit<ClientProfile, "id" | "name" | "createdAt" | 
   tocBgColor: "#f9f9f9",
   tocBgOpacity: 100,
   blogBaseUrl: "",
+  specialNotes: "",
 };
 
 export function createDefaultClient(name: string): ClientProfile {

@@ -57,6 +57,7 @@ export interface ClientProfile {
   tocBgColor: string;        // TOC box background color; "" = transparent
   tocBgOpacity: number;      // TOC background opacity (0-100)
   blogBaseUrl: string;       // e.g. https://www.tantanwow.com/blog/posts/
+  specialNotes: string;      // 上架注意事項，顯示於結果頁提醒
 }
 
 export interface ImageReplacement {
@@ -70,7 +71,6 @@ export interface WizardState {
   imageReplacements: ImageReplacement[];
   selectedClientId: string | null;
   articleSlug: string;
-  specialNotes: string;
   cleanedHtml: string | null;
   isLoading: boolean;
   error: string | null;

@@ -9,12 +9,10 @@ interface Step3SelectClientProps {
   onSelect: (id: string) => void;
   articleSlug: string;
   onArticleSlugChange: (slug: string) => void;
-  specialNotes: string;
-  onSpecialNotesChange: (notes: string) => void;
   error: string | null;
 }
 
-export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onArticleSlugChange, specialNotes, onSpecialNotesChange, error }: Step3SelectClientProps) {
+export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onArticleSlugChange, error }: Step3SelectClientProps) {
   const { clients, isLoaded } = useClients();
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -103,20 +101,6 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
           />
         )}
         <p className="text-xs text-gray-400">填入後目錄連結將使用完整網址，避免 Shopline 跳回首頁</p>
-      </div>
-
-      {/* Special notes */}
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          特殊設定 <span className="text-gray-400 font-normal">（選填，完成後會顯示於結果頁提醒）</span>
-        </label>
-        <textarea
-          value={specialNotes}
-          onChange={(e) => onSpecialNotesChange(e.target.value)}
-          rows={3}
-          placeholder="例：購買按鈕需手動替換連結、第三段需插入圖片..."
-          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 resize-none"
-        />
       </div>
 
       {error && (

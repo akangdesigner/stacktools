@@ -370,6 +370,20 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
         </div>
       </section>
 
+      {/* Special notes */}
+      <section>
+        <p className="text-sm font-semibold text-gray-800 mb-3 pb-1 border-b border-gray-100">特殊設定</p>
+        <div className="space-y-1.5">
+          <textarea
+            value={form.specialNotes}
+            onChange={(e) => set("specialNotes", e.target.value)}
+            rows={3}
+            placeholder="例：購買按鈕需手動替換連結、第三段需插入圖片…&#10;每行一條，完成後顯示於結果頁提醒"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white placeholder-gray-400 resize-none"
+          />
+        </div>
+      </section>
+
       {/* Actions */}
       <div className="flex gap-3 pt-2">
         <button

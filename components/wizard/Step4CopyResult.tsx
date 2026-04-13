@@ -12,14 +12,14 @@ interface Step4CopyResultProps {
   selectedClientId: string | null;
   onRegenerate: () => Promise<void>;
   isRegenerating: boolean;
-  specialNotes: string;
 }
 
-export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRegenerate, isRegenerating, specialNotes }: Step4CopyResultProps) {
+export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRegenerate, isRegenerating }: Step4CopyResultProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const { getClient } = useClients();
   const currentClient = selectedClientId ? getClient(selectedClientId) : null;
+  const specialNotes = currentClient?.specialNotes ?? "";
 
   return (
     <div className="space-y-4">
