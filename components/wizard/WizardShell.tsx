@@ -98,7 +98,17 @@ export function WizardShell() {
             />
           )}
           {state.currentStep === 5 && state.cleanedHtml && (
-            <Step4CopyResult cleanedHtml={state.cleanedHtml} onReset={reset} />
+            <Step4CopyResult
+              cleanedHtml={state.cleanedHtml}
+              onReset={reset}
+              selectedClientId={state.selectedClientId}
+              onClientChange={setSelectedClientId}
+              onRegenerate={async () => {
+                const client = getClient(state.selectedClientId!);
+                if (client) await submitForCleaning(client);
+              }}
+              isRegenerating={state.isLoading}
+            />
           )}
         </div>
 
