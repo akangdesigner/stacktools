@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 
 type FeedbackCategory = '使用問題' | '工具建議' | '其他';
 
@@ -16,8 +16,6 @@ export default function FeedbackPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-
-  const remaining = useMemo(() => 2000 - content.length, [content.length]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,7 +80,6 @@ export default function FeedbackPage() {
             placeholder="請描述您的問題或想新增的功能細節..."
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-gray-300"
           />
-          <p className="mt-1 text-xs text-gray-400">尚可輸入 {remaining} 字</p>
         </div>
 
         <div className="flex items-center gap-3">
