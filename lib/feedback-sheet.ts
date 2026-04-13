@@ -10,10 +10,15 @@ function formatDate(d: Date): string {
 }
 
 export async function appendFeedbackRow(category: string, content: string) {
+  const params = new URLSearchParams({
+    date: formatDate(new Date()),
+    category,
+    content,
+  });
+
   const res = await fetch(APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ date: formatDate(new Date()), category, content }),
+    body: params,
   });
 
   if (!res.ok) {
