@@ -321,7 +321,14 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
                   <input
                     type="checkbox"
                     checked={!form.tocBgColor}
-                    onChange={(e) => set("tocBgColor", e.target.checked ? "" : "#f9f9f9")}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        set("tocBgColor", "");
+                        set("tocBgOpacity", 100);
+                      } else {
+                        set("tocBgColor", "#f9f9f9");
+                      }
+                    }}
                     className="w-4 h-4 rounded accent-blue-600"
                   />
                   透明
@@ -330,6 +337,21 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
                   <ColorPicker label="" value={form.tocBgColor} onChange={(v) => set("tocBgColor", v)} />
                 )}
               </div>
+              {form.tocBgColor && (
+                <label className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600 w-32 shrink-0">背景透明度</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={form.tocBgOpacity ?? 100}
+                    onChange={(e) => set("tocBgOpacity", Number(e.target.value))}
+                    className="w-44"
+                  />
+                  <span className="text-sm text-gray-500 w-12">{form.tocBgOpacity ?? 100}%</span>
+                </label>
+              )}
             </>
           )}
           <div className="flex items-start gap-3">

@@ -55,6 +55,7 @@ export interface ClientProfile {
   generateToc: boolean;      // prepend auto-generated table of contents
   tocTitle: string;          // heading text for the TOC box
   tocBgColor: string;        // TOC box background color; "" = transparent
+  tocBgOpacity: number;      // TOC background opacity (0-100)
   blogBaseUrl: string;       // e.g. https://www.tantanwow.com/blog/posts/
 }
 

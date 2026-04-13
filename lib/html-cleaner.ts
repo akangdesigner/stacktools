@@ -31,12 +31,24 @@ function isButtonAnchor(style: string): boolean {
   return style.includes("background-color") || style.includes("padding");
 }
 
-function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, tocBgColor: string, articleUrl?: string): string {
+function hexToRgba(color: string, opacityPercent: number): string {
+  const match = color.trim().match(/^#?([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$/);
+  if (!match) return color;
+  const raw = match[1];
+  const hex = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  const alpha = Math.max(0, Math.min(100, opacityPercent)) / 100;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, tocBgColor: string, tocBgOpacity: number, articleUrl?: string): string {
   const base = articleUrl ? articleUrl.replace(/#.*$/, "") : ".";
   const links = items
     .map((item) => `<li><a href="${base}#${item.id}" target="_self" style="color: ${linkColor}; text-decoration: underline; font-weight: 400;">${item.text}</a></li>`)
     .join("");
-  const bgStyle = tocBgColor ? `background-color: ${tocBgColor}; ` : "";
+  const bgStyle = tocBgColor ? `background-color: ${hexToRgba(tocBgColor, tocBgOpacity)}; ` : "";
   return `<div class="catalog-box" style="${bgStyle}padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
 }
 
@@ -158,8 +170,12 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     });
   }
 
-  // ── 7. images
+  // ── 7. images (skip emoji inline images)
   root.querySelectorAll("img").forEach((img) => {
+    const role = img.getAttribute("role") || "";
+    const src = img.getAttribute("src") || "";
+    const isEmoji = role === "img" || src.includes("/emoji/") || src.endsWith(".svg");
+    if (isEmoji) return;
     const existing = img.getAttribute("style") || "";
     img.setAttribute("style", mergeStyles(existing, {
       "max-width": client.imageMaxWidth,
@@ -189,7 +205,14 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   if (client.generateToc && tocItems.length > 0) {
     const firstH2Match = result.match(/<h2[\s>]/i);
     if (firstH2Match && firstH2Match.index !== undefined) {
-      const toc = generateTocHtml(tocItems, client.linkColor, client.tocTitle, client.tocBgColor ?? "#f9f9f9", articleUrl) + "\n";
+      const toc = generateTocHtml(
+        tocItems,
+        client.linkColor,
+        client.tocTitle,
+        client.tocBgColor ?? "#f9f9f9",
+        client.tocBgOpacity ?? 100,
+        articleUrl
+      ) + "\n";
       result = result.slice(0, firstH2Match.index) + toc + result.slice(firstH2Match.index);
     }
   }
