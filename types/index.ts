@@ -70,6 +70,7 @@ export interface WizardState {
   imageReplacements: ImageReplacement[];
   selectedClientId: string | null;
   articleSlug: string;
+  specialNotes: string;
   cleanedHtml: string | null;
   isLoading: boolean;
   error: string | null;

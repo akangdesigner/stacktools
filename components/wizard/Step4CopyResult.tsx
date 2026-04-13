@@ -12,9 +12,10 @@ interface Step4CopyResultProps {
   selectedClientId: string | null;
   onRegenerate: () => Promise<void>;
   isRegenerating: boolean;
+  specialNotes: string;
 }
 
-export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRegenerate, isRegenerating }: Step4CopyResultProps) {
+export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRegenerate, isRegenerating, specialNotes }: Step4CopyResultProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const { getClient } = useClients();
@@ -91,6 +92,9 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRege
         <ul className="text-sm text-amber-700 space-y-1 pl-6 list-disc">
           <li>表格：格式不固定，需手動複製貼上</li>
           <li>YouTube 影片內嵌：iframe 格式各異，需手動貼入</li>
+          {specialNotes.trim().split("\n").filter(Boolean).map((line, i) => (
+            <li key={i}>{line}</li>
+          ))}
         </ul>
       </div>
 
