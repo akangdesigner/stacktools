@@ -170,12 +170,15 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     });
   }
 
-  // ── 7. images (skip emoji inline images)
+  // ── 7. images (emoji inline images get fixed small size; content images get client styles)
   root.querySelectorAll("img").forEach((img) => {
     const role = img.getAttribute("role") || "";
     const src = img.getAttribute("src") || "";
     const isEmoji = role === "img" || src.includes("/emoji/") || src.endsWith(".svg");
-    if (isEmoji) return;
+    if (isEmoji) {
+      img.setAttribute("style", "display: inline; height: 1em; width: 1em; vertical-align: -0.1em; margin: 0 0.05em;");
+      return;
+    }
     const existing = img.getAttribute("style") || "";
     img.setAttribute("style", mergeStyles(existing, {
       "max-width": client.imageMaxWidth,
