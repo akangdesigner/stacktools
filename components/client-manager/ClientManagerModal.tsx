@@ -8,12 +8,13 @@ import type { ClientProfile } from "@/types";
 
 interface ClientManagerModalProps {
   onClose: () => void;
+  initialView?: View;
 }
 
 type View = { type: "list" } | { type: "form"; client?: ClientProfile };
 
-export function ClientManagerModal({ onClose }: ClientManagerModalProps) {
-  const [view, setView] = useState<View>({ type: "list" });
+export function ClientManagerModal({ onClose, initialView }: ClientManagerModalProps) {
+  const [view, setView] = useState<View>(initialView ?? { type: "list" });
   const { clients, upsertClient } = useClients();
   const importRef = useRef<HTMLInputElement>(null);
 

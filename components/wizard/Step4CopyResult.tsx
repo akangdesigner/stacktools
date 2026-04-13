@@ -4,19 +4,21 @@ import { useState } from "react";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { HtmlPreview } from "@/components/ui/HtmlPreview";
 import { useClients } from "@/hooks/useClients";
+import { ClientManagerModal } from "@/components/client-manager/ClientManagerModal";
 
 interface Step4CopyResultProps {
   cleanedHtml: string;
   onReset: () => void;
   selectedClientId: string | null;
-  onClientChange: (id: string) => void;
   onRegenerate: () => Promise<void>;
   isRegenerating: boolean;
 }
 
-export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onClientChange, onRegenerate, isRegenerating }: Step4CopyResultProps) {
+export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRegenerate, isRegenerating }: Step4CopyResultProps) {
   const [showPreview, setShowPreview] = useState(false);
-  const { clients } = useClients();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const { getClient } = useClients();
+  const currentClient = selectedClientId ? getClient(selectedClientId) : null;
 
   return (
     <div className="space-y-4">
@@ -30,15 +32,17 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onClie
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
         <span className="text-sm text-gray-500 shrink-0">套用客戶</span>
-        <select
-          value={selectedClientId ?? ""}
-          onChange={(e) => onClientChange(e.target.value)}
-          className="flex-1 text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <span className="flex-1 text-sm font-medium text-gray-800 truncate">{currentClient?.name ?? "—"}</span>
+        <button
+          onClick={() => setShowEditModal(true)}
+          disabled={!currentClient}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
         >
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          編輯設定
+        </button>
         <button
           onClick={onRegenerate}
           disabled={isRegenerating || !selectedClientId}
@@ -62,6 +66,13 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onClie
           )}
         </button>
       </div>
+
+      {showEditModal && currentClient && (
+        <ClientManagerModal
+          initialView={{ type: "form", client: currentClient }}
+          onClose={() => setShowEditModal(false)}
+        />
+      )}
 
       <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
         <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

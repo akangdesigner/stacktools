@@ -102,7 +102,6 @@ export function WizardShell() {
               cleanedHtml={state.cleanedHtml}
               onReset={reset}
               selectedClientId={state.selectedClientId}
-              onClientChange={setSelectedClientId}
               onRegenerate={async () => {
                 const client = getClient(state.selectedClientId!);
                 if (client) await submitForCleaning(client);
