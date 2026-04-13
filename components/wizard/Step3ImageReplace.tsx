@@ -18,17 +18,21 @@ function isRelativePath(src: string): boolean {
 }
 
 // Extracts src from every <img> tag — used to detect images in the original pasted HTML
+// Skips emoji images (role="img", /emoji/ CDN, or .svg extension)
 function parseImageSrcs(html: string): string[] {
   const srcs: string[] = [];
   const seen = new Set<string>();
   const imgTagRegex = /<img\s[^>]*>/gi;
   let tagMatch: RegExpExecArray | null;
   while ((tagMatch = imgTagRegex.exec(html)) !== null) {
-    const srcMatch = /\bsrc="([^"]+)"/.exec(tagMatch[0]);
-    if (srcMatch && !seen.has(srcMatch[1])) {
-      seen.add(srcMatch[1]);
-      srcs.push(srcMatch[1]);
-    }
+    const tag = tagMatch[0];
+    const srcMatch = /\bsrc="([^"]+)"/.exec(tag);
+    if (!srcMatch || seen.has(srcMatch[1])) continue;
+    const src = srcMatch[1];
+    const isEmoji = /\brole="img"/.test(tag) || src.includes("/emoji/") || src.endsWith(".svg");
+    if (isEmoji) continue;
+    seen.add(src);
+    srcs.push(src);
   }
   return srcs;
 }
