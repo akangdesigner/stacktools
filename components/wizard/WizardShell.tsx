@@ -57,9 +57,14 @@ export function WizardShell() {
     return true;
   }
 
+  const selectedClient = state.selectedClientId ? getClient(state.selectedClientId) : null;
+  const specialNotes = selectedClient?.specialNotes?.trim() ?? "";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-start justify-center pt-10 pb-16 px-4">
-      <div className="w-full max-w-2xl space-y-6">
+      <div className="w-full max-w-5xl flex gap-6 items-start">
+        {/* Main wizard */}
+        <div className="flex-1 min-w-0 space-y-6">
         {/* Header */}
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-bold text-gray-900">文章上架工具</h1>
@@ -156,6 +161,28 @@ export function WizardShell() {
             </button>
           </div>
         )}
+        </div>{/* end main wizard */}
+
+        {/* Sidebar — 特殊提醒 */}
+        <div className="w-56 shrink-0 pt-[72px]">
+          {specialNotes ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+              <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z" />
+                </svg>
+                特殊提醒
+              </p>
+              <div className="text-xs text-amber-700 space-y-1 leading-relaxed">
+                {specialNotes.split("\n").filter(Boolean).map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="h-1" />
+          )}
+        </div>
       </div>
     </div>
   );

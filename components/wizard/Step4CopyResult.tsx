@@ -19,7 +19,6 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRege
   const [showEditModal, setShowEditModal] = useState(false);
   const { getClient } = useClients();
   const currentClient = selectedClientId ? getClient(selectedClientId) : null;
-  const specialNotes = currentClient?.specialNotes ?? "";
 
   return (
     <div className="space-y-4">
@@ -93,13 +92,6 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRege
           <li>表格：格式不固定，需手動複製貼上</li>
           <li>YouTube 影片內嵌：iframe 格式各異，需手動貼入</li>
         </ul>
-        {specialNotes.trim() && (
-          <div className="mt-2 text-sm text-amber-700 space-y-0.5">
-            {specialNotes.trim().split("\n").filter(Boolean).map((line, i) => (
-              <p key={i}>{line}</p>
-            ))}
-          </div>
-        )}
       </div>
 
       <div>

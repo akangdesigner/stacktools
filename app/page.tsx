@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const tools = [
+const internalTools = [
   {
     href: "/article",
     title: "文章上架工具",
@@ -33,38 +33,71 @@ const tools = [
     color: "bg-orange-50 border-orange-200 hover:border-orange-400",
     iconBg: "bg-orange-100",
   },
+];
+
+const externalTools = [
   {
-    href: "/feedback",
-    title: "工具箱回饋",
-    description: "提交使用問題與功能建議，回饋會直接寫入指定 Google Sheet 供後續追蹤。",
-    icon: "💬",
-    color: "bg-rose-50 border-rose-200 hover:border-rose-400",
-    iconBg: "bg-rose-100",
+    href: "/products",
+    title: "外部產品",
+    description: "瀏覽對外提供的產品與服務連結。",
+    icon: "📦",
+    color: "bg-gray-50 border-gray-200 hover:border-gray-400",
+    iconBg: "bg-gray-100",
   },
 ];
 
 export default function HomePage() {
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">工具箱</h1>
-        <p className="text-gray-500 mt-1">選擇工具開始作業</p>
+    <div className="p-8 space-y-10 max-w-2xl">
+      {/* 內部工具 */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">內部工具</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {internalTools.map((tool) => (
+            <Link
+              key={tool.href}
+              href={tool.href}
+              className={`block p-5 rounded-xl border-2 transition-all ${tool.color}`}
+            >
+              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
+                {tool.icon}
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+            </Link>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-        {tools.map((tool) => (
-          <Link
-            key={tool.href}
-            href={tool.href}
-            className={`block p-5 rounded-xl border-2 transition-all ${tool.color}`}
-          >
-            <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
-              {tool.icon}
-            </div>
-            <h2 className="font-semibold text-gray-900 mb-1">{tool.title}</h2>
-            <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
-          </Link>
-        ))}
+      {/* 外部產品 */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">外部產品</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {externalTools.map((tool) => (
+            <Link
+              key={tool.href}
+              href={tool.href}
+              className={`block p-5 rounded-xl border-2 transition-all ${tool.color}`}
+            >
+              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
+                {tool.icon}
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* 回饋 */}
+      <div className="border-t border-gray-100 pt-6">
+        <Link
+          href="/feedback"
+          className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <span>💬</span>
+          工具箱回饋
+        </Link>
       </div>
     </div>
   );
