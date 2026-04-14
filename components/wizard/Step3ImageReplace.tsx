@@ -96,13 +96,13 @@ export function Step3ImageReplace({ rawHtml, replacements, onChange }: Props) {
     const extractedUrls = parseFigureSrcs(text);
     const urls = extractedUrls.length > 0
       ? extractedUrls
-      : text.split("\n").map((l) => {
-          const line = l.trim();
-          if (!line) return "";
-          // If line is an HTML fragment containing src="...", extract the URL
-          const srcMatch = /\bsrc="([^"]+)"/.exec(line);
-          return srcMatch ? decodeHtmlEntities(srcMatch[1]) : line;
-        }).filter(Boolean);
+      : (() => {
+          // Extract ALL src="..." globally (handles multiple <img> on the same line)
+          const globalSrcs = [...text.matchAll(/\bsrc="([^"]+)"/g)].map((m) => decodeHtmlEntities(m[1]));
+          if (globalSrcs.length > 0) return globalSrcs;
+          // Fall back: one URL per line
+          return text.split("\n").map((l) => l.trim()).filter(Boolean);
+        })();
     const next: ImageReplacement[] = replacements.map((r, i) => ({
       ...r,
       replacement: urls[i] ? decodeHtmlEntities(urls[i]) : "",
