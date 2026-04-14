@@ -27,9 +27,6 @@ function mergeStyles(existing: string, overrides: Record<string, string>): strin
   return serializeStyleMap(map);
 }
 
-function isButtonAnchor(style: string): boolean {
-  return style.includes("background-color") || style.includes("padding");
-}
 
 function hexToRgba(color: string, opacityPercent: number): string {
   const match = color.trim().match(/^#?([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$/);
@@ -132,29 +129,19 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     });
   });
 
-  // ── 5. anchors: button vs plain link
+  // ── 5. anchors: all treated as plain links
   root.querySelectorAll("a").forEach((a) => {
     const existing = a.getAttribute("style") || "";
-    if (isButtonAnchor(existing)) {
-      a.setAttribute("style", mergeStyles(existing, {
-        "background-color": client.buttonBgColor,
-        color: client.buttonTextColor,
-        "border-radius": client.buttonBorderRadius,
-        padding: client.buttonPadding,
-      }));
-    } else {
-      // Remove bold inside links if requested
-      if (client.stripLinkBold) {
-        a.querySelectorAll("strong, b").forEach((node) => {
-          node.replaceWith(node.innerHTML);
-        });
-      }
-      a.setAttribute("style", mergeStyles(existing, {
-        color: client.linkColor,
-        "text-decoration": client.linkTextDecoration,
-        "font-weight": client.linkFontWeight,
-      }));
+    if (client.stripLinkBold) {
+      a.querySelectorAll("strong, b").forEach((node) => {
+        node.replaceWith(node.innerHTML);
+      });
     }
+    a.setAttribute("style", mergeStyles(existing, {
+      color: client.linkColor,
+      "text-decoration": client.linkTextDecoration,
+      "font-weight": client.linkFontWeight,
+    }));
   });
 
   // ── 6. em → bold or colored non-italic span
@@ -203,7 +190,16 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     });
   }
 
-  // ── 9. Insert TOC before first H2 (via string replace to preserve onclick)
+  // ── 9. Append CTA links at end of article
+  const validCtaLinks = (client.ctaLinks ?? []).filter((c) => c.text.trim() && c.url.trim());
+  if (validCtaLinks.length > 0) {
+    const linksHtml = validCtaLinks
+      .map((c) => `<a href="${c.url}" style="color: ${client.linkColor}; text-decoration: ${client.linkTextDecoration}; font-weight: ${client.linkFontWeight};">${c.text}</a>`)
+      .join("　｜　");
+    root.innerHTML += `\n<p style="font-size: ${client.paragraphFontSize}; line-height: ${client.paragraphLineHeight}; color: ${client.paragraphColor};">${linksHtml}</p>`;
+  }
+
+  // ── 10. Insert TOC before first H2 (via string replace to preserve onclick)
   let result = root.toString();
   if (client.generateToc && tocItems.length > 0) {
     const firstH2Match = result.match(/<h2[\s>]/i);
