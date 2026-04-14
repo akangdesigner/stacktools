@@ -146,7 +146,11 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
           node.replaceWith(node.innerHTML);
         });
       }
-      a.setAttribute("style", mergeStyles(existing, {
+      // Strip button-specific properties before applying link styles
+      const styleMap = parseStyleString(existing);
+      ["background-color", "padding", "border-radius", "display", "font-weight"].forEach((k) => styleMap.delete(k));
+      const cleaned = serializeStyleMap(styleMap);
+      a.setAttribute("style", mergeStyles(cleaned, {
         color: client.linkColor,
         "text-decoration": client.linkTextDecoration,
         "font-weight": client.linkFontWeight,
