@@ -197,51 +197,63 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
         </div>
       </section>
 
-      {/* CTA Links */}
+      {/* Button */}
       <section>
-        <p className="text-sm font-semibold text-gray-800 mb-3 pb-1 border-b border-gray-100">CTA 文字連結</p>
-        <div className="space-y-2">
-          {(form.ctaLinks ?? []).map((cta, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="連結文字"
-                value={cta.text}
-                onChange={(e) => {
-                  const updated = [...(form.ctaLinks ?? [])];
-                  updated[idx] = { ...updated[idx], text: e.target.value };
-                  set("ctaLinks", updated);
-                }}
-                className="w-28 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                placeholder="https://..."
-                value={cta.url}
-                onChange={(e) => {
-                  const updated = [...(form.ctaLinks ?? [])];
-                  updated[idx] = { ...updated[idx], url: e.target.value };
-                  set("ctaLinks", updated);
-                }}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="button"
-                onClick={() => set("ctaLinks", (form.ctaLinks ?? []).filter((_, i) => i !== idx))}
-                className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none px-1"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => set("ctaLinks", [...(form.ctaLinks ?? []), { text: "", url: "" }])}
-            className="mt-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            ＋ 新增連結
-          </button>
-          <p className="text-xs text-gray-400">有填寫的連結會附加在文章末尾</p>
+        <p className="text-sm font-semibold text-gray-800 mb-3 pb-1 border-b border-gray-100">按鈕（CTA）樣式</p>
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <span className="text-sm text-gray-600 w-32 shrink-0">拔除按鈕格式</span>
+            <input
+              type="checkbox"
+              checked={form.stripButtonStyle}
+              onChange={(e) => set("stripButtonStyle", e.target.checked)}
+              className="w-4 h-4 rounded accent-blue-600"
+            />
+            <span className="text-xs text-gray-400">勾選後按鈕改為純文字連結</span>
+          </label>
+          {!form.stripButtonStyle && (
+            <>
+              <ColorPicker label="按鈕背景色" value={form.buttonBgColor} onChange={(v) => set("buttonBgColor", v)} />
+              <ColorPicker label="按鈕文字色" value={form.buttonTextColor} onChange={(v) => set("buttonTextColor", v)} />
+              <label className="flex items-center gap-3">
+                <span className="text-sm text-gray-600 w-32 shrink-0">圓角</span>
+                <input
+                  type="text"
+                  value={form.buttonBorderRadius}
+                  onChange={(e) => set("buttonBorderRadius", e.target.value)}
+                  className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+              <label className="flex items-center gap-3">
+                <span className="text-sm text-gray-600 w-32 shrink-0">內距</span>
+                <input
+                  type="text"
+                  value={form.buttonPadding}
+                  onChange={(e) => set("buttonPadding", e.target.value)}
+                  className="w-36 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+              <div className="mt-2">
+                <p className="text-xs text-gray-400 mb-1">預覽</p>
+                <a
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  style={{
+                    backgroundColor: form.buttonBgColor,
+                    color: form.buttonTextColor,
+                    padding: form.buttonPadding,
+                    borderRadius: form.buttonBorderRadius,
+                    textDecoration: "none",
+                    fontWeight: "bold",
+                    display: "inline-block",
+                    fontSize: 14,
+                  }}
+                >
+                  立即購買
+                </a>
+              </div>
+            </>
+          )}
         </div>
       </section>
 

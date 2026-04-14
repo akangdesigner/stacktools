@@ -25,8 +25,12 @@ export interface ClientProfile {
   linkFontWeight: string;    // "400" | "bold"
   stripLinkBold: boolean;    // remove <strong>/<b> inside <a>
 
-  // CTA 文字連結清單
-  ctaLinks: { text: string; url: string }[];
+  // CTA buttons
+  buttonBgColor: string;
+  buttonTextColor: string;
+  buttonBorderRadius: string;
+  buttonPadding: string;
+  stripButtonStyle: boolean;  // strip button styling, render as plain link
 
   // List items
   listItemColor: string;

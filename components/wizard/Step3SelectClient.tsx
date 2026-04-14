@@ -66,7 +66,7 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
                 <span>H3：<span style={{ color: selected.h3Color }} className="font-medium">{selected.h3Color}</span> / {selected.h3FontSize}</span>
                 <span>段落：{selected.paragraphFontSize} / <span style={{ color: selected.paragraphColor }} className="font-medium">{selected.paragraphColor}</span></span>
                 <span>連結：<span style={{ color: selected.linkColor }} className="font-medium">{selected.linkColor}</span></span>
-                <span>CTA：{(selected.ctaLinks ?? []).length} 筆連結</span>
+                <span>按鈕：{selected.stripButtonStyle ? "拔除格式" : <span style={{ background: selected.buttonBgColor, color: selected.buttonTextColor, padding: "1px 6px", borderRadius: 3 }}>{selected.buttonBgColor}</span>}</span>
               </div>
             </div>
           )}
