@@ -175,7 +175,12 @@ export default function ClientDetailPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-800">客戶資訊</h2>
           {!editingInfo && (
-            <button onClick={() => setEditingInfo(true)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">編輯</button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setEditingInfo(true)} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">編輯</button>
+              <button onClick={handleDelete} disabled={deleting} className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50">
+                {deleting ? '刪除中…' : '刪除'}
+              </button>
+            </div>
           )}
         </div>
 
@@ -311,16 +316,6 @@ export default function ClientDetailPage() {
         <p className="text-sm text-gray-300">尚無報告</p>
       </div>
 
-      {/* 刪除 */}
-      <div className="pt-2">
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="text-xs text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
-        >
-          {deleting ? '刪除中…' : '刪除此客戶'}
-        </button>
-      </div>
     </div>
   );
 }
