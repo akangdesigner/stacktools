@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listClients, createClient } from '@/lib/socialDb';
+import { listClients, createClient, exportAllClients } from '@/lib/socialDb';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const clients = listClients();
-    return NextResponse.json(clients);
+    if (req.nextUrl.searchParams.get('full') === 'true') {
+      return NextResponse.json(exportAllClients());
+    }
+    return NextResponse.json(listClients());
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

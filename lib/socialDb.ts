@@ -97,6 +97,15 @@ export function getClientUrls(clientId: string): PlatformGroup[] {
   return Array.from(map.entries()).map(([platform, urls]) => ({ platform, urls }));
 }
 
+export function exportAllClients(): { name: string; slackId: string | null; platforms: PlatformGroup[] }[] {
+  const clients = listClients();
+  return clients.map((c) => ({
+    name: c.name,
+    slackId: c.slack_id,
+    platforms: getClientUrls(c.id),
+  }));
+}
+
 export function setClientUrls(clientId: string, platforms: { platform: string; urls: string[] }[]) {
   const db = getSocialDb();
   const del = db.prepare('DELETE FROM social_client_urls WHERE client_id = ?');

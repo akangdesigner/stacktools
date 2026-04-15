@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface ClientSummary {
@@ -20,6 +20,8 @@ export default function SocialListPage() {
   const [slackId, setSlackId] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [importMsg, setImportMsg] = useState('');
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch('/api/social-clients')
@@ -48,6 +50,40 @@ export default function SocialListPage() {
     }
   }
 
+  async function handleExport() {
+    const res = await fetch('/api/social-clients?full=true');
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `social-clients-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportMsg('匯入中…');
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const res = await fetch('/api/social-clients/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json),
+      });
+      const data = await res.json();
+      setImportMsg(`匯入完成：${data.imported} 筆成功${data.failed ? `，${data.failed} 筆失敗` : ''}`);
+      // 重新載入列表
+      fetch('/api/social-clients').then((r) => r.json()).then(setClients);
+    } catch (err) {
+      setImportMsg(`匯入失敗：${String(err)}`);
+    }
+    e.target.value = '';
+  }
+
   return (
     <div className="p-8 max-w-2xl space-y-8">
       <div className="flex items-center justify-between">
@@ -55,7 +91,33 @@ export default function SocialListPage() {
           <h1 className="text-2xl font-bold text-gray-900">社群監控客戶</h1>
           <p className="mt-1 text-sm text-gray-500">管理各客戶的社群帳號追蹤與 Webhook 觸發。</p>
         </div>
-        <button
+        <div className="flex items-center gap-2">
+          {/* 匯出 */}
+          <button
+            onClick={handleExport}
+            title="匯出 JSON"
+            className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-400 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </button>
+          {/* 匯入 */}
+          <button
+            onClick={() => importRef.current?.click()}
+            title="匯入 JSON"
+            className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-400 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </button>
+          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+          <button
           onClick={() => { setShowForm((v) => !v); setError(''); }}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
         >
@@ -63,8 +125,12 @@ export default function SocialListPage() {
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
           新增客戶
-        </button>
+          </button>
+        </div>
       </div>
+      {importMsg && (
+        <p className="text-xs text-gray-500">{importMsg}</p>
+      )}
 
       {/* 新增表單 */}
       {showForm && (
