@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getClient, getClientUrls } from '@/lib/socialDb';
+
+export async function POST(req: NextRequest) {
+  const webhookUrl = process.env.N8N_SOCIAL_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return NextResponse.json({ error: '未設定 N8N_SOCIAL_WEBHOOK_URL' }, { status: 500 });
+  }
+
+  let body: { clientId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: '無效的請求格式' }, { status: 400 });
+  }
+
+  const { clientId } = body;
+  if (!clientId?.trim()) {
+    return NextResponse.json({ error: '請提供客戶 ID' }, { status: 400 });
+  }
+
+  const client = getClient(clientId);
+  if (!client) {
+    return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
+  }
+
+  const platforms = getClientUrls(clientId);
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientName: client.name,
+        slackChannelId: client.slack_id ?? '',
+        platforms,
+      }),
+    });
+    const text = await res.text();
+    return NextResponse.json({ ok: res.ok, status: res.status, body: text });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}

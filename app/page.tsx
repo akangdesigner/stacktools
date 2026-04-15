@@ -33,6 +33,14 @@ const internalTools = [
     color: "bg-orange-50 border-orange-200 hover:border-orange-400",
     iconBg: "bg-orange-100",
   },
+  {
+    href: "/social",
+    title: "社群 Webhook 觸發",
+    description: "填入貼文 URL 與 Slack 頻道，一鍵觸發 FB/IG/YT/TikTok/Threads 的 N8N Webhook。",
+    icon: "📡",
+    color: "bg-rose-50 border-rose-200 hover:border-rose-400",
+    iconBg: "bg-rose-100",
+  },
 ];
 
 const externalTools = [
@@ -89,16 +97,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 回饋 */}
-      <div className="border-t border-gray-100 pt-6">
-        <Link
-          href="/feedback"
-          className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <span>💬</span>
-          工具箱回饋
-        </Link>
-      </div>
     </div>
   );
 }
