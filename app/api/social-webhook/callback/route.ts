@@ -51,11 +51,11 @@ function normalizePost(p: Record<string, any>) {
     p['videoPlayCount'] ?? p['videoViewCount'] ?? p['videoPlayCount']
   );
 
-  // thumbnail：中文 / 英文 / Apify profilePicUrl / displayUrl
+  // thumbnail：優先取貼文圖片 displayUrl，其次大頭貼
   const thumbnail =
-    p['大頭貼'] ??
+    p['displayUrl'] ??
     p['thumbnail'] ?? p['Thumbnail'] ??
-    p['profilePicUrl'] ?? p['displayUrl'] ??
+    p['大頭貼'] ?? p['profilePicUrl'] ??
     null;
 
   // post_date：中文 / 英文 / Apify timestamp

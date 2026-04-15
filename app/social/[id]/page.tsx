@@ -361,44 +361,52 @@ export default function ClientDetailPage() {
 
         {/* 貼文列表 */}
         {latestJob && latestJob.posts.length > 0 && (
-          <div className="divide-y divide-gray-50 -mx-5 px-5">
+          <div className="divide-y divide-gray-100 -mx-5">
             {latestJob.posts.map((post) => (
-              <div key={post.id} className="py-3 space-y-2">
-                {post.video_url ? (
+              <div key={post.id} className="px-5 py-4 space-y-2">
+                {/* 影片：全寬顯示 */}
+                {post.video_url && (
                   <video
                     src={post.video_url}
                     controls
                     muted
                     loop
-                    className="w-full rounded-lg bg-black max-h-80 object-contain"
+                    className="w-full rounded-lg bg-black max-h-72 object-contain"
                   />
-                ) : post.thumbnail ? (
-                  <img src={post.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0 bg-gray-100" />
-                ) : null}
+                )}
+                {/* 縮圖 + 文字並排 */}
                 <div className="flex gap-3">
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{post.platform}</span>
-                    {post.account && <span className="text-xs text-gray-500 truncate">{post.account}</span>}
-                    {post.post_date && <span className="text-xs text-gray-300 ml-auto shrink-0">{post.post_date}</span>}
-                  </div>
-                  {post.content && (
-                    <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
+                  {!post.video_url && post.thumbnail && (
+                    <img
+                      src={post.thumbnail}
+                      alt=""
+                      className="w-14 h-14 rounded-lg object-cover shrink-0 bg-gray-100"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
                   )}
-                  {post.hashtags && (
-                    <p className="text-xs text-blue-400 line-clamp-2">{post.hashtags}</p>
-                  )}
-                  <div className="flex items-center gap-3 text-xs text-gray-400">
-                    {post.likes != null && <span>❤ {post.likes.toLocaleString()}</span>}
-                    {post.comments != null && <span>💬 {post.comments.toLocaleString()}</span>}
-                    {post.views != null && <span>👁 {post.views.toLocaleString()}</span>}
-                    {post.post_url && (
-                      <a href={post.post_url} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline shrink-0">
-                        查看原文 →
-                      </a>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{post.platform}</span>
+                      {post.account && <span className="text-xs text-gray-500 truncate">{post.account}</span>}
+                      {post.post_date && <span className="text-xs text-gray-300 ml-auto shrink-0">{post.post_date}</span>}
+                    </div>
+                    {post.content && (
+                      <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
                     )}
+                    {post.hashtags && (
+                      <p className="text-xs text-blue-400 line-clamp-2">{post.hashtags}</p>
+                    )}
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      {post.likes != null && <span>❤ {post.likes.toLocaleString()}</span>}
+                      {post.comments != null && <span>💬 {post.comments.toLocaleString()}</span>}
+                      {post.views != null && <span>👁 {post.views.toLocaleString()}</span>}
+                      {post.post_url && (
+                        <a href={post.post_url} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline shrink-0">
+                          查看原文 →
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
                 </div>
               </div>
             ))}
