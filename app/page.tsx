@@ -56,6 +56,7 @@ const externalTools = [
 
 export default function HomePage() {
   return (
+    <>
     <div className="p-8 space-y-10 max-w-2xl">
       {/* 內部工具 */}
       <div>
@@ -107,5 +108,6 @@ export default function HomePage() {
       </svg>
       工具箱回饋
     </Link>
+    </>
   );
 }
