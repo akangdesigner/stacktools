@@ -61,10 +61,9 @@ export default function ClientDetailPage() {
   const [deleting, setDeleting] = useState(false);
 
   // 報告
-  const [jobs, setJobs] = useState<SocialJob[]>([]);
+  const [latestJob, setLatestJob] = useState<SocialJob | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
-  const [timedOutJobIds, setTimedOutJobIds] = useState<Set<string>>(new Set());
+  const [timedOut, setTimedOut] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCountRef = useRef(0);
 
@@ -94,16 +93,9 @@ export default function ClientDetailPage() {
     const res = await fetch(`/api/social-clients/${id}/jobs`);
     if (res.ok) {
       const data: SocialJob[] = await res.json();
-      setJobs(data);
-      // 超過 10 分鐘還在 processing → 標記逾時
-      const now = Date.now();
-      const stale = data
-        .filter((j) => j.status === 'processing' && now - new Date(j.created_at).getTime() > 10 * 60 * 1000)
-        .map((j) => j.id);
-      if (stale.length > 0) setTimedOutJobIds(new Set(stale));
-      // 自動展開最新已完成的任務
-      const latest = data.find((j) => j.status === 'completed');
-      if (latest) setExpandedJobId(latest.id);
+      // 只取最新一筆已完成的
+      const latest = data.find((j) => j.status === 'completed') ?? null;
+      setLatestJob(latest);
     }
   }
 
@@ -111,29 +103,22 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (!activeJobId) return;
     pollCountRef.current = 0;
+    setTimedOut(false);
     pollRef.current = setInterval(async () => {
       pollCountRef.current += 1;
-
-      // 超過 20 次 → 標記逾時，停止輪詢
       if (pollCountRef.current > 20) {
         clearInterval(pollRef.current!);
-        setTimedOutJobIds((prev) => new Set([...prev, activeJobId]));
+        setTimedOut(true);
         setActiveJobId(null);
         return;
       }
-
       const res = await fetch(`/api/social-jobs/${activeJobId}`);
       if (!res.ok) return;
       const job: SocialJob = await res.json();
       if (job.status !== 'processing') {
         clearInterval(pollRef.current!);
         setActiveJobId(null);
-        setJobs((prev) => {
-          const idx = prev.findIndex((j) => j.id === job.id);
-          if (idx === -1) return [job, ...prev];
-          const next = [...prev]; next[idx] = job; return next;
-        });
-        if (job.status === 'completed') setExpandedJobId(job.id);
+        if (job.status === 'completed') setLatestJob(job);
       }
     }, 10000);
     return () => clearInterval(pollRef.current!);
@@ -192,12 +177,6 @@ export default function ClientDetailPage() {
         setTriggerError(data.error ?? `伺服器錯誤（HTTP ${res.status}）`);
         return;
       }
-      const newJob: SocialJob = {
-        id: data.jobId!, status: 'processing',
-        date_from: dateFrom || null, date_to: dateTo || null,
-        message: null, created_at: new Date().toLocaleString('zh-TW'), posts: [],
-      };
-      setJobs((prev) => [newJob, ...prev]);
       setActiveJobId(data.jobId!);
     } catch (err) {
       setTriggerError(String(err));
@@ -350,98 +329,74 @@ export default function ClientDetailPage() {
 
       {/* ── 區塊 3：報告 ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-        <h2 className="text-base font-semibold text-gray-800">報告</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-800">最新報告</h2>
+          {latestJob && (
+            <span className="text-xs text-gray-400">
+              {latestJob.created_at}・{latestJob.posts.length} 筆貼文
+            </span>
+          )}
+        </div>
 
-        {jobs.length === 0 ? (
+        {/* 處理中 */}
+        {activeJobId && (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <svg className="animate-spin w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            抓取中，約 3 分鐘後自動更新…
+          </div>
+        )}
+
+        {/* 逾時 */}
+        {timedOut && !activeJobId && (
+          <p className="text-sm text-yellow-600">逾時，請重新按「抓取社群內容」。</p>
+        )}
+
+        {/* 無資料 */}
+        {!activeJobId && !latestJob && !timedOut && (
           <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「抓取社群內容」開始。</p>
-        ) : (
-          <div className="space-y-3">
-            {jobs.map((job) => (
-              <div key={job.id} className="rounded-xl border border-gray-100 overflow-hidden">
-                {/* Job 標頭 */}
-                <button
-                  type="button"
-                  onClick={() => setExpandedJobId((v) => v === job.id ? null : job.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    {timedOutJobIds.has(job.id) ? (
-                      <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
-                    ) : job.status === 'processing' ? (
-                      <svg className="animate-spin w-3.5 h-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                      </svg>
-                    ) : job.status === 'completed' ? (
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                    ) : (
-                      <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
-                    )}
-                    <span className="text-sm text-gray-700">{job.created_at}</span>
-                    {(job.date_from || job.date_to) && (
-                      <span className="text-xs text-gray-400">{job.date_from ?? '…'} — {job.date_to ?? '…'}</span>
-                    )}
-                    {job.status === 'completed' && (
-                      <span className="text-xs text-gray-400">{job.posts.length} 筆貼文</span>
-                    )}
-                    {timedOutJobIds.has(job.id) && (
-                      <span className="text-xs text-yellow-500">逾時，請重新抓取</span>
-                    )}
-                    {!timedOutJobIds.has(job.id) && job.status === 'processing' && (
-                      <span className="text-xs text-gray-400">處理中…</span>
-                    )}
-                    {job.status === 'failed' && (
-                      <span className="text-xs text-red-400">{job.message ?? '失敗'}</span>
-                    )}
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg"
-                    className={`w-4 h-4 text-gray-300 transition-transform ${expandedJobId === job.id ? 'rotate-180' : ''}`}
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
+        )}
 
-                {/* 貼文列表 */}
-                {expandedJobId === job.id && job.posts.length > 0 && (
-                  <div className="border-t border-gray-100 divide-y divide-gray-50">
-                    {job.posts.map((post) => (
-                      <div key={post.id} className="px-4 py-3 flex gap-3">
-                        {post.thumbnail && (
-                          <img src={post.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0 bg-gray-100" />
-                        )}
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{post.platform}</span>
-                            {post.account && <span className="text-xs text-gray-500 truncate">{post.account}</span>}
-                            {post.post_date && <span className="text-xs text-gray-300 ml-auto shrink-0">{post.post_date}</span>}
-                          </div>
-                          {post.content && (
-                            <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
-                          )}
-                          {post.hashtags && (
-                            <p className="text-xs text-blue-400 line-clamp-2">{post.hashtags}</p>
-                          )}
-                          <div className="flex items-center gap-3 text-xs text-gray-400">
-                            {post.likes != null && <span>❤ {post.likes.toLocaleString()}</span>}
-                            {post.comments != null && <span>💬 {post.comments.toLocaleString()}</span>}
-                            {post.views != null && <span>👁 {post.views.toLocaleString()}</span>}
-                            {post.post_url && (
-                              <a href={post.post_url} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline shrink-0">
-                                查看原文 →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+        {/* 貼文列表 */}
+        {latestJob && latestJob.posts.length > 0 && (
+          <div className="divide-y divide-gray-50 -mx-5 px-5">
+            {latestJob.posts.map((post) => (
+              <div key={post.id} className="py-3 flex gap-3">
+                {post.thumbnail && (
+                  <img src={post.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0 bg-gray-100" />
+                )}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{post.platform}</span>
+                    {post.account && <span className="text-xs text-gray-500 truncate">{post.account}</span>}
+                    {post.post_date && <span className="text-xs text-gray-300 ml-auto shrink-0">{post.post_date}</span>}
                   </div>
-                )}
-                {expandedJobId === job.id && job.status === 'completed' && job.posts.length === 0 && (
-                  <div className="border-t border-gray-100 px-4 py-3 text-sm text-gray-300">此次抓取無貼文資料。</div>
-                )}
+                  {post.content && (
+                    <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
+                  )}
+                  {post.hashtags && (
+                    <p className="text-xs text-blue-400 line-clamp-2">{post.hashtags}</p>
+                  )}
+                  <div className="flex items-center gap-3 text-xs text-gray-400">
+                    {post.likes != null && <span>❤ {post.likes.toLocaleString()}</span>}
+                    {post.comments != null && <span>💬 {post.comments.toLocaleString()}</span>}
+                    {post.views != null && <span>👁 {post.views.toLocaleString()}</span>}
+                    {post.post_url && (
+                      <a href={post.post_url} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline shrink-0">
+                        查看原文 →
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
+        )}
+
+        {latestJob && latestJob.posts.length === 0 && !activeJobId && (
+          <p className="text-sm text-gray-300">此次抓取無貼文資料。</p>
         )}
       </div>
     </div>
