@@ -27,6 +27,9 @@ export async function POST(req: NextRequest) {
   const platforms = getClientUrls(clientId);
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -35,10 +38,15 @@ export async function POST(req: NextRequest) {
         slackChannelId: client.slack_id ?? '',
         platforms,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     const text = await res.text();
     return NextResponse.json({ ok: res.ok, status: res.status, body: text });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error && err.name === 'AbortError'
+      ? 'N8N 請求逾時（15s），請確認 Webhook URL 與 workflow 狀態'
+      : String(err);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

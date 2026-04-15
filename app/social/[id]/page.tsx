@@ -133,10 +133,11 @@ export default function ClientDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: id }),
       });
-      const data = await res.json();
+      let data: { ok?: boolean; status?: number; error?: string } = {};
+      try { data = await res.json(); } catch { /* 非 JSON 回應 */ }
       setTriggerResult(res.ok && data.ok
         ? { ok: true, message: '已成功送出至 N8N！' }
-        : { ok: false, message: data.error ?? `N8N 回應錯誤（${data.status}）` });
+        : { ok: false, message: data.error ?? `伺服器錯誤（HTTP ${res.status}）` });
     } catch (err) {
       setTriggerResult({ ok: false, message: String(err) });
     } finally {
