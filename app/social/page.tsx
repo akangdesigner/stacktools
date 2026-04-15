@@ -89,7 +89,7 @@ export default function SocialListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">社群監控客戶</h1>
-          <p className="mt-1 text-sm text-gray-500">管理各客戶的社群帳號追蹤與 Webhook 觸發。</p>
+          <p className="mt-1 text-sm text-gray-500">管理各客戶的社群帳號，設定完成後即可一鍵抓取最新貼文並通知 Slack。</p>
         </div>
         <div className="flex items-center gap-2">
           {/* 匯出 */}
@@ -202,7 +202,7 @@ export default function SocialListPage() {
               </div>
               <div className="space-y-1 text-xs text-gray-500">
                 {c.slack_id && <p>Slack：{c.slack_id}</p>}
-                <p>追蹤 URL：{c.url_count} 筆</p>
+                <p>追蹤帳號：{c.url_count} 筆</p>
                 <p>建立：{c.created_at}</p>
               </div>
             </button>

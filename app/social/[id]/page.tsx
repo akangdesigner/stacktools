@@ -181,7 +181,7 @@ export default function ClientDetailPage() {
   }
 
   async function handleDelete() {
-    if (!confirm(`確定要刪除「${client?.name}」及所有追蹤 URL？`)) return;
+    if (!confirm(`確定要刪除「${client?.name}」及所有追蹤帳號與報告？`)) return;
     setDeleting(true);
     await fetch(`/api/social-clients/${id}`, { method: 'DELETE' });
     router.push('/social');
@@ -246,7 +246,7 @@ export default function ClientDetailPage() {
         {/* 抓取觸發 */}
         <div className="pt-2 border-t border-gray-100 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 shrink-0">篩選日期</span>
+            <span className="text-xs text-gray-400 shrink-0">貼文日期區間</span>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
               className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <span className="text-xs text-gray-300">—</span>
@@ -278,7 +278,7 @@ export default function ClientDetailPage() {
       {/* ── 區塊 2：追蹤 URL ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
         <button type="button" onClick={() => setUrlsOpen((v) => !v)} className="w-full flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-800">各平台個人檔案 URL</h2>
+          <h2 className="text-base font-semibold text-gray-800">各平台帳號網址</h2>
           <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 text-gray-400 transition-transform ${urlsOpen ? 'rotate-180' : ''}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9" />
@@ -315,7 +315,7 @@ export default function ClientDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={saveUrls} disabled={savingUrls} className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50">
-              {savingUrls ? '儲存中…' : '儲存 URL'}
+              {savingUrls ? '儲存中…' : '儲存網址'}
             </button>
             {urlSaved && <span className="text-xs text-emerald-600">✓ 已儲存</span>}
           </div>
@@ -327,7 +327,7 @@ export default function ClientDetailPage() {
         <h2 className="text-base font-semibold text-gray-800">報告</h2>
 
         {jobs.length === 0 ? (
-          <p className="text-sm text-gray-300">尚無報告，按「抓取社群內容」開始。</p>
+          <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「抓取社群內容」開始。</p>
         ) : (
           <div className="space-y-3">
             {jobs.map((job) => (

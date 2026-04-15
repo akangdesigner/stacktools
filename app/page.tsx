@@ -35,8 +35,8 @@ const internalTools = [
   },
   {
     href: "/social",
-    title: "社群 Webhook 觸發",
-    description: "填入貼文 URL 與 Slack 頻道，一鍵觸發 FB/IG/YT/TikTok/Threads 的 N8N Webhook。",
+    title: "社群貼文追蹤",
+    description: "設定客戶的社群帳號網址，定期抓取 FB/IG/YT/TikTok/Threads 的最新貼文，並發送通知到 Slack。",
     icon: "📡",
     color: "bg-rose-50 border-rose-200 hover:border-rose-400",
     iconBg: "bg-rose-100",
