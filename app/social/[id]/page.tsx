@@ -47,6 +47,8 @@ export default function ClientDetailPage() {
   // Webhook
   const [triggering, setTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   // 刪除
   const [deleting, setDeleting] = useState(false);
@@ -131,7 +133,7 @@ export default function ClientDetailPage() {
       const res = await fetch('/api/social-webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id }),
+        body: JSON.stringify({ clientId: id, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
       });
       let data: { ok?: boolean; status?: number; error?: string } = {};
       try { data = await res.json(); } catch { /* 非 JSON 回應 */ }
@@ -223,19 +225,46 @@ export default function ClientDetailPage() {
         )}
 
         {/* Webhook 觸發 */}
-        <div className="pt-2 border-t border-gray-100 flex items-center gap-3 flex-wrap">
-          <button
-            onClick={triggerWebhook}
-            disabled={triggering}
-            className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
-          >
-            {triggering ? '送出中…' : '觸發 Webhook'}
-          </button>
-          {triggerResult && (
-            <span className={`text-xs font-medium ${triggerResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-              {triggerResult.ok ? '✓ ' : '✗ '}{triggerResult.message}
-            </span>
-          )}
+        <div className="pt-2 border-t border-gray-100 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-400 shrink-0">篩選日期</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <span className="text-xs text-gray-300">—</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="text-xs text-gray-300 hover:text-gray-500 transition-colors"
+              >
+                清除
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={triggerWebhook}
+              disabled={triggering}
+              className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              {triggering ? '送出中…' : '觸發 Webhook'}
+            </button>
+            {triggerResult && (
+              <span className={`text-xs font-medium ${triggerResult.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                {triggerResult.ok ? '✓ ' : '✗ '}{triggerResult.message}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
