@@ -95,6 +95,12 @@ export default function ClientDetailPage() {
     if (res.ok) {
       const data: SocialJob[] = await res.json();
       setJobs(data);
+      // 超過 10 分鐘還在 processing → 標記逾時
+      const now = Date.now();
+      const stale = data
+        .filter((j) => j.status === 'processing' && now - new Date(j.created_at).getTime() > 10 * 60 * 1000)
+        .map((j) => j.id);
+      if (stale.length > 0) setTimedOutJobIds(new Set(stale));
       // 自動展開最新已完成的任務
       const latest = data.find((j) => j.status === 'completed');
       if (latest) setExpandedJobId(latest.id);
