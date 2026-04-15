@@ -85,7 +85,7 @@ export default function SocialListPage() {
   }
 
   return (
-    <div className="p-8 max-w-2xl space-y-8">
+    <div className="p-8 space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">社群監控客戶</h1>

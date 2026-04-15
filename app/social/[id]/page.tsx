@@ -201,7 +201,7 @@ export default function ClientDetailPage() {
   );
 
   return (
-    <div className="p-8 max-w-2xl space-y-8">
+    <div className="p-8 space-y-8">
       <Link href="/social" className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors">
         <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
         返回客戶列表

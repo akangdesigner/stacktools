@@ -35,15 +35,6 @@ export default function RootLayout({
         <main className="flex-1 overflow-auto">
           {children}
         </main>
-        <Link
-          href="/feedback"
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 bg-gray-900 text-white text-sm font-medium rounded-2xl shadow-lg hover:bg-gray-700 transition-colors"
-        >
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 16a2 2 0 01-2 2H7l-4 4V6a2 2 0 012-2h14a2 2 0 012 2v10z" />
-          </svg>
-          工具箱回饋
-        </Link>
       </body>
     </html>
   );
