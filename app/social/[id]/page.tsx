@@ -51,6 +51,9 @@ export default function ClientDetailPage() {
   // 刪除
   const [deleting, setDeleting] = useState(false);
 
+  // URL 區塊開合
+  const [urlsOpen, setUrlsOpen] = useState(false);
+
   useEffect(() => {
     fetch(`/api/social-clients/${id}`)
       .then((r) => {
@@ -232,8 +235,21 @@ export default function ClientDetailPage() {
 
       {/* ── 區塊 2：追蹤 URL ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-        <h2 className="text-base font-semibold text-gray-800">各平台個人檔案 URL</h2>
-        <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setUrlsOpen((v) => !v)}
+          className="w-full flex items-center justify-between"
+        >
+          <h2 className="text-base font-semibold text-gray-800">各平台個人檔案 URL</h2>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className={`w-4 h-4 text-gray-400 transition-transform ${urlsOpen ? 'rotate-180' : ''}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        {urlsOpen && <div className="space-y-3">
           {PLATFORM_DEFS.map((p) => (
             <div key={p.key} className="rounded-xl border border-gray-200 px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -275,8 +291,8 @@ export default function ClientDetailPage() {
               ))}
             </div>
           ))}
-        </div>
-        <div className="flex items-center gap-3">
+        </div>}
+        {urlsOpen && <div className="flex items-center gap-3">
           <button
             onClick={saveUrls}
             disabled={savingUrls}
@@ -285,7 +301,7 @@ export default function ClientDetailPage() {
             {savingUrls ? '儲存中…' : '儲存 URL'}
           </button>
           {urlSaved && <span className="text-xs text-emerald-600">✓ 已儲存</span>}
-        </div>
+        </div>}
       </div>
 
       {/* ── 區塊 3：報告（預留） ── */}
