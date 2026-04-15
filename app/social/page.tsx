@@ -92,39 +92,27 @@ export default function SocialListPage() {
           <p className="mt-1 text-sm text-gray-500">管理各客戶的社群帳號，設定完成後即可一鍵抓取最新貼文並通知 Slack。</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* 匯出 */}
           <button
             onClick={handleExport}
-            title="匯出 JSON"
-            className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-400 transition-colors"
+            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
+            匯出
           </button>
-          {/* 匯入 */}
           <button
             onClick={() => importRef.current?.click()}
-            title="匯入 JSON"
-            className="p-2 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-400 transition-colors"
+            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
+            匯入
           </button>
           <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
           <button
-          onClick={() => { setShowForm((v) => !v); setError(''); }}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          新增客戶
+            onClick={() => { setShowForm((v) => !v); setError(''); }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            新增客戶
           </button>
         </div>
       </div>
