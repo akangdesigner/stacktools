@@ -55,14 +55,18 @@ export function getSocialDb(): Database.Database {
       thumbnail   TEXT,
       post_date   TEXT,
       hashtags    TEXT,
+      video_url   TEXT,
       created_at  TEXT DEFAULT (datetime('now','localtime'))
     );
   `);
 
-  // migration：舊資料庫補 hashtags 欄位
+  // migration：舊資料庫補欄位
   const cols = (db.prepare("PRAGMA table_info(social_posts)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes('hashtags')) {
     db.exec('ALTER TABLE social_posts ADD COLUMN hashtags TEXT');
+  }
+  if (!cols.includes('video_url')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN video_url TEXT');
   }
 
   return db;
@@ -165,6 +169,7 @@ export interface SocialPost {
   thumbnail: string | null;
   post_date: string | null;
   hashtags: string | null;
+  video_url: string | null;
   created_at: string;
 }
 
@@ -194,13 +199,13 @@ export function listJobsByClient(clientId: string): SocialJob[] {
 
 export function savePosts(jobId: string, posts: Partial<SocialPost>[]) {
   const ins = getSocialDb().prepare(
-    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags, video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   getSocialDb().transaction(() => {
     for (const p of posts) {
       ins.run(jobId, p.platform ?? '', p.account ?? null, p.post_url ?? null, p.content ?? null,
         p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.post_date ?? null,
-        p.hashtags ?? null);
+        p.hashtags ?? null, p.video_url ?? null);
     }
   })();
 }

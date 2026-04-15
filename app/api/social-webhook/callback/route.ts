@@ -65,7 +65,10 @@ function normalizePost(p: Record<string, any>) {
     p['timestamp'] ?? p['takenAtTimestamp'] ??
     null;
 
-  return { platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags: hashtagsStr };
+  const video_url =
+    p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ?? null;
+
+  return { platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags: hashtagsStr, video_url };
 }
 
 function toInt(v: unknown): number | null {
