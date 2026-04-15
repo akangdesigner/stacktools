@@ -26,6 +26,7 @@ interface SocialPost {
   id: number; platform: string; account: string | null; post_url: string | null;
   content: string | null; likes: number | null; comments: number | null;
   views: number | null; thumbnail: string | null; post_date: string | null;
+  hashtags: string | null;
 }
 
 interface SocialJob {
@@ -63,7 +64,9 @@ export default function ClientDetailPage() {
   const [jobs, setJobs] = useState<SocialJob[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [timedOutJobIds, setTimedOutJobIds] = useState<Set<string>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -89,13 +92,30 @@ export default function ClientDetailPage() {
 
   async function loadJobs() {
     const res = await fetch(`/api/social-clients/${id}/jobs`);
-    if (res.ok) setJobs(await res.json());
+    if (res.ok) {
+      const data: SocialJob[] = await res.json();
+      setJobs(data);
+      // 自動展開最新已完成的任務
+      const latest = data.find((j) => j.status === 'completed');
+      if (latest) setExpandedJobId(latest.id);
+    }
   }
 
-  // ── 輪詢 ──────────────────────────────────────────────────
+  // ── 輪詢（最多 20 次，約 3.3 分鐘後逾時）──────────────────
   useEffect(() => {
     if (!activeJobId) return;
+    pollCountRef.current = 0;
     pollRef.current = setInterval(async () => {
+      pollCountRef.current += 1;
+
+      // 超過 20 次 → 標記逾時，停止輪詢
+      if (pollCountRef.current > 20) {
+        clearInterval(pollRef.current!);
+        setTimedOutJobIds((prev) => new Set([...prev, activeJobId]));
+        setActiveJobId(null);
+        return;
+      }
+
       const res = await fetch(`/api/social-jobs/${activeJobId}`);
       if (!res.ok) return;
       const job: SocialJob = await res.json();
@@ -339,7 +359,9 @@ export default function ClientDetailPage() {
                   className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    {job.status === 'processing' ? (
+                    {timedOutJobIds.has(job.id) ? (
+                      <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
+                    ) : job.status === 'processing' ? (
                       <svg className="animate-spin w-3.5 h-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -356,7 +378,10 @@ export default function ClientDetailPage() {
                     {job.status === 'completed' && (
                       <span className="text-xs text-gray-400">{job.posts.length} 筆貼文</span>
                     )}
-                    {job.status === 'processing' && (
+                    {timedOutJobIds.has(job.id) && (
+                      <span className="text-xs text-yellow-500">逾時，請重新抓取</span>
+                    )}
+                    {!timedOutJobIds.has(job.id) && job.status === 'processing' && (
                       <span className="text-xs text-gray-400">處理中…</span>
                     )}
                     {job.status === 'failed' && (
@@ -386,6 +411,9 @@ export default function ClientDetailPage() {
                           </div>
                           {post.content && (
                             <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
+                          )}
+                          {post.hashtags && (
+                            <p className="text-xs text-blue-400 line-clamp-2">{post.hashtags}</p>
                           )}
                           <div className="flex items-center gap-3 text-xs text-gray-400">
                             {post.likes != null && <span>❤ {post.likes.toLocaleString()}</span>}

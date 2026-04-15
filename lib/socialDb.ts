@@ -54,9 +54,16 @@ export function getSocialDb(): Database.Database {
       views       INTEGER,
       thumbnail   TEXT,
       post_date   TEXT,
+      hashtags    TEXT,
       created_at  TEXT DEFAULT (datetime('now','localtime'))
     );
   `);
+
+  // migration：舊資料庫補 hashtags 欄位
+  const cols = (db.prepare("PRAGMA table_info(social_posts)").all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes('hashtags')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN hashtags TEXT');
+  }
 
   return db;
 }
@@ -157,6 +164,7 @@ export interface SocialPost {
   views: number | null;
   thumbnail: string | null;
   post_date: string | null;
+  hashtags: string | null;
   created_at: string;
 }
 
@@ -186,12 +194,13 @@ export function listJobsByClient(clientId: string): SocialJob[] {
 
 export function savePosts(jobId: string, posts: Partial<SocialPost>[]) {
   const ins = getSocialDb().prepare(
-    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   getSocialDb().transaction(() => {
     for (const p of posts) {
       ins.run(jobId, p.platform ?? '', p.account ?? null, p.post_url ?? null, p.content ?? null,
-        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.post_date ?? null);
+        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.post_date ?? null,
+        p.hashtags ?? null);
     }
   })();
 }
