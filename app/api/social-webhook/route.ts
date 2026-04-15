@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient, getClientUrls } from '@/lib/socialDb';
+import { getClient, getClientUrls, createJob } from '@/lib/socialDb';
 
 export async function POST(req: NextRequest) {
   const webhookUrl = process.env.N8N_SOCIAL_WEBHOOK_URL;
@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
   }
 
   const platforms = getClientUrls(clientId);
+  const job = createJob(clientId, dateFrom, dateTo);
+  const callbackUrl = `${req.nextUrl.origin}/api/social-webhook/callback`;
 
   try {
     const controller = new AbortController();
@@ -34,6 +36,8 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        jobId: job.id,
+        callbackUrl,
         clientName: client.name,
         slackChannelId: client.slack_id ?? '',
         platforms,
@@ -43,8 +47,13 @@ export async function POST(req: NextRequest) {
       signal: controller.signal,
     });
     clearTimeout(timer);
+
     const text = await res.text();
-    return NextResponse.json({ ok: res.ok, status: res.status, body: text });
+    if (!res.ok) {
+      return NextResponse.json({ error: `N8N 回應錯誤（${res.status}）：${text}` }, { status: 502 });
+    }
+
+    return NextResponse.json({ ok: true, jobId: job.id, status: 'processing' });
   } catch (err: unknown) {
     const msg = err instanceof Error && err.name === 'AbortError'
       ? 'N8N 請求逾時（15s），請確認 Webhook URL 與 workflow 狀態'

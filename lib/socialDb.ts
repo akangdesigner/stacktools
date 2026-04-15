@@ -30,6 +30,32 @@ export function getSocialDb(): Database.Database {
       platform   TEXT NOT NULL,
       url        TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS social_jobs (
+      id          TEXT PRIMARY KEY,
+      client_id   TEXT NOT NULL REFERENCES social_clients(id) ON DELETE CASCADE,
+      status      TEXT NOT NULL DEFAULT 'processing',
+      date_from   TEXT,
+      date_to     TEXT,
+      message     TEXT,
+      created_at  TEXT DEFAULT (datetime('now','localtime')),
+      updated_at  TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS social_posts (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id      TEXT NOT NULL REFERENCES social_jobs(id) ON DELETE CASCADE,
+      platform    TEXT NOT NULL,
+      account     TEXT,
+      post_url    TEXT,
+      content     TEXT,
+      likes       INTEGER,
+      comments    INTEGER,
+      views       INTEGER,
+      thumbnail   TEXT,
+      post_date   TEXT,
+      created_at  TEXT DEFAULT (datetime('now','localtime'))
+    );
   `);
 
   return db;
@@ -105,6 +131,78 @@ export function exportAllClients(): { name: string; slackId: string | null; plat
     platforms: getClientUrls(c.id),
   }));
 }
+
+// ── Jobs ───────────────────────────────────────────────────────────────────
+
+export interface SocialJob {
+  id: string;
+  client_id: string;
+  status: 'processing' | 'completed' | 'failed';
+  date_from: string | null;
+  date_to: string | null;
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SocialPost {
+  id: number;
+  job_id: string;
+  platform: string;
+  account: string | null;
+  post_url: string | null;
+  content: string | null;
+  likes: number | null;
+  comments: number | null;
+  views: number | null;
+  thumbnail: string | null;
+  post_date: string | null;
+  created_at: string;
+}
+
+export function createJob(clientId: string, dateFrom?: string, dateTo?: string): SocialJob {
+  const id = crypto.randomUUID();
+  getSocialDb().prepare(
+    'INSERT INTO social_jobs (id, client_id, date_from, date_to) VALUES (?, ?, ?, ?)'
+  ).run(id, clientId, dateFrom ?? null, dateTo ?? null);
+  return getSocialDb().prepare('SELECT * FROM social_jobs WHERE id = ?').get(id) as SocialJob;
+}
+
+export function updateJob(jobId: string, status: SocialJob['status'], message?: string) {
+  getSocialDb().prepare(
+    "UPDATE social_jobs SET status = ?, message = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+  ).run(status, message ?? null, jobId);
+}
+
+export function getJob(jobId: string): SocialJob | undefined {
+  return getSocialDb().prepare('SELECT * FROM social_jobs WHERE id = ?').get(jobId) as SocialJob | undefined;
+}
+
+export function listJobsByClient(clientId: string): SocialJob[] {
+  return getSocialDb().prepare(
+    'SELECT * FROM social_jobs WHERE client_id = ? ORDER BY created_at DESC'
+  ).all(clientId) as SocialJob[];
+}
+
+export function savePosts(jobId: string, posts: Partial<SocialPost>[]) {
+  const ins = getSocialDb().prepare(
+    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  getSocialDb().transaction(() => {
+    for (const p of posts) {
+      ins.run(jobId, p.platform ?? '', p.account ?? null, p.post_url ?? null, p.content ?? null,
+        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.post_date ?? null);
+    }
+  })();
+}
+
+export function getPostsByJob(jobId: string): SocialPost[] {
+  return getSocialDb().prepare(
+    'SELECT * FROM social_posts WHERE job_id = ? ORDER BY id'
+  ).all(jobId) as SocialPost[];
+}
+
+// ── URLs ───────────────────────────────────────────────────────────────────
 
 export function setClientUrls(clientId: string, platforms: { platform: string; urls: string[] }[]) {
   const db = getSocialDb();
