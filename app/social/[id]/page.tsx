@@ -35,6 +35,49 @@ interface SocialJob {
   message: string | null; created_at: string; posts: SocialPost[];
 }
 
+// ── DEMO 假資料（預覽用，確認後刪除）──────────────────────────
+const DEMO_JOB: SocialJob = {
+  id: 'demo', status: 'completed', date_from: null, date_to: null,
+  message: null, created_at: '2026-04-15 10:00:00',
+  posts: [
+    { id: 1, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example1/',
+      content: '🌿 黑頭粉刺救星降臨！限時 7 天↑入夏寵粉優惠 不用去醫美 在家就能解鎖 0 瑕疵神顏🔑 Relove 1+1 神級組合/強勢登場！利用專利外泌體與拋光酵母 幫肌膚來場深度大掃除',
+      likes: 43, comments: 0, views: null,
+      thumbnail: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=400&fit=crop',
+      post_date: '2026-04-06T10:00:00.000Z', hashtags: '#保養 #粉刺 #美肌', video_url: null },
+    { id: 2, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example2/',
+      content: '【Relove × vacanza】強強聯手！承包妳四月的精緻與底氣 🌟 四月最浪漫的跨界合作來了！就是要從內到外都給妳最頂級的呵護 ♡',
+      likes: 128, comments: 5, views: null,
+      thumbnail: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
+      post_date: '2026-04-03T08:30:00.000Z', hashtags: '#聯名 #美妝 #保養', video_url: null },
+    { id: 3, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example3/',
+      content: '#保養教學 很多人問：「棉片不就是敷完就好嗎？」NO、NO、NO 作為抗痘專家 今天教大家如何把一片棉片的價值發揮到 200%！',
+      likes: 276, comments: 12, views: null,
+      thumbnail: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273?w=400&h=400&fit=crop',
+      post_date: '2026-03-28T14:00:00.000Z', hashtags: '#保養教學 #棉片 #護膚', video_url: null },
+    { id: 4, platform: 'FB', account: 'Relove 官方', post_url: 'https://www.facebook.com/relove/posts/example4',
+      content: '📣 四月限定優惠開跑！購買任兩件保養品，加贈限量保濕面膜一片。數量有限，售完為止，手刀下單不要猶豫！',
+      likes: 89, comments: 23, views: null,
+      thumbnail: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&h=400&fit=crop',
+      post_date: '2026-04-01T09:00:00.000Z', hashtags: '#限時優惠 #保養 #Relove', video_url: null },
+    { id: 5, platform: 'YT', account: 'Relove Care', post_url: 'https://www.youtube.com/watch?v=example5',
+      content: '【保養懶人包】5 分鐘搞定早晨護膚步驟！跟著 Relove 一起打造零毛孔底妝感，讓你每天出門都有好氣色✨',
+      likes: 512, comments: 34, views: 8200,
+      thumbnail: 'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?w=400&h=400&fit=crop',
+      post_date: '2026-03-25T12:00:00.000Z', hashtags: '#保養懶人包 #護膚 #YouTube', video_url: null },
+    { id: 6, platform: 'TikTok', account: '@relove_official', post_url: 'https://www.tiktok.com/@relove/video/example6',
+      content: '敷完面膜後這樣收尾，毛孔縮小效果直接翻倍🔥 學起來！#skincare #保養 #tiktok推薦',
+      likes: 3400, comments: 156, views: 52000,
+      thumbnail: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=400&h=400&fit=crop',
+      post_date: '2026-04-10T18:00:00.000Z', hashtags: '#skincare #保養 #tiktok推薦', video_url: null },
+    { id: 7, platform: 'Threads', account: 'relove_care', post_url: 'https://www.threads.net/@relove/post/example7',
+      content: '素顏才是真的美💪 今天分享一個超簡單的日常，只要三步驟，讓肌膚自己發光。你們都用什麼保養品呢？',
+      likes: 67, comments: 8, views: null,
+      thumbnail: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=400&fit=crop',
+      post_date: '2026-04-12T20:00:00.000Z', hashtags: '#素顏 #保養 #Threads', video_url: null },
+  ],
+};
+
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -360,56 +403,74 @@ export default function ClientDetailPage() {
         )}
 
         {/* 貼文列表 */}
-        {latestJob && latestJob.posts.length > 0 && (
-          <div className="divide-y divide-gray-100 -mx-5">
-            {latestJob.posts.map((post) => (
-              <div key={post.id} className="px-5 py-4 space-y-2">
-                {/* 影片：全寬顯示 */}
-                {post.video_url && (
-                  <video
-                    src={post.video_url}
-                    controls
-                    muted
-                    loop
-                    className="w-full rounded-lg bg-black max-h-72 object-contain"
-                  />
-                )}
-                {/* 縮圖 + 文字並排 */}
-                <div className="flex gap-3">
-                  {!post.video_url && post.thumbnail && (
-                    <img
-                      src={post.thumbnail}
-                      alt=""
-                      className="w-14 h-14 rounded-lg object-cover shrink-0 bg-gray-100"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">{post.platform}</span>
-                      {post.account && <span className="text-xs text-gray-500 truncate">{post.account}</span>}
-                      {post.post_date && <span className="text-xs text-gray-300 ml-auto shrink-0">{post.post_date}</span>}
+        {(latestJob ?? DEMO_JOB) && (latestJob ?? DEMO_JOB).posts.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            {(latestJob ?? DEMO_JOB).posts.map((post) => {
+              const dateStr = post.post_date ? (() => {
+                try { return new Date(post.post_date).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+                catch { return post.post_date; }
+              })() : null;
+
+              return (
+                <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+                  {/* 頂部：頭像 + 帳號 + 平台 */}
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 shrink-0 flex items-center justify-center text-white text-xs font-bold">
+                      {post.account ? post.account[0] : '?'}
                     </div>
+                    <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
+                    <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
+                  </div>
+
+                  {/* 貼文圖片 */}
+                  {post.thumbnail && (
+                    <div className="aspect-square bg-gray-100 overflow-hidden">
+                      <img
+                        src={post.thumbnail}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.currentTarget.parentElement!.style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+
+                  {/* 互動數 */}
+                  <div className="flex items-center gap-3 px-3 pt-2.5 text-sm">
+                    {post.likes != null && (
+                      <span className="flex items-center gap-1 text-gray-700">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+                        {post.likes.toLocaleString()}
+                      </span>
+                    )}
+                    {post.comments != null && (
+                      <span className="flex items-center gap-1 text-gray-700">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                        {post.comments.toLocaleString()}
+                      </span>
+                    )}
+                    {post.post_url && (
+                      <a href={post.post_url} target="_blank" rel="noreferrer" className="ml-auto text-gray-400 hover:text-gray-700 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      </a>
+                    )}
+                  </div>
+
+                  {/* 內文 */}
+                  <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
                     {post.content && (
-                      <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
+                      <p className="text-sm text-gray-800 line-clamp-3">
+                        <span className="font-semibold mr-1">{post.account}</span>
+                        {post.content}
+                      </p>
                     )}
                     {post.hashtags && (
-                      <p className="text-xs text-blue-400 line-clamp-2">{post.hashtags}</p>
+                      <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
                     )}
-                    <div className="flex items-center gap-3 text-xs text-gray-400">
-                      {post.likes != null && <span>❤ {post.likes.toLocaleString()}</span>}
-                      {post.comments != null && <span>💬 {post.comments.toLocaleString()}</span>}
-                      {post.views != null && <span>👁 {post.views.toLocaleString()}</span>}
-                      {post.post_url && (
-                        <a href={post.post_url} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline shrink-0">
-                          查看原文 →
-                        </a>
-                      )}
-                    </div>
+                    {dateStr && <p className="text-xs text-gray-300 pt-0.5">{dateStr}</p>}
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
