@@ -79,11 +79,13 @@ export default function ClientDetailPage() {
   const [savingInfo, setSavingInfo] = useState(false);
 
   const [platformUrls, setPlatformUrls] = useState<PlatformUrls>(EMPTY_URLS);
+  const [activePlatforms, setActivePlatforms] = useState<PlatformKey[]>(PLATFORM_DEFS.map(p => p.key));
   const [savingUrls, setSavingUrls] = useState(false);
   const [urlSaved, setUrlSaved] = useState(false);
   const [urlsOpen, setUrlsOpen] = useState(false);
 
   const [dateFrom, setDateFrom] = useState('');
+  const [appliedDateFrom, setAppliedDateFrom] = useState('');
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState('');
 
@@ -117,6 +119,9 @@ export default function ClientDetailPage() {
           if (platform in urls) urls[platform as PlatformKey] = u.length ? u : [''];
         }
         setPlatformUrls(urls);
+        // 有填入 URL 的平台才顯示，其餘預設也顯示（新客戶全開）
+        const withUrls = data.platforms.filter(p => p.urls.length > 0).map(p => p.platform as PlatformKey);
+        if (withUrls.length > 0) setActivePlatforms(withUrls);
       })
       .finally(() => setLoading(false));
 
@@ -184,6 +189,9 @@ export default function ClientDetailPage() {
       const next = prev[key].filter((_, i) => i !== index);
       return { ...prev, [key]: next.length ? next : [''] };
     });
+  }
+  function clearPlatform(key: PlatformKey) {
+    setPlatformUrls((prev) => ({ ...prev, [key]: [''] }));
   }
 
   // ── 基本資料儲存 ───────────────────────────────────────────
@@ -365,10 +373,18 @@ export default function ClientDetailPage() {
         </button>
         {urlsOpen && <>
           <div className="space-y-3">
-            {PLATFORM_DEFS.map((p) => (
+            {PLATFORM_DEFS.filter(p => activePlatforms.includes(p.key)).map((p) => (
               <div key={p.key} className="rounded-xl border border-gray-200 px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="w-16 text-center rounded-full px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600">{p.key}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-16 text-center rounded-full px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600">{p.key}</span>
+                    <button type="button" onClick={() => { clearPlatform(p.key); setActivePlatforms(prev => prev.filter(k => k !== p.key)); }}
+                      className="text-gray-300 hover:text-red-400 transition-colors" title="刪除此平台">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
                   <button type="button" onClick={() => addUrl(p.key)} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -391,6 +407,19 @@ export default function ClientDetailPage() {
                 ))}
               </div>
             ))}
+            {/* 已移除的平台 → 可加回 */}
+            {PLATFORM_DEFS.filter(p => !activePlatforms.includes(p.key)).length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                <span className="text-xs text-gray-400">新增平台</span>
+                {PLATFORM_DEFS.filter(p => !activePlatforms.includes(p.key)).map(p => (
+                  <button key={p.key} type="button"
+                    onClick={() => setActivePlatforms(prev => [...prev, p.key])}
+                    className="text-xs px-2.5 py-1 rounded-full border border-dashed border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors">
+                    + {p.key}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button onClick={saveUrls} disabled={savingUrls} className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50">
@@ -412,15 +441,14 @@ export default function ClientDetailPage() {
           )}
         </div>
 
-        {/* 初次載入骨架 */}
+        {/* 初次載入 */}
         {jobsLoading && !activeJobId && (
-          <div className="space-y-3 animate-pulse">
-            <div className="h-4 bg-gray-100 rounded w-1/3" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="rounded-xl border border-gray-100 bg-gray-50 h-48" />
-              ))}
-            </div>
+          <div className="flex items-center gap-2.5 py-2">
+            <svg className="animate-spin w-4 h-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <span className="text-sm text-gray-400">報告載入中…</span>
           </div>
         )}
 
@@ -459,20 +487,20 @@ export default function ClientDetailPage() {
           const filtered = job.posts.filter((p) => {
             if (p.platform !== activePlatform) return false;
             if (filterOwner && p.account !== filterOwner) return false;
-            if (dateFrom && p.post_date) {
-              // 穩健解析：支援 ISO、2026/2/26、Unix timestamp 等格式
+            if (appliedDateFrom && p.post_date) {
+              // 穩健解析：新資料已為 ISO，舊資料支援 Unix timestamp / YYYY/MM/DD
               const raw = String(p.post_date);
               let postDate: Date;
-              if (/^\d{10,13}$/.test(raw)) {
-                // Unix timestamp（秒 or 毫秒）
-                postDate = new Date(raw.length === 10 ? Number(raw) * 1000 : Number(raw));
+              if (/^\d{10}$/.test(raw)) {
+                postDate = new Date(Number(raw) * 1000);
+              } else if (/^\d{13}$/.test(raw)) {
+                postDate = new Date(Number(raw));
               } else {
-                // 統一把 / 換成 - 再取日期部分
                 const normalized = raw.replace(/\//g, '-').split('T')[0].split(' ')[0];
                 const [y, m, d] = normalized.split('-').map(Number);
                 postDate = new Date(y, m - 1, d);
               }
-              const [sy, sm, sd] = dateFrom.split('-').map(Number);
+              const [sy, sm, sd] = appliedDateFrom.split('-').map(Number);
               const since = new Date(sy, sm - 1, sd);
               if (postDate < since) return false;
             }
@@ -527,8 +555,16 @@ export default function ClientDetailPage() {
                   <span className="text-xs text-gray-400 shrink-0">發佈日期在此之後</span>
                   <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
                     className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-                  {dateFrom && (
-                    <button type="button" onClick={() => setDateFrom('')} className="text-xs text-gray-300 hover:text-gray-500 transition-colors">清除</button>
+                  <button
+                    type="button"
+                    onClick={() => setAppliedDateFrom(dateFrom)}
+                    disabled={dateFrom === appliedDateFrom}
+                    className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    套用
+                  </button>
+                  {appliedDateFrom && (
+                    <button type="button" onClick={() => { setDateFrom(''); setAppliedDateFrom(''); }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">清除</button>
                   )}
                 </div>
               </div>

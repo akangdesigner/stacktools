@@ -85,13 +85,14 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
     p['thumbnail'] ?? p['Thumbnail'] ??
     null;
 
-  // post_date：中文 / 英文 / Apify timestamp / YT 影片日期
-  const post_date =
+  // post_date：中文 / 英文 / Apify timestamp / YT 影片日期，統一轉為 ISO 字串
+  const post_date = normalizeDate(
     p['日期'] ??
     p['影片日期'] ??
     p['postDate'] ?? p['post_date'] ??
     p['timestamp'] ?? p['takenAtTimestamp'] ??
-    null;
+    null
+  );
 
   const video_url =
     p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ?? null;
@@ -104,6 +105,22 @@ function extractThreadsAccount(url: string | null): string | null {
   if (!url) return null;
   const m = url.match(/threads\.net\/(@[^/]+)/i);
   return m ? m[1] : null;
+}
+
+// 統一把各種日期格式轉成 ISO 字串（YYYY-MM-DDTHH:mm:ss.sssZ）
+// 支援：Unix 10/13 位數字、2026/2/26、ISO 字串
+function normalizeDate(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  // Unix timestamp（秒 or 毫秒）
+  if (/^\d{10}$/.test(s)) return new Date(Number(s) * 1000).toISOString();
+  if (/^\d{13}$/.test(s)) return new Date(Number(s)).toISOString();
+  // YYYY/MM/DD 或 YYYY-MM-DD（可帶時間）
+  const normalized = s.replace(/\//g, '-');
+  const d = new Date(normalized);
+  if (!isNaN(d.getTime())) return d.toISOString();
+  return null;
 }
 
 function toInt(v: unknown): number | null {
