@@ -78,6 +78,23 @@ const DEMO_JOB: SocialJob = {
   ],
 };
 
+function getEmbedUrl(platform: string, postUrl: string | null): string | null {
+  if (!postUrl) return null;
+  if (platform === 'IG') {
+    const m = postUrl.match(/instagram\.com\/(?:p|reel)\/([^/?#]+)/);
+    if (m) return `https://www.instagram.com/p/${m[1]}/embed/`;
+  }
+  if (platform === 'YT') {
+    const m = postUrl.match(/[?&]v=([^&]+)/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  }
+  if (platform === 'Threads') {
+    const m = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
+    if (m) return `https://www.threads.net/t/${m[1]}/embed`;
+  }
+  return null;
+}
+
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -428,8 +445,9 @@ export default function ClientDetailPage() {
                   })}
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 {filtered.map((post) => {
+              const embedUrl = getEmbedUrl(post.platform, post.post_url);
               const dateStr = post.post_date ? (() => {
                 try { return new Date(post.post_date).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
                 catch { return post.post_date; }
@@ -437,35 +455,29 @@ export default function ClientDetailPage() {
 
               return (
                 <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
-                  {/* 頂部：頭像 + 帳號 + 平台 */}
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
-                      {post.profile_pic_url ? (
-                        <img
-                          src={post.profile_pic_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement!.innerText = post.account ? post.account[0] : '?';
-                          }}
-                        />
-                      ) : (post.account ? post.account[0] : '?')}
-                    </div>
-                    <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
-                    <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
-                  </div>
-
-                  {/* 貼文圖片 */}
-                  {post.thumbnail && (
-                    <div className="aspect-square bg-gray-100 overflow-hidden">
-                      <img
-                        src={post.thumbnail}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        onError={(e) => { e.currentTarget.parentElement!.style.display = 'none'; }}
-                      />
-                    </div>
+                  {/* 內嵌貼文 */}
+                  {embedUrl ? (
+                    <iframe
+                      src={embedUrl}
+                      className="w-full border-0"
+                      style={{ height: post.platform === 'YT' ? '220px' : '500px' }}
+                      scrolling="no"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <>
+                      {/* 無內嵌：顯示頭像 + 帳號 */}
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
+                          {post.profile_pic_url ? (
+                            <img src={post.profile_pic_url} alt="" className="w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerText = post.account?.[0] ?? '?'; }} />
+                          ) : (post.account?.[0] ?? '?')}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
+                        <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
+                      </div>
+                    </>
                   )}
 
                   {/* 互動數 */}

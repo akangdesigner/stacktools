@@ -22,18 +22,19 @@ function normalizePost(p: Record<string, any>) {
     p['ownerFullName'] ?? p['ownerUsername'] ??
     null;
 
-  // post_url：中文欄位 / 英文欄位 / Apify url
+  // post_url：中文欄位 / 英文欄位 / Apify url / Threads（空格 key）
   const post_url =
     p['貼文網址'] ??
     p['postUrl'] ?? p['post_url'] ??
-    p['url'] ??
+    p['url'] ?? p[' url'] ??
     null;
 
-  // content：中文欄位 / 英文欄位 / Apify caption
+  // content：中文欄位 / 英文欄位 / Apify caption / Threads text
   const content =
     p['貼文內容'] ??
     p['content'] ?? p['Content'] ??
     p['caption'] ??
+    p['text'] ??
     null;
 
   // likes：中文 / 英文 / Apify likesCount
