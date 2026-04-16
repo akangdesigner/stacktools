@@ -17,7 +17,7 @@ function normalizePost(p: Record<string, any>) {
   const hashtags =
     p['hashtags'] ?? p['Hashtags'] ?? null;
   const hashtagsStr = Array.isArray(hashtags)
-    ? hashtags.join(' ')
+    ? hashtags.map((h) => (h && typeof h === 'object' && 'name' in h ? `#${h.name}` : String(h))).join(' ')
     : typeof hashtags === 'string' ? hashtags : null;
 
   // post_url：先算出來，供 platform 偵測使用
@@ -32,10 +32,11 @@ function normalizePost(p: Record<string, any>) {
   const rawPlatform = p['platform'] ?? p['Platform'] ?? p['平台'] ?? '';
   const platform = rawPlatform || detectPlatform(post_url);
 
-  // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱
+  // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱 / 抖音帳號
   const account =
     p['IG帳號'] ??
     p['IG帳號姓名'] ??
+    p['抖音帳號'] ??
     p['頻道名稱'] ??
     p['account'] ?? p['Account'] ??
     p['ownerFullName'] ?? p['ownerUsername'] ??
