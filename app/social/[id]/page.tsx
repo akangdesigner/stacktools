@@ -438,12 +438,20 @@ export default function ClientDetailPage() {
 
         {/* 處理中 */}
         {activeJobId && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <svg className="animate-spin w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-            </svg>
-            抓取中，約 3 分鐘後自動更新…
+          <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <svg className="animate-spin w-4 h-4 text-blue-500 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              <span className="text-sm font-medium text-blue-700">正在抓取各平台貼文，請稍候…</span>
+            </div>
+            {/* 跑馬燈進度條 */}
+            <div className="h-1.5 w-full rounded-full bg-blue-100 overflow-hidden">
+              <div className="h-full w-1/3 rounded-full bg-blue-400 animate-[slide_1.5s_ease-in-out_infinite]"
+                style={{ animation: 'slide 1.5s ease-in-out infinite' }} />
+            </div>
+            <p className="text-xs text-blue-400">約需 3 分鐘，完成後頁面自動更新，請勿關閉此頁面</p>
           </div>
         )}
 

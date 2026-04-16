@@ -145,7 +145,23 @@ export async function POST(req: NextRequest) {
   }
 
   if (status === 'completed' && Array.isArray(rawPosts) && rawPosts.length > 0) {
-    const normalized = rawPosts.map((p) => normalizePost(p, sourcePlatform)).filter((p) => p !== null);
+    // 展開巢狀結構：若 item 內有 "貼文" 陣列（Threads 格式），則拆成多筆
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const flatPosts: Array<{ post: Record<string, any>; platform: string | undefined }> = [];
+    for (const item of rawPosts) {
+      const itemPlatform = item['頻道來源']
+        ? (platformMap[String(item['頻道來源']).toLowerCase()] ?? String(item['頻道來源']))
+        : sourcePlatform;
+      if (Array.isArray(item['貼文'])) {
+        // 每個 item 包含最多 5 筆子貼文
+        for (const sub of item['貼文']) {
+          flatPosts.push({ post: sub, platform: itemPlatform });
+        }
+      } else {
+        flatPosts.push({ post: item, platform: itemPlatform });
+      }
+    }
+    const normalized = flatPosts.map(({ post, platform }) => normalizePost(post, platform)).filter((p) => p !== null);
     if (normalized.length > 0) savePosts(jobId, normalized);
   }
 
