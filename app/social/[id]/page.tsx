@@ -602,8 +602,17 @@ export default function ClientDetailPage() {
                       <div className="px-8 pt-5 pb-3">
                         <iframe
                           src={embedUrl}
+                          className="w-full border-0 rounded-lg aspect-[4/5]"
+                          scrolling="no"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : post.platform === 'Threads' ? (
+                      <div className="px-8 pt-5 pb-3">
+                        <iframe
+                          src={embedUrl}
                           className="w-full border-0 rounded-lg"
-                          style={{ height: '600px' }}
+                          style={{ height: '420px' }}
                           scrolling="no"
                           allowFullScreen
                         />
@@ -621,11 +630,12 @@ export default function ClientDetailPage() {
                     <>
                       {/* 無內嵌：顯示頭像 + 帳號 */}
                       <div className="flex items-center gap-2 px-3 py-2.5">
-                        <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
-                          {post.profile_pic_url ? (
-                            <img src={post.profile_pic_url} alt="" className="w-full h-full object-cover"
-                              onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement!.innerText = post.account?.[0] ?? '?'; }} />
-                          ) : (post.account?.[0] ?? '?')}
+                        <div className="relative w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
+                          <span>{post.account?.[0] ?? '?'}</span>
+                          {post.profile_pic_url && (
+                            <img src={post.profile_pic_url} alt="" className="absolute inset-0 w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          )}
                         </div>
                         <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
@@ -654,25 +664,27 @@ export default function ClientDetailPage() {
                     )}
                   </div>
 
-                  {/* 內文 */}
-                  <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
-                    {post.platform === 'YT' ? (
-                      post.content && (
-                        <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
-                      )
-                    ) : (
-                      post.content && (
-                        <p className="text-sm text-gray-800 line-clamp-3">
-                          <span className="font-semibold mr-1">{post.account}</span>
-                          {post.content}
-                        </p>
-                      )
-                    )}
-                    {post.hashtags && (
-                      <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
-                    )}
-                    {dateStr && <p className="text-xs text-gray-300 pt-0.5">{dateStr}</p>}
-                  </div>
+                  {/* 內文：Threads embed 已含帳號與內容，不重複顯示 */}
+                  {post.platform !== 'Threads' && (
+                    <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
+                      {post.platform === 'YT' ? (
+                        post.content && (
+                          <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
+                        )
+                      ) : (
+                        post.content && (
+                          <p className="text-sm text-gray-800 line-clamp-3">
+                            <span className="font-semibold mr-1">{post.account}</span>
+                            {post.content}
+                          </p>
+                        )
+                      )}
+                      {post.hashtags && (
+                        <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
+                      )}
+                      {dateStr && <p className="text-xs text-gray-300 pt-0.5">{dateStr}</p>}
+                    </div>
+                  )}
                 </div>
               );
             })}
