@@ -548,6 +548,46 @@ export default function ClientDetailPage() {
                 catch { return post.post_date; }
               })() : null;
 
+              // TikTok 獨立排版：大頭貼＋標題在上，iframe 置中留白
+              if (post.platform === 'TikTok') {
+                const tikEmbedUrl = getEmbedUrl('TikTok', post.post_url);
+                return (
+                  <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+                    {/* 大頭貼 + 帳號 + 標題 */}
+                    <div className="flex items-start gap-2.5 px-4 pt-4 pb-3">
+                      <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
+                        {post.profile_pic_url ? (
+                          <img src={post.profile_pic_url} alt="" className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        ) : (post.account?.[0] ?? '?')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{post.account ?? '—'}</p>
+                        {post.content && <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{post.content}</p>}
+                      </div>
+                      {post.post_url && (
+                        <a href={post.post_url} target="_blank" rel="noreferrer" className="shrink-0 text-gray-300 hover:text-gray-600 transition-colors mt-0.5">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                      )}
+                    </div>
+                    {/* iframe 置中留白 */}
+                    <div className="flex justify-center px-6 pb-4">
+                      {tikEmbedUrl ? (
+                        <iframe
+                          src={tikEmbedUrl}
+                          className="border-0 aspect-[9/16] rounded-xl"
+                          style={{ width: '260px' }}
+                          allowFullScreen
+                        />
+                      ) : (
+                        <p className="text-xs text-gray-300 py-6">無法載入影片</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
                   {/* 內嵌貼文 */}
@@ -558,17 +598,29 @@ export default function ClientDetailPage() {
                         className="w-full border-0 aspect-video"
                         allowFullScreen
                       />
-                    ) : (post.platform === 'FB' || post.platform === 'TikTok') ? (
-                      <iframe
-                        src={embedUrl}
-                        className="w-full border-0 aspect-[9/16]"
-                        allowFullScreen
-                      />
+                    ) : post.platform === 'FB' ? (
+                      <div className="px-4 pt-4 pb-2">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0 aspect-[9/16] rounded-lg"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : post.platform === 'IG' ? (
+                      <div className="px-4 pt-4 pb-2">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0 rounded-lg"
+                          style={{ height: '680px' }}
+                          scrolling="no"
+                          allowFullScreen
+                        />
+                      </div>
                     ) : (
                       <iframe
                         src={embedUrl}
                         className="w-full border-0"
-                        style={{ height: post.platform === 'IG' ? '800px' : '600px' }}
+                        style={{ height: '600px' }}
                         scrolling="no"
                         allowFullScreen
                       />
@@ -614,10 +666,7 @@ export default function ClientDetailPage() {
                   <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
                     {post.platform === 'YT' ? (
                       post.content && (
-                        <>
-                          {post.account && <p className="text-xs text-gray-400">{post.account}</p>}
-                          <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
-                        </>
+                        <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
                       )
                     ) : (
                       post.content && (
