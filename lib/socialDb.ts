@@ -68,6 +68,9 @@ export function getSocialDb(): Database.Database {
   if (!cols.includes('video_url')) {
     db.exec('ALTER TABLE social_posts ADD COLUMN video_url TEXT');
   }
+  if (!cols.includes('profile_pic_url')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN profile_pic_url TEXT');
+  }
 
   return db;
 }
@@ -167,6 +170,7 @@ export interface SocialPost {
   comments: number | null;
   views: number | null;
   thumbnail: string | null;
+  profile_pic_url: string | null;
   post_date: string | null;
   hashtags: string | null;
   video_url: string | null;
@@ -199,13 +203,13 @@ export function listJobsByClient(clientId: string): SocialJob[] {
 
 export function savePosts(jobId: string, posts: Partial<SocialPost>[]) {
   const ins = getSocialDb().prepare(
-    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags, video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags, video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   getSocialDb().transaction(() => {
     for (const p of posts) {
       ins.run(jobId, p.platform ?? '', p.account ?? null, p.post_url ?? null, p.content ?? null,
-        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.post_date ?? null,
-        p.hashtags ?? null, p.video_url ?? null);
+        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.profile_pic_url ?? null,
+        p.post_date ?? null, p.hashtags ?? null, p.video_url ?? null);
     }
   })();
 }

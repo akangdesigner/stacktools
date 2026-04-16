@@ -16,6 +16,7 @@ function normalizePost(p: Record<string, any>) {
 
   // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername
   const account =
+    p['IG帳號'] ??
     p['IG帳號姓名'] ??
     p['account'] ?? p['Account'] ??
     p['ownerFullName'] ?? p['ownerUsername'] ??
@@ -51,11 +52,13 @@ function normalizePost(p: Record<string, any>) {
     p['videoPlayCount'] ?? p['videoViewCount'] ?? p['videoPlayCount']
   );
 
-  // thumbnail：優先取貼文圖片 displayUrl，其次大頭貼
+  // profile_pic_url：帳號大頭貼（獨立儲存，不混入貼文縮圖）
+  const profile_pic_url = p['大頭貼'] ?? p['profilePicUrl'] ?? null;
+
+  // thumbnail：只取貼文圖片，不 fallback 到大頭貼
   const thumbnail =
     p['displayUrl'] ??
     p['thumbnail'] ?? p['Thumbnail'] ??
-    p['大頭貼'] ?? p['profilePicUrl'] ??
     null;
 
   // post_date：中文 / 英文 / Apify timestamp
@@ -68,7 +71,7 @@ function normalizePost(p: Record<string, any>) {
   const video_url =
     p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ?? null;
 
-  return { platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags: hashtagsStr, video_url };
+  return { platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags: hashtagsStr, video_url };
 }
 
 function toInt(v: unknown): number | null {
