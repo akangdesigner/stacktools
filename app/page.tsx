@@ -72,53 +72,68 @@ const externalTools = [
 export default function HomePage() {
   return (
     <>
-    <div className="p-8 space-y-10 max-w-2xl">
-      {/* 內部工具 */}
-      <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">內部工具</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {internalTools.map((tool) => (
-            <Link
-              key={tool.href}
-              href={tool.href}
-              className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
-            >
-              {tool.inDev && (
-                <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
-              )}
-              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
-                {tool.icon}
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
-            </Link>
-          ))}
+    <div className="p-8 flex gap-8 items-start">
+      {/* 左欄：工具卡片 */}
+      <div className="flex-1 min-w-0 space-y-10">
+        {/* 內部工具 */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">內部工具</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {internalTools.map((tool) => (
+              <Link
+                key={tool.href}
+                href={tool.href}
+                className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
+              >
+                {tool.inDev && (
+                  <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
+                )}
+                <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
+                  {tool.icon}
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* 外部產品 */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">外部產品</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {externalTools.map((tool) => (
+              <Link
+                key={tool.href}
+                href={tool.href}
+                className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
+              >
+                {tool.inDev && (
+                  <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
+                )}
+                <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
+                  {tool.icon}
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* 外部產品 */}
-      <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">外部產品</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {externalTools.map((tool) => (
-            <Link
-              key={tool.href}
-              href={tool.href}
-              className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
-            >
-              {tool.inDev && (
-                <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
-              )}
-              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
-                {tool.icon}
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-
+      {/* 右欄：使用手冊入口 */}
+      <aside className="w-60 shrink-0 hidden lg:block sticky top-8">
+        <Link
+          href="/manual"
+          className="block rounded-xl border-2 border-gray-200 bg-white p-5 hover:border-gray-400 transition-all"
+        >
+          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-xl mb-3">📖</div>
+          <h3 className="font-semibold text-gray-900 mb-1">使用手冊</h3>
+          <p className="text-sm text-gray-500 leading-relaxed">所有工具的使用說明與外部產品介紹，快速上手 Stacktools。</p>
+          <span className="mt-3 inline-flex items-center gap-1 text-xs text-gray-400">查看手冊 →</span>
+        </Link>
+      </aside>
     </div>
     <Link
       href="/feedback"
