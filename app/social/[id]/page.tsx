@@ -550,11 +550,17 @@ export default function ClientDetailPage() {
                         className="w-full border-0 aspect-video"
                         allowFullScreen
                       />
+                    ) : (post.platform === 'FB' || post.platform === 'TikTok') ? (
+                      <iframe
+                        src={embedUrl}
+                        className="w-full border-0 aspect-[9/16]"
+                        allowFullScreen
+                      />
                     ) : (
                       <iframe
                         src={embedUrl}
                         className="w-full border-0"
-                        style={{ height: post.platform === 'FB' ? '420px' : post.platform === 'IG' ? '800px' : '600px' }}
+                        style={{ height: post.platform === 'IG' ? '800px' : '600px' }}
                         scrolling="no"
                         allowFullScreen
                       />
@@ -598,11 +604,20 @@ export default function ClientDetailPage() {
 
                   {/* 內文 */}
                   <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
-                    {post.content && (
-                      <p className="text-sm text-gray-800 line-clamp-3">
-                        <span className="font-semibold mr-1">{post.account}</span>
-                        {post.content}
-                      </p>
+                    {post.platform === 'YT' ? (
+                      post.content && (
+                        <>
+                          {post.account && <p className="text-xs text-gray-400">{post.account}</p>}
+                          <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
+                        </>
+                      )
+                    ) : (
+                      post.content && (
+                        <p className="text-sm text-gray-800 line-clamp-3">
+                          <span className="font-semibold mr-1">{post.account}</span>
+                          {post.content}
+                        </p>
+                      )
                     )}
                     {post.hashtags && (
                       <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
