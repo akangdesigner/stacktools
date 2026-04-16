@@ -77,8 +77,19 @@ const devItems = [
 
 const extraItems = [
   {
+    href: '/ai-editor',
+    label: 'AI 小編生成文章',
+    inDev: true,
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </svg>
+    ),
+  },
+  {
     href: '/products',
     label: '外部產品',
+    inDev: false,
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -151,7 +162,9 @@ export default function Sidebar() {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
-                  {item.icon}{item.label}
+                  {item.icon}
+                  <span className="flex-1">{item.label}</span>
+                  {item.inDev && !isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
                 </Link>
               );
             })}

@@ -23,6 +23,7 @@ function normalizePost(p: Record<string, any>) {
   // post_url：先算出來，供 platform 偵測使用
   const post_url =
     p['貼文網址'] ??
+    p['圖影網址'] ??
     p['影片url'] ??
     p['postUrl'] ?? p['post_url'] ??
     p['url'] ?? p[' url'] ??
@@ -32,20 +33,22 @@ function normalizePost(p: Record<string, any>) {
   const rawPlatform = p['platform'] ?? p['Platform'] ?? p['平台'] ?? '';
   const platform = rawPlatform || detectPlatform(post_url);
 
-  // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱 / 抖音帳號
+  // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱 / 抖音帳號 / FB 貼文擁有者
   const account =
     p['IG帳號'] ??
     p['IG帳號姓名'] ??
     p['抖音帳號'] ??
+    p['貼文擁有者'] ??
     p['頻道名稱'] ??
     p['account'] ?? p['Account'] ??
     p['ownerFullName'] ?? p['ownerUsername'] ??
     null;
 
 
-  // content：中文欄位 / 英文欄位 / Apify caption / Threads text / YT 標題＋描述
+  // content：中文欄位 / 英文欄位 / Apify caption / Threads text / YT 標題＋描述 / FB 文案
   const content =
     p['貼文內容'] ??
+    p['文案'] ??
     p['content'] ?? p['Content'] ??
     p['caption'] ??
     p['text'] ??
@@ -69,7 +72,7 @@ function normalizePost(p: Record<string, any>) {
   );
 
   // profile_pic_url：帳號大頭貼（獨立儲存，不混入貼文縮圖）
-  const profile_pic_url = p['大頭貼'] ?? p['profilePicUrl'] ?? p['頻道大頭貼'] ?? null;
+  const profile_pic_url = p['大頭貼'] ?? p['大頭照'] ?? p['profilePicUrl'] ?? p['頻道大頭貼'] ?? null;
 
   // thumbnail：只取貼文圖片，不 fallback 到大頭貼
   const thumbnail =
