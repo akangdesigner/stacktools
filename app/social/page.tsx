@@ -7,6 +7,7 @@ interface ClientSummary {
   id: string;
   name: string;
   slack_id: string | null;
+  auto_monitor: number;
   created_at: string;
   url_count: number;
 }
@@ -192,6 +193,18 @@ export default function SocialListPage() {
                 {c.slack_id && <p>Slack：{c.slack_id}</p>}
                 <p>追蹤帳號：{c.url_count} 筆</p>
                 <p>建立：{c.created_at}</p>
+              </div>
+              <div>
+                {c.auto_monitor === 1 ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    自動監控
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400">
+                    手動更新
+                  </span>
+                )}
               </div>
             </button>
           ))}

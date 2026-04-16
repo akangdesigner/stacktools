@@ -18,7 +18,7 @@ type PlatformUrls = Record<PlatformKey, string[]>;
 const EMPTY_URLS: PlatformUrls = { FB: [''], IG: [''], YT: [''], TikTok: [''], Threads: [''] };
 
 interface ClientData {
-  id: string; name: string; slack_id: string | null; created_at: string;
+  id: string; name: string; slack_id: string | null; auto_monitor: number; created_at: string;
   platforms: { platform: string; urls: string[] }[];
 }
 
@@ -119,6 +119,8 @@ export default function ClientDetailPage() {
   const [triggerError, setTriggerError] = useState('');
 
   const [deleting, setDeleting] = useState(false);
+  const [autoMonitor, setAutoMonitor] = useState(false);
+  const [savingMonitor, setSavingMonitor] = useState(false);
 
   // 報告
   const [latestJob, setLatestJob] = useState<SocialJob | null>(null);
@@ -127,6 +129,7 @@ export default function ClientDetailPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCountRef = useRef(0);
   const [filterPlatform, setFilterPlatform] = useState<string | null>(null);
+  const [filterOwner, setFilterOwner] = useState<string | null>(null);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -137,6 +140,7 @@ export default function ClientDetailPage() {
         setClient(data);
         setEditName(data.name);
         setEditSlack(data.slack_id ?? '');
+        setAutoMonitor(data.auto_monitor === 1);
         const urls: PlatformUrls = { ...EMPTY_URLS };
         for (const { platform, urls: u } of data.platforms) {
           if (platform in urls) urls[platform as PlatformKey] = u.length ? u : [''];
@@ -230,7 +234,7 @@ export default function ClientDetailPage() {
     try {
       const res = await fetch('/api/social-webhook', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+        body: JSON.stringify({ clientId: id }),
       });
       let data: { ok?: boolean; jobId?: string; error?: string } = {};
       try { data = await res.json(); } catch { /* ignore */ }
@@ -244,6 +248,17 @@ export default function ClientDetailPage() {
     } finally {
       setTriggering(false);
     }
+  }
+
+  async function toggleAutoMonitor() {
+    setSavingMonitor(true);
+    const next = !autoMonitor;
+    await fetch(`/api/social-clients/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoMonitor: next }),
+    });
+    setAutoMonitor(next);
+    setSavingMonitor(false);
   }
 
   async function handleDelete() {
@@ -302,26 +317,33 @@ export default function ClientDetailPage() {
             </div>
           </div>
         ) : (
+          <>
           <div className="space-y-1 text-sm text-gray-700">
             <p><span className="text-gray-400 text-xs mr-2">名稱</span>{client?.name}</p>
             <p><span className="text-gray-400 text-xs mr-2">Slack</span>{client?.slack_id || <span className="text-gray-300">（未設定）</span>}</p>
             <p><span className="text-gray-400 text-xs mr-2">建立</span>{client?.created_at}</p>
           </div>
+
+          {/* 自動監控開關 */}
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <p className="text-sm font-medium text-gray-800">定期自動更新</p>
+              <p className="text-xs text-gray-400 mt-0.5">開啟後，系統會依排程自動抓取最新貼文</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleAutoMonitor}
+              disabled={savingMonitor}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${autoMonitor ? 'bg-gray-900' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${autoMonitor ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          </>
         )}
 
         {/* 抓取觸發 */}
         <div className="pt-2 border-t border-gray-100 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 shrink-0">貼文日期區間</span>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            <span className="text-xs text-gray-300">—</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            {(dateFrom || dateTo) && (
-              <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-300 hover:text-gray-500 transition-colors">清除</button>
-            )}
-          </div>
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={triggerWebhook} disabled={triggering || !!activeJobId}
               className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50">
@@ -425,26 +447,76 @@ export default function ClientDetailPage() {
           const job = latestJob ?? DEMO_JOB;
           const platforms = Array.from(new Set(job.posts.map((p) => p.platform)));
           const activePlatform = filterPlatform ?? platforms[0];
-          const filtered = job.posts.filter((p) => p.platform === activePlatform);
+
+          // 擁有者清單（依目前平台）
+          const owners = Array.from(new Set(
+            job.posts.filter((p) => p.platform === activePlatform && p.account).map((p) => p.account!)
+          ));
+
+          const filtered = job.posts.filter((p) => {
+            if (p.platform !== activePlatform) return false;
+            if (filterOwner && p.account !== filterOwner) return false;
+            if (dateFrom && p.post_date && new Date(p.post_date) < new Date(dateFrom)) return false;
+            if (dateTo && p.post_date && new Date(p.post_date) > new Date(dateTo + 'T23:59:59')) return false;
+            return true;
+          });
+
           return (
             <>
-              {/* 平台篩選器 */}
-              {platforms.length > 1 && (
-                <div className="flex items-center gap-2 flex-wrap pt-1">
-                  {platforms.map((p) => {
-                    const count = job.posts.filter((post) => post.platform === p).length;
-                    return (
+              {/* 篩選器列 */}
+              <div className="space-y-2 pt-1">
+                {/* 平台篩選 */}
+                {platforms.length > 1 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {platforms.map((p) => {
+                      const count = job.posts.filter((post) => post.platform === p).length;
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => { setFilterPlatform(p); setFilterOwner(null); }}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${activePlatform === p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                          {p}（{count}）
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 擁有者篩選 */}
+                {owners.length > 1 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setFilterOwner(null)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${!filterOwner ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      全部帳號
+                    </button>
+                    {owners.map((o) => (
                       <button
-                        key={p}
-                        onClick={() => setFilterPlatform(p)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${activePlatform === p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        key={o}
+                        onClick={() => setFilterOwner(o)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterOwner === o ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                       >
-                        {p}（{count}）
+                        {o}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
+                )}
+
+                {/* 日期區間篩選 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 shrink-0">日期區間</span>
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                  <span className="text-xs text-gray-300">—</span>
+                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                  {(dateFrom || dateTo) && (
+                    <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-300 hover:text-gray-500 transition-colors">清除</button>
+                  )}
                 </div>
-              )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 {filtered.map((post) => {
               const embedUrl = getEmbedUrl(post.platform, post.post_url);

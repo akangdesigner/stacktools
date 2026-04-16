@@ -18,10 +18,11 @@ export function getSocialDb(): Database.Database {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS social_clients (
-      id         TEXT PRIMARY KEY,
-      name       TEXT NOT NULL,
-      slack_id   TEXT,
-      created_at TEXT DEFAULT (datetime('now','localtime'))
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      slack_id     TEXT,
+      auto_monitor INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT DEFAULT (datetime('now','localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS social_client_urls (
@@ -60,7 +61,13 @@ export function getSocialDb(): Database.Database {
     );
   `);
 
-  // migration：舊資料庫補欄位
+  // migration：social_clients 補欄位
+  const clientCols = (db.prepare("PRAGMA table_info(social_clients)").all() as { name: string }[]).map((c) => c.name);
+  if (!clientCols.includes('auto_monitor')) {
+    db.exec('ALTER TABLE social_clients ADD COLUMN auto_monitor INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // migration：social_posts 補欄位
   const cols = (db.prepare("PRAGMA table_info(social_posts)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes('hashtags')) {
     db.exec('ALTER TABLE social_posts ADD COLUMN hashtags TEXT');
@@ -81,6 +88,7 @@ export interface SocialClient {
   id: string;
   name: string;
   slack_id: string | null;
+  auto_monitor: number;
   created_at: string;
 }
 
@@ -112,10 +120,11 @@ export function createClient({ name, slackId }: { name: string; slackId?: string
   return getClient(id)!;
 }
 
-export function updateClient(id: string, { name, slackId }: { name?: string; slackId?: string }) {
+export function updateClient(id: string, { name, slackId, autoMonitor }: { name?: string; slackId?: string; autoMonitor?: boolean }) {
   const db = getSocialDb();
   if (name !== undefined) db.prepare('UPDATE social_clients SET name = ? WHERE id = ?').run(name, id);
   if (slackId !== undefined) db.prepare('UPDATE social_clients SET slack_id = ? WHERE id = ?').run(slackId || null, id);
+  if (autoMonitor !== undefined) db.prepare('UPDATE social_clients SET auto_monitor = ? WHERE id = ?').run(autoMonitor ? 1 : 0, id);
 }
 
 export function deleteClient(id: string) {

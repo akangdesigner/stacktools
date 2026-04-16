@@ -19,7 +19,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!getClient(id)) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
 
     const body = await req.json();
-    updateClient(id, { name: body.name, slackId: body.slackId });
+    updateClient(id, { name: body.name, slackId: body.slackId, autoMonitor: body.autoMonitor });
     if (Array.isArray(body.platforms)) setClientUrls(id, body.platforms);
 
     const client = getClient(id);

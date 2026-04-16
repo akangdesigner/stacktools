@@ -8,6 +8,7 @@ const internalTools = [
     icon: "📝",
     color: "bg-blue-50 border-blue-200 hover:border-blue-400",
     iconBg: "bg-blue-100",
+    inDev: false,
   },
   {
     href: "/ig",
@@ -16,6 +17,7 @@ const internalTools = [
     icon: "📸",
     color: "bg-purple-50 border-purple-200 hover:border-purple-400",
     iconBg: "bg-purple-100",
+    inDev: false,
   },
   {
     href: "/knowledge",
@@ -24,6 +26,7 @@ const internalTools = [
     icon: "📚",
     color: "bg-emerald-50 border-emerald-200 hover:border-emerald-400",
     iconBg: "bg-emerald-100",
+    inDev: false,
   },
   {
     href: "/recommendation",
@@ -32,14 +35,16 @@ const internalTools = [
     icon: "✉️",
     color: "bg-orange-50 border-orange-200 hover:border-orange-400",
     iconBg: "bg-orange-100",
+    inDev: false,
   },
   {
     href: "/social",
     title: "社群貼文追蹤",
     description: "設定客戶的社群帳號網址，定期抓取 FB/IG/YT/TikTok/Threads 的最新貼文，並發送通知到 Slack。",
-    icon: "📡",
+    icon: "📊",
     color: "bg-rose-50 border-rose-200 hover:border-rose-400",
     iconBg: "bg-rose-100",
+    inDev: true,
   },
 ];
 
@@ -58,16 +63,37 @@ export default function HomePage() {
   return (
     <>
     <div className="p-8 space-y-10 max-w-2xl">
-      {/* 內部工具 */}
+      {/* 已上線工具 */}
       <div>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">內部工具</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {internalTools.map((tool) => (
+          {internalTools.filter((t) => !t.inDev).map((tool) => (
             <Link
               key={tool.href}
               href={tool.href}
               className={`block p-5 rounded-xl border-2 transition-all ${tool.color}`}
             >
+              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
+                {tool.icon}
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* 開發中工具 */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">開發中</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {internalTools.filter((t) => t.inDev).map((tool) => (
+            <Link
+              key={tool.href}
+              href={tool.href}
+              className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
+            >
+              <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
               <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
                 {tool.icon}
               </div>
