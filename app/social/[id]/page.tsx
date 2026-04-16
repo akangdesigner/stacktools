@@ -50,6 +50,18 @@ function getEmbedUrl(platform: string, postUrl: string | null): string | null {
     const m = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
     if (m) return `https://www.threads.net/t/${m[1]}/embed`;
   }
+  if (platform === 'TikTok') {
+    const m = postUrl.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+  }
+  if (platform === 'FB') {
+    if (/facebook\.com\/(reel|watch|video)/.test(postUrl) || /facebook\.com\/.*\/videos\//.test(postUrl)) {
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(postUrl)}&show_text=true&width=500`;
+    }
+    if (/facebook\.com\/.+\/posts\//.test(postUrl) || /facebook\.com\/permalink/.test(postUrl)) {
+      return `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(postUrl)}&show_text=true&width=500`;
+    }
+  }
   return null;
 }
 
@@ -89,6 +101,7 @@ export default function ClientDetailPage() {
   const [filterPlatform, setFilterPlatform] = useState<string | null>(null);
   const [filterOwner, setFilterOwner] = useState<string | null>(null);
   const [jobsLoading, setJobsLoading] = useState(true);
+  const [justCompleted, setJustCompleted] = useState(false);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -118,9 +131,23 @@ export default function ClientDetailPage() {
       const res = await fetch(`/api/social-clients/${id}/jobs`);
       if (res.ok) {
         const data: SocialJob[] = await res.json();
-        // 只取最新一筆已完成的
-        const latest = data.find((j) => j.status === 'completed') ?? null;
-        setLatestJob(latest);
+        const completed = data.filter((j) => j.status === 'completed');
+        if (completed.length === 0) { setLatestJob(null); return; }
+
+        // 合併所有 job 的貼文，依 post_url 去重複（較新 job 的資料優先）
+        const seen = new Set<string>();
+        const mergedPosts: SocialPost[] = [];
+        for (const job of completed) {
+          for (const post of job.posts) {
+            const key = post.post_url ?? `${post.platform}-${post.id}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              mergedPosts.push(post);
+            }
+          }
+        }
+        // 用最新一筆 job 的 metadata，替換成合併後的貼文
+        setLatestJob({ ...completed[0], posts: mergedPosts });
       }
     } finally {
       setJobsLoading(false);
@@ -146,7 +173,12 @@ export default function ClientDetailPage() {
       if (job.status !== 'processing') {
         clearInterval(pollRef.current!);
         setActiveJobId(null);
-        if (job.status === 'completed') setLatestJob(job);
+        if (job.status === 'completed') {
+          // 重新 loadJobs 以合併所有 job 貼文
+          await loadJobs();
+          setJustCompleted(true);
+          setTimeout(() => setJustCompleted(false), 5000);
+        }
       }
     }, 10000);
     return () => clearInterval(pollRef.current!);
@@ -283,7 +315,7 @@ export default function ClientDetailPage() {
           <>
           <div className="space-y-1 text-sm text-gray-700">
             <p><span className="text-gray-400 text-xs mr-2">名稱</span>{client?.name}</p>
-            <p><span className="text-gray-400 text-xs mr-2">Slack</span>{client?.slack_id || <span className="text-gray-300">（未設定）</span>}</p>
+            <p><span className="text-gray-400 text-xs mr-2">Slack 頻道 ID</span>{client?.slack_id || <span className="text-gray-300">（未設定）</span>}</p>
             <p><span className="text-gray-400 text-xs mr-2">建立</span>{client?.created_at}</p>
           </div>
 
@@ -310,8 +342,16 @@ export default function ClientDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={triggerWebhook} disabled={triggering || !!activeJobId}
               className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50">
-              {triggering ? '送出中…' : activeJobId ? '抓取中…' : '抓取社群內容'}
+              {triggering ? '送出中…' : activeJobId ? '更新中…' : '手動更新報告'}
             </button>
+            {justCompleted && !activeJobId && (
+              <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                報告已更新完成
+              </span>
+            )}
             {activeJobId && (
               <span className="text-xs text-gray-500 flex items-center gap-1.5">
                 <svg className="animate-spin w-3.5 h-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -409,12 +449,12 @@ export default function ClientDetailPage() {
 
         {/* 逾時 */}
         {timedOut && !activeJobId && (
-          <p className="text-sm text-yellow-600">逾時，請重新按「抓取社群內容」。</p>
+          <p className="text-sm text-yellow-600">逾時，請重新按「手動更新報告」。</p>
         )}
 
         {/* 無資料 */}
         {!activeJobId && !latestJob && !timedOut && !jobsLoading && (
-          <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「抓取社群內容」開始。</p>
+          <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「手動更新報告」開始。</p>
         )}
 
         {/* 貼文列表 */}
@@ -504,13 +544,21 @@ export default function ClientDetailPage() {
                 <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
                   {/* 內嵌貼文 */}
                   {embedUrl ? (
-                    <iframe
-                      src={embedUrl}
-                      className="w-full border-0"
-                      style={{ height: post.platform === 'YT' ? '220px' : '600px' }}
-                      scrolling="no"
-                      allowFullScreen
-                    />
+                    post.platform === 'YT' ? (
+                      <iframe
+                        src={embedUrl}
+                        className="w-full border-0 aspect-video"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <iframe
+                        src={embedUrl}
+                        className="w-full border-0"
+                        style={{ height: post.platform === 'FB' ? '420px' : '600px' }}
+                        scrolling="no"
+                        allowFullScreen
+                      />
+                    )
                   ) : (
                     <>
                       {/* 無內嵌：顯示頭像 + 帳號 */}
