@@ -130,23 +130,12 @@ export default function ClientDetailPage() {
       const res = await fetch(`/api/social-clients/${id}/jobs`);
       if (res.ok) {
         const data: SocialJob[] = await res.json();
-        const completed = data.filter((j) => j.status === 'completed');
-        if (completed.length === 0) { setLatestJob(null); return; }
-
-        // 合併所有 job 的貼文，依 post_url 去重複（較新 job 的資料優先）
-        const seen = new Set<string>();
-        const mergedPosts: SocialPost[] = [];
-        for (const job of completed) {
-          for (const post of job.posts) {
-            const key = post.post_url ?? `${post.platform}-${post.id}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              mergedPosts.push(post);
-            }
-          }
-        }
-        // 用最新一筆 job 的 metadata，替換成合併後的貼文
-        setLatestJob({ ...completed[0], posts: mergedPosts });
+        // 只取有貼文的最新一筆 completed job，避免舊的錯誤資料污染
+        const latest = data.find((j) => j.status === 'completed' && j.posts.length > 0);
+        if (!latest) { setLatestJob(null); return; }
+        // 過濾掉平台為空的異常資料
+        const validPosts = latest.posts.filter((p) => p.platform && p.platform.trim() !== '');
+        setLatestJob({ ...latest, posts: validPosts });
       }
     } finally {
       setJobsLoading(false);
@@ -470,7 +459,23 @@ export default function ClientDetailPage() {
           const filtered = job.posts.filter((p) => {
             if (p.platform !== activePlatform) return false;
             if (filterOwner && p.account !== filterOwner) return false;
-            if (dateFrom && p.post_date && new Date(p.post_date) < new Date(dateFrom + 'T00:00:00')) return false;
+            if (dateFrom && p.post_date) {
+              // 穩健解析：支援 ISO、2026/2/26、Unix timestamp 等格式
+              const raw = String(p.post_date);
+              let postDate: Date;
+              if (/^\d{10,13}$/.test(raw)) {
+                // Unix timestamp（秒 or 毫秒）
+                postDate = new Date(raw.length === 10 ? Number(raw) * 1000 : Number(raw));
+              } else {
+                // 統一把 / 換成 - 再取日期部分
+                const normalized = raw.replace(/\//g, '-').split('T')[0].split(' ')[0];
+                const [y, m, d] = normalized.split('-').map(Number);
+                postDate = new Date(y, m - 1, d);
+              }
+              const [sy, sm, sd] = dateFrom.split('-').map(Number);
+              const since = new Date(sy, sm - 1, sd);
+              if (postDate < since) return false;
+            }
             return true;
           });
 
@@ -519,7 +524,7 @@ export default function ClientDetailPage() {
 
                 {/* 日期篩選：某日之後 */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-gray-400 shrink-0">此日期之後</span>
+                  <span className="text-xs text-gray-400 shrink-0">發佈日期在此之後</span>
                   <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
                     className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
                   {dateFrom && (
@@ -527,7 +532,7 @@ export default function ClientDetailPage() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className={`grid pt-2 ${activePlatform === 'TikTok' ? 'grid-cols-2 sm:grid-cols-3 gap-8' : 'grid-cols-1 sm:grid-cols-2 gap-6'}`}>
                 {filtered.map((post) => {
               const embedUrl = getEmbedUrl(post.platform, post.post_url);
               const dateStr = post.post_date ? (() => {
@@ -539,7 +544,7 @@ export default function ClientDetailPage() {
               if (post.platform === 'TikTok') {
                 const tikEmbedUrl = getEmbedUrl('TikTok', post.post_url);
                 return (
-                  <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+                  <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col max-w-[300px] mx-auto w-full">
                     {/* 大頭貼 + 帳號 + 標題 */}
                     <div className="flex items-start gap-2.5 px-4 pt-4 pb-3">
                       <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
@@ -559,7 +564,7 @@ export default function ClientDetailPage() {
                       )}
                     </div>
                     {/* iframe 置中留白 */}
-                    <div className="flex justify-center px-6 pb-4">
+                    <div className="flex justify-center px-4 pb-4">
                       {tikEmbedUrl ? (
                         <iframe
                           src={tikEmbedUrl}
@@ -586,7 +591,7 @@ export default function ClientDetailPage() {
                         allowFullScreen
                       />
                     ) : post.platform === 'FB' ? (
-                      <div className="px-4 pt-4 pb-2">
+                      <div className="px-8 pt-5 pb-3">
                         <iframe
                           src={embedUrl}
                           className="w-full border-0 aspect-[9/16] rounded-lg"
@@ -594,11 +599,11 @@ export default function ClientDetailPage() {
                         />
                       </div>
                     ) : post.platform === 'IG' ? (
-                      <div className="px-4 pt-4 pb-2">
+                      <div className="px-8 pt-5 pb-3">
                         <iframe
                           src={embedUrl}
                           className="w-full border-0 rounded-lg"
-                          style={{ height: '680px' }}
+                          style={{ height: '600px' }}
                           scrolling="no"
                           allowFullScreen
                         />
