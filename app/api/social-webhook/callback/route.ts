@@ -34,7 +34,8 @@ function normalizePost(p: Record<string, any>) {
   const platform = rawPlatform || detectPlatform(post_url);
 
   // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱 / 抖音帳號 / FB 貼文擁有者
-  const account =
+  // fallback：從 Threads URL 提取 @username
+  const accountRaw =
     p['IG帳號'] ??
     p['IG帳號姓名'] ??
     p['抖音帳號'] ??
@@ -43,6 +44,7 @@ function normalizePost(p: Record<string, any>) {
     p['account'] ?? p['Account'] ??
     p['ownerFullName'] ?? p['ownerUsername'] ??
     null;
+  const account = accountRaw ?? extractThreadsAccount(post_url);
 
 
   // content：中文欄位 / 英文欄位 / Apify caption / Threads text / YT 標題＋描述 / FB 文案
@@ -94,6 +96,13 @@ function normalizePost(p: Record<string, any>) {
   return { platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags: hashtagsStr, video_url };
 }
 
+// 從 threads.net URL 提取帳號名稱，例如 https://www.threads.net/@relove_care/post/xxx → @relove_care
+function extractThreadsAccount(url: string | null): string | null {
+  if (!url) return null;
+  const m = url.match(/threads\.net\/(@[^/]+)/i);
+  return m ? m[1] : null;
+}
+
 function toInt(v: unknown): number | null {
   if (v == null) return null;
   const n = Number(v);
@@ -113,7 +122,8 @@ export async function POST(req: NextRequest) {
   const jobId  = body['jobId']  ?? body['job_id'];
   const status = body['status'] ?? 'completed';
   const message = body['message'] ?? null;
-  const rawPosts = body['posts'];
+  // 支援 posts（英文 key）或 貼文（Threads n8n 用中文 key）
+  const rawPosts = body['posts'] ?? body['貼文'];
 
   if (!jobId) {
     return NextResponse.json({ error: '缺少 jobId' }, { status: 400 });
