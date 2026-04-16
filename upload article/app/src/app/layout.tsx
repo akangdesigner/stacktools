@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
-import Link from "next/link";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stacktools",
-  description: "小積木的工具箱",
+  title: "文章上架工具",
+  description: "將草稿文章快速整理成客戶指定樣式",
 };
 
 export default function RootLayout({
@@ -26,16 +24,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="zh-TW"
+      lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      style={{ colorScheme: 'light' }}
     >
-      <body className="min-h-screen flex bg-gray-50">
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
-      </body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }

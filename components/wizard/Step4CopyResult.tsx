@@ -81,19 +81,6 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRege
         <p className="text-sm text-green-800 font-medium">HTML 清洗完成！已套用客戶樣式設定。</p>
       </div>
 
-      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-        <p className="text-sm font-medium text-amber-800 flex items-center gap-2 mb-1.5">
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z" />
-          </svg>
-          請手動確認以下項目
-        </p>
-        <ul className="text-sm text-amber-700 space-y-1 pl-6 list-disc">
-          <li>表格：格式不固定，需手動複製貼上</li>
-          <li>YouTube 影片內嵌：iframe 格式各異，需手動貼入</li>
-        </ul>
-      </div>
-
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-gray-700">清洗後 HTML</span>
