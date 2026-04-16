@@ -14,27 +14,30 @@ function normalizePost(p: Record<string, any>) {
   const rawPlatform = p['platform'] ?? p['Platform'] ?? p['平台'] ?? '';
   const platform = rawPlatform || 'IG';
 
-  // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername
+  // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱
   const account =
     p['IG帳號'] ??
     p['IG帳號姓名'] ??
+    p['頻道名稱'] ??
     p['account'] ?? p['Account'] ??
     p['ownerFullName'] ?? p['ownerUsername'] ??
     null;
 
-  // post_url：中文欄位 / 英文欄位 / Apify url / Threads（空格 key）
+  // post_url：中文欄位 / 英文欄位 / Apify url / Threads（空格 key）/ YT 影片url
   const post_url =
     p['貼文網址'] ??
+    p['影片url'] ??
     p['postUrl'] ?? p['post_url'] ??
     p['url'] ?? p[' url'] ??
     null;
 
-  // content：中文欄位 / 英文欄位 / Apify caption / Threads text
+  // content：中文欄位 / 英文欄位 / Apify caption / Threads text / YT 標題＋描述
   const content =
     p['貼文內容'] ??
     p['content'] ?? p['Content'] ??
     p['caption'] ??
     p['text'] ??
+    (p['影片標題'] ? `${p['影片標題']}${p['影片描述'] ? '\n\n' + p['影片描述'] : ''}` : null) ??
     null;
 
   // likes：中文 / 英文 / Apify likesCount
@@ -54,7 +57,7 @@ function normalizePost(p: Record<string, any>) {
   );
 
   // profile_pic_url：帳號大頭貼（獨立儲存，不混入貼文縮圖）
-  const profile_pic_url = p['大頭貼'] ?? p['profilePicUrl'] ?? null;
+  const profile_pic_url = p['大頭貼'] ?? p['profilePicUrl'] ?? p['頻道大頭貼'] ?? null;
 
   // thumbnail：只取貼文圖片，不 fallback 到大頭貼
   const thumbnail =
@@ -62,9 +65,10 @@ function normalizePost(p: Record<string, any>) {
     p['thumbnail'] ?? p['Thumbnail'] ??
     null;
 
-  // post_date：中文 / 英文 / Apify timestamp
+  // post_date：中文 / 英文 / Apify timestamp / YT 影片日期
   const post_date =
     p['日期'] ??
+    p['影片日期'] ??
     p['postDate'] ?? p['post_date'] ??
     p['timestamp'] ?? p['takenAtTimestamp'] ??
     null;
