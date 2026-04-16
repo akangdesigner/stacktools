@@ -84,7 +84,6 @@ export default function ClientDetailPage() {
   const [urlsOpen, setUrlsOpen] = useState(false);
 
   const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState('');
 
@@ -438,20 +437,12 @@ export default function ClientDetailPage() {
 
         {/* 處理中 */}
         {activeJobId && (
-          <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <svg className="animate-spin w-4 h-4 text-blue-500 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-              </svg>
-              <span className="text-sm font-medium text-blue-700">正在抓取各平台貼文，請稍候…</span>
-            </div>
-            {/* 跑馬燈進度條 */}
-            <div className="h-1.5 w-full rounded-full bg-blue-100 overflow-hidden">
-              <div className="h-full w-1/3 rounded-full bg-blue-400 animate-[slide_1.5s_ease-in-out_infinite]"
-                style={{ animation: 'slide 1.5s ease-in-out infinite' }} />
-            </div>
-            <p className="text-xs text-blue-400">約需 3 分鐘，完成後頁面自動更新，請勿關閉此頁面</p>
+          <div className="flex items-center gap-2.5 px-1 py-2">
+            <svg className="animate-spin w-4 h-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <span className="text-sm text-gray-500">正在抓取各平台貼文，完成後自動更新…</span>
           </div>
         )}
 
@@ -479,8 +470,7 @@ export default function ClientDetailPage() {
           const filtered = job.posts.filter((p) => {
             if (p.platform !== activePlatform) return false;
             if (filterOwner && p.account !== filterOwner) return false;
-            if (dateFrom && p.post_date && new Date(p.post_date) < new Date(dateFrom)) return false;
-            if (dateTo && p.post_date && new Date(p.post_date) > new Date(dateTo + 'T23:59:59')) return false;
+            if (dateFrom && p.post_date && new Date(p.post_date) < new Date(dateFrom + 'T00:00:00')) return false;
             return true;
           });
 
@@ -527,16 +517,13 @@ export default function ClientDetailPage() {
                   </div>
                 )}
 
-                {/* 日期區間篩選 */}
+                {/* 日期篩選：某日之後 */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-gray-400 shrink-0">日期區間</span>
+                  <span className="text-xs text-gray-400 shrink-0">此日期之後</span>
                   <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
                     className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-                  <span className="text-xs text-gray-300">—</span>
-                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-                    className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-                  {(dateFrom || dateTo) && (
-                    <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-300 hover:text-gray-500 transition-colors">清除</button>
+                  {dateFrom && (
+                    <button type="button" onClick={() => setDateFrom('')} className="text-xs text-gray-300 hover:text-gray-500 transition-colors">清除</button>
                   )}
                 </div>
               </div>
