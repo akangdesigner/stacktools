@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJob, updateJob, savePosts } from '@/lib/socialDb';
 
-function detectPlatform(url: string | null): string {
-  if (!url) return 'IG';
+// 從 URL 推測平台，辨識不出回傳 null（不預設 IG）
+function detectPlatformFromUrl(url: string | null): string | null {
+  if (!url) return null;
   if (/instagram\.com/i.test(url)) return 'IG';
   if (/youtube\.com|youtu\.be/i.test(url)) return 'YT';
   if (/threads\.net/i.test(url)) return 'Threads';
   if (/tiktok\.com/i.test(url)) return 'TikTok';
   if (/facebook\.com|fb\.com/i.test(url)) return 'FB';
-  return 'IG';
+  return null;
 }
 
 // N8N 回傳的單筆貼文 — 支援中文欄位名、英文欄位名、Apify 原始欄位名
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizePost(p: Record<string, any>) {
+function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
   const hashtags =
     p['hashtags'] ?? p['Hashtags'] ?? null;
   const hashtagsStr = Array.isArray(hashtags)
@@ -29,9 +30,11 @@ function normalizePost(p: Record<string, any>) {
     p['url'] ?? p[' url'] ??
     null;
 
-  // platform：有明確欄位就用，否則從 URL 自動判斷
+  // platform：優先用外層 sourcePlatform（頻道來源），其次貼文本身欄位，最後從 URL 偵測
+  // 三者都無法辨識則回傳 null，由呼叫端過濾丟棄
   const rawPlatform = p['platform'] ?? p['Platform'] ?? p['平台'] ?? '';
-  const platform = rawPlatform || detectPlatform(post_url);
+  const platform = sourcePlatform || rawPlatform || detectPlatformFromUrl(post_url);
+  if (!platform) return null;
 
   // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱 / 抖音帳號 / FB 貼文擁有者
   // fallback：從 Threads URL 提取 @username
@@ -124,6 +127,13 @@ export async function POST(req: NextRequest) {
   const message = body['message'] ?? null;
   // 支援 posts（英文 key）或 貼文（Threads n8n 用中文 key）
   const rawPosts = body['posts'] ?? body['貼文'];
+  // 外層平台來源，將 n8n 頻道來源名稱對應到內部標準名稱
+  const platformMap: Record<string, string> = {
+    facebook: 'FB', instagram: 'IG', threads: 'Threads', tiktok: 'TikTok', youtube: 'YT',
+  };
+  const sourcePlatform: string | undefined = body['頻道來源']
+    ? (platformMap[String(body['頻道來源']).toLowerCase()] ?? String(body['頻道來源']))
+    : undefined;
 
   if (!jobId) {
     return NextResponse.json({ error: '缺少 jobId' }, { status: 400 });
@@ -135,7 +145,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (status === 'completed' && Array.isArray(rawPosts) && rawPosts.length > 0) {
-    savePosts(jobId, rawPosts.map(normalizePost));
+    const normalized = rawPosts.map((p) => normalizePost(p, sourcePlatform)).filter((p) => p !== null);
+    if (normalized.length > 0) savePosts(jobId, normalized);
   }
 
   updateJob(jobId, status as 'completed' | 'failed' | 'processing', message ?? undefined);
