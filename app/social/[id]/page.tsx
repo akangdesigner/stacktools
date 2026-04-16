@@ -554,7 +554,7 @@ export default function ClientDetailPage() {
                       <iframe
                         src={embedUrl}
                         className="w-full border-0"
-                        style={{ height: post.platform === 'FB' ? '420px' : '600px' }}
+                        style={{ height: post.platform === 'FB' ? '420px' : post.platform === 'IG' ? '800px' : '600px' }}
                         scrolling="no"
                         allowFullScreen
                       />
