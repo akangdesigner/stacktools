@@ -35,48 +35,6 @@ interface SocialJob {
   message: string | null; created_at: string; posts: SocialPost[];
 }
 
-// ── DEMO 假資料（預覽用，確認後刪除）──────────────────────────
-const DEMO_JOB: SocialJob = {
-  id: 'demo', status: 'completed', date_from: null, date_to: null,
-  message: null, created_at: '2026-04-15 10:00:00',
-  posts: [
-    { id: 1, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example1/',
-      content: '🌿 黑頭粉刺救星降臨！限時 7 天↑入夏寵粉優惠 不用去醫美 在家就能解鎖 0 瑕疵神顏🔑 Relove 1+1 神級組合/強勢登場！利用專利外泌體與拋光酵母 幫肌膚來場深度大掃除',
-      likes: 43, comments: 0, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=400&fit=crop',
-      post_date: '2026-04-06T10:00:00.000Z', hashtags: '#保養 #粉刺 #美肌', video_url: null, profile_pic_url: null },
-    { id: 2, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example2/',
-      content: '【Relove × vacanza】強強聯手！承包妳四月的精緻與底氣 🌟 四月最浪漫的跨界合作來了！就是要從內到外都給妳最頂級的呵護 ♡',
-      likes: 128, comments: 5, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
-      post_date: '2026-04-03T08:30:00.000Z', hashtags: '#聯名 #美妝 #保養', video_url: null, profile_pic_url: null },
-    { id: 3, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example3/',
-      content: '#保養教學 很多人問：「棉片不就是敷完就好嗎？」NO、NO、NO 作為抗痘專家 今天教大家如何把一片棉片的價值發揮到 200%！',
-      likes: 276, comments: 12, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273?w=400&h=400&fit=crop',
-      post_date: '2026-03-28T14:00:00.000Z', hashtags: '#保養教學 #棉片 #護膚', video_url: null, profile_pic_url: null },
-    { id: 4, platform: 'FB', account: 'Relove 官方', post_url: 'https://www.facebook.com/relove/posts/example4',
-      content: '📣 四月限定優惠開跑！購買任兩件保養品，加贈限量保濕面膜一片。數量有限，售完為止，手刀下單不要猶豫！',
-      likes: 89, comments: 23, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&h=400&fit=crop',
-      post_date: '2026-04-01T09:00:00.000Z', hashtags: '#限時優惠 #保養 #Relove', video_url: null, profile_pic_url: null },
-    { id: 5, platform: 'YT', account: 'Relove Care', post_url: 'https://www.youtube.com/watch?v=example5',
-      content: '【保養懶人包】5 分鐘搞定早晨護膚步驟！跟著 Relove 一起打造零毛孔底妝感，讓你每天出門都有好氣色✨',
-      likes: 512, comments: 34, views: 8200,
-      thumbnail: 'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?w=400&h=400&fit=crop',
-      post_date: '2026-03-25T12:00:00.000Z', hashtags: '#保養懶人包 #護膚 #YouTube', video_url: null, profile_pic_url: null },
-    { id: 6, platform: 'TikTok', account: '@relove_official', post_url: 'https://www.tiktok.com/@relove/video/example6',
-      content: '敷完面膜後這樣收尾，毛孔縮小效果直接翻倍🔥 學起來！#skincare #保養 #tiktok推薦',
-      likes: 3400, comments: 156, views: 52000,
-      thumbnail: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=400&h=400&fit=crop',
-      post_date: '2026-04-10T18:00:00.000Z', hashtags: '#skincare #保養 #tiktok推薦', video_url: null, profile_pic_url: null },
-    { id: 7, platform: 'Threads', account: 'relove_care', post_url: 'https://www.threads.net/@relove/post/example7',
-      content: '素顏才是真的美💪 今天分享一個超簡單的日常，只要三步驟，讓肌膚自己發光。你們都用什麼保養品呢？',
-      likes: 67, comments: 8, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=400&fit=crop',
-      post_date: '2026-04-12T20:00:00.000Z', hashtags: '#素顏 #保養 #Threads', video_url: null, profile_pic_url: null },
-  ],
-};
 
 function getEmbedUrl(platform: string, postUrl: string | null): string | null {
   if (!postUrl) return null;
@@ -130,6 +88,7 @@ export default function ClientDetailPage() {
   const pollCountRef = useRef(0);
   const [filterPlatform, setFilterPlatform] = useState<string | null>(null);
   const [filterOwner, setFilterOwner] = useState<string | null>(null);
+  const [jobsLoading, setJobsLoading] = useState(true);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -155,12 +114,16 @@ export default function ClientDetailPage() {
   }, [id]);
 
   async function loadJobs() {
-    const res = await fetch(`/api/social-clients/${id}/jobs`);
-    if (res.ok) {
-      const data: SocialJob[] = await res.json();
-      // 只取最新一筆已完成的
-      const latest = data.find((j) => j.status === 'completed') ?? null;
-      setLatestJob(latest);
+    try {
+      const res = await fetch(`/api/social-clients/${id}/jobs`);
+      if (res.ok) {
+        const data: SocialJob[] = await res.json();
+        // 只取最新一筆已完成的
+        const latest = data.find((j) => j.status === 'completed') ?? null;
+        setLatestJob(latest);
+      }
+    } finally {
+      setJobsLoading(false);
     }
   }
 
@@ -421,6 +384,18 @@ export default function ClientDetailPage() {
           )}
         </div>
 
+        {/* 初次載入骨架 */}
+        {jobsLoading && !activeJobId && (
+          <div className="space-y-3 animate-pulse">
+            <div className="h-4 bg-gray-100 rounded w-1/3" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="rounded-xl border border-gray-100 bg-gray-50 h-48" />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 處理中 */}
         {activeJobId && (
           <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -438,13 +413,13 @@ export default function ClientDetailPage() {
         )}
 
         {/* 無資料 */}
-        {!activeJobId && !latestJob && !timedOut && (
+        {!activeJobId && !latestJob && !timedOut && !jobsLoading && (
           <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「抓取社群內容」開始。</p>
         )}
 
         {/* 貼文列表 */}
-        {(latestJob ?? DEMO_JOB) && (latestJob ?? DEMO_JOB).posts.length > 0 && (() => {
-          const job = latestJob ?? DEMO_JOB;
+        {latestJob && latestJob.posts.length > 0 && !jobsLoading && (() => {
+          const job = latestJob;
           const platforms = Array.from(new Set(job.posts.map((p) => p.platform)));
           const activePlatform = filterPlatform ?? platforms[0];
 
@@ -532,7 +507,7 @@ export default function ClientDetailPage() {
                     <iframe
                       src={embedUrl}
                       className="w-full border-0"
-                      style={{ height: post.platform === 'YT' ? '220px' : '500px' }}
+                      style={{ height: post.platform === 'YT' ? '220px' : '600px' }}
                       scrolling="no"
                       allowFullScreen
                     />

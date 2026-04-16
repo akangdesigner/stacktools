@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJob, updateJob, savePosts } from '@/lib/socialDb';
 
+function detectPlatform(url: string | null): string {
+  if (!url) return 'IG';
+  if (/instagram\.com/i.test(url)) return 'IG';
+  if (/youtube\.com|youtu\.be/i.test(url)) return 'YT';
+  if (/threads\.net/i.test(url)) return 'Threads';
+  if (/tiktok\.com/i.test(url)) return 'TikTok';
+  if (/facebook\.com|fb\.com/i.test(url)) return 'FB';
+  return 'IG';
+}
+
 // N8N 回傳的單筆貼文 — 支援中文欄位名、英文欄位名、Apify 原始欄位名
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizePost(p: Record<string, any>) {
@@ -10,9 +20,17 @@ function normalizePost(p: Record<string, any>) {
     ? hashtags.join(' ')
     : typeof hashtags === 'string' ? hashtags : null;
 
-  // platform：空字串也當作未設定，預設 IG
+  // post_url：先算出來，供 platform 偵測使用
+  const post_url =
+    p['貼文網址'] ??
+    p['影片url'] ??
+    p['postUrl'] ?? p['post_url'] ??
+    p['url'] ?? p[' url'] ??
+    null;
+
+  // platform：有明確欄位就用，否則從 URL 自動判斷
   const rawPlatform = p['platform'] ?? p['Platform'] ?? p['平台'] ?? '';
-  const platform = rawPlatform || 'IG';
+  const platform = rawPlatform || detectPlatform(post_url);
 
   // account：中文欄位 / 英文欄位 / Apify ownerFullName / ownerUsername / YT 頻道名稱
   const account =
@@ -23,13 +41,6 @@ function normalizePost(p: Record<string, any>) {
     p['ownerFullName'] ?? p['ownerUsername'] ??
     null;
 
-  // post_url：中文欄位 / 英文欄位 / Apify url / Threads（空格 key）/ YT 影片url
-  const post_url =
-    p['貼文網址'] ??
-    p['影片url'] ??
-    p['postUrl'] ?? p['post_url'] ??
-    p['url'] ?? p[' url'] ??
-    null;
 
   // content：中文欄位 / 英文欄位 / Apify caption / Threads text / YT 標題＋描述
   const content =
