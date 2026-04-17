@@ -581,7 +581,7 @@ export default function ClientDetailPage() {
                   )}
                 </div>
               </div>
-              <div className={`grid pt-2 ${activePlatform === 'TikTok' ? 'grid-cols-2 sm:grid-cols-3 gap-8' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
+              <div className="grid pt-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filtered.map((post) => {
               const embedUrl = getEmbedUrl(post.platform, post.post_url);
               const dateStr = post.post_date ? (() => {
@@ -593,7 +593,7 @@ export default function ClientDetailPage() {
               if (post.platform === 'TikTok') {
                 const tikEmbedUrl = getEmbedUrl('TikTok', post.post_url);
                 return (
-                  <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col max-w-[300px] mx-auto w-full">
+                  <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col">
                     {/* 大頭貼 + 帳號 + 標題 */}
                     <div className="flex items-start gap-2.5 px-4 pt-4 pb-3">
                       <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
@@ -617,8 +617,7 @@ export default function ClientDetailPage() {
                       {tikEmbedUrl ? (
                         <iframe
                           src={tikEmbedUrl}
-                          className="border-0 aspect-[9/16] rounded-xl"
-                          style={{ width: '260px' }}
+                          className="w-full border-0 aspect-[9/16] rounded-xl"
                           allowFullScreen
                         />
                       ) : (
