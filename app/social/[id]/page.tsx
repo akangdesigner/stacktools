@@ -114,6 +114,18 @@ export default function ClientDetailPage() {
   const [jobsLoading, setJobsLoading] = useState(true);
   const [justCompleted, setJustCompleted] = useState(false);
 
+  // Threads 官方 embed script（有 Threads 貼文時載入一次）
+  useEffect(() => {
+    if (!latestJob?.posts.some(p => p.platform === 'Threads')) return;
+    const src = 'https://www.threads.net/embed/iframe.js';
+    if (!document.querySelector(`script[src="${src}"]`)) {
+      const el = document.createElement('script');
+      el.src = src;
+      el.async = true;
+      document.body.appendChild(el);
+    }
+  }, [latestJob]);
+
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
     fetch(`/api/social-clients/${id}`)
@@ -630,8 +642,8 @@ export default function ClientDetailPage() {
 
               // FB 圖片貼文（is_video=0）：不用 embed，避免文案重複
               const isFbImagePost = post.platform === 'FB' && post.is_video === 0;
-              // Threads 有縮圖時直接透過 proxy 顯示
-              const isThreadsWithImage = post.platform === 'Threads' && !!post.thumbnail;
+              // Threads 一律用官方 blockquote embed，不走縮圖路徑
+              const isThreadsWithImage = false;
 
               return (
                 <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
@@ -661,14 +673,14 @@ export default function ClientDetailPage() {
                         />
                       </div>
                     ) : post.platform === 'Threads' ? (
-                      <div className="px-8 pt-5 pb-3">
-                        <iframe
-                          src={embedUrl}
-                          className="w-full border-0 rounded-lg"
-                          style={{ height: '420px' }}
-                          scrolling="no"
-                          allowFullScreen
-                        />
+                      <div className="px-6 pt-4 pb-2">
+                        <blockquote
+                          className="text-post-media"
+                          data-media-id={post.post_url?.match(/threads\.net\/t\/([^/?#]+)/)?.[1] ?? ''}
+                        >
+                          <a href={post.post_url ?? '#'} target="_blank" rel="noreferrer"
+                            className="text-sm text-blue-500">在 Threads 查看貼文</a>
+                        </blockquote>
                       </div>
                     ) : (
                       <iframe
