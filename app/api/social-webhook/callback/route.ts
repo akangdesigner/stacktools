@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJob, updateJob, savePosts } from '@/lib/socialDb';
 
+// 從 Threads short code 提取發文時間（Instagram media ID 結構：高位 bits 含時間戳）
+function extractDateFromThreadsCode(code: string): string | null {
+  const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const EPOCH = BigInt(1314220021721);
+  let id = BigInt(0);
+  for (const ch of code) {
+    const v = CHARS.indexOf(ch);
+    if (v < 0) return null;
+    id = id * BigInt(64) + BigInt(v);
+  }
+  const ts = Number((id >> BigInt(23)) + EPOCH);
+  return new Date(ts).toISOString();
+}
+
 // 從 URL 推測平台，辨識不出回傳 null（不預設 IG）
 function detectPlatformFromUrl(url: string | null): string | null {
   if (!url) return null;
@@ -92,7 +106,7 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
     (p['image_versions2']?.['candidates']?.[0]?.['url'] ?? null);
 
   // post_date：中文 / 英文 / Apify timestamp / YT 影片日期，統一轉為 ISO 字串
-  const post_date = normalizeDate(
+  let post_date = normalizeDate(
     p['貼文時間'] ??
     p['日期'] ??
     p['影片日期'] ??
@@ -100,6 +114,11 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
     p['timestamp'] ?? p['takenAtTimestamp'] ??
     null
   );
+  // Threads 且沒有日期時，從 short code 提取時間戳
+  if (!post_date && platform === 'Threads' && post_url) {
+    const m = post_url.match(/threads\.net\/(?:@[^/]+\/post\/|t\/)([^/?#]+)/);
+    if (m) post_date = extractDateFromThreadsCode(m[1]);
+  }
 
   const video_url =
     p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ??

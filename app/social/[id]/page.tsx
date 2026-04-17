@@ -42,28 +42,6 @@ function proxyImg(url: string | null): string | null {
   return `/api/proxy-image?url=${encodeURIComponent(url)}`;
 }
 
-// 從 Threads URL 提取短代碼（支援 @user/post/CODE 和 /t/CODE 兩種格式）
-function extractThreadsCode(postUrl: string | null): string {
-  if (!postUrl) return '';
-  const m1 = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
-  if (m1) return m1[1];
-  const m2 = postUrl.match(/threads\.net\/t\/([^/?#]+)/);
-  if (m2) return m2[1];
-  return '';
-}
-
-// 短代碼 → 數字 media ID（base64url 解碼，iframe.js 的 data-media-id 需要數字格式）
-const THREADS_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-function decodeThreadsCode(code: string): string {
-  if (!code) return '';
-  let id = BigInt(0);
-  for (const ch of code) {
-    const v = THREADS_CHARS.indexOf(ch);
-    if (v < 0) return '';
-    id = id * BigInt(64) + BigInt(v);
-  }
-  return id.toString();
-}
 
 function getEmbedUrl(platform: string, postUrl: string | null): string | null {
   if (!postUrl) return null;
@@ -136,18 +114,6 @@ export default function ClientDetailPage() {
   const [filterOwner, setFilterOwner] = useState<string | null>(null);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [justCompleted, setJustCompleted] = useState(false);
-
-  // Threads 官方 embed script
-  useEffect(() => {
-    if (!latestJob?.posts.some(p => p.platform === 'Threads')) return;
-    const src = 'https://www.threads.net/embed/iframe.js';
-    if (!document.querySelector(`script[src="${src}"]`)) {
-      const el = document.createElement('script');
-      el.src = src;
-      el.async = true;
-      document.body.appendChild(el);
-    }
-  }, [latestJob]);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -533,8 +499,8 @@ export default function ClientDetailPage() {
             if (p.platform !== activePlatform) return false;
             if (filterOwner && p.account !== filterOwner) return false;
             if (appliedDateFrom) {
-              // 沒有日期的貼文，日期篩選時一律排除
-              if (!p.post_date) return false;
+              // 沒有日期的貼文，無法判斷，一律保留顯示
+              if (!p.post_date) return true;
               // 穩健解析：新資料已為 ISO，舊資料支援 Unix timestamp / YYYY/MM/DD
               const raw = String(p.post_date);
               let postDate: Date;
@@ -615,7 +581,7 @@ export default function ClientDetailPage() {
                   )}
                 </div>
               </div>
-              <div className={`grid pt-2 ${activePlatform === 'TikTok' ? 'grid-cols-2 sm:grid-cols-3 gap-8' : 'grid-cols-1 sm:grid-cols-2 gap-6'}`}>
+              <div className={`grid pt-2 ${activePlatform === 'TikTok' ? 'grid-cols-2 sm:grid-cols-3 gap-8' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
                 {filtered.map((post) => {
               const embedUrl = getEmbedUrl(post.platform, post.post_url);
               const dateStr = post.post_date ? (() => {
@@ -627,7 +593,7 @@ export default function ClientDetailPage() {
               if (post.platform === 'TikTok') {
                 const tikEmbedUrl = getEmbedUrl('TikTok', post.post_url);
                 return (
-                  <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col max-w-[300px] mx-auto w-full">
+                  <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col max-w-[300px] mx-auto w-full">
                     {/* 大頭貼 + 帳號 + 標題 */}
                     <div className="flex items-start gap-2.5 px-4 pt-4 pb-3">
                       <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
@@ -669,7 +635,7 @@ export default function ClientDetailPage() {
               const isThreadsWithImage = false;
 
               return (
-                <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
+                <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col">
                   {/* 內嵌貼文 */}
                   {embedUrl && !isFbImagePost && !isThreadsWithImage ? (
                     post.platform === 'YT' ? (
@@ -696,14 +662,13 @@ export default function ClientDetailPage() {
                         />
                       </div>
                     ) : post.platform === 'Threads' ? (
-                      <div className="px-6 pt-4 pb-2">
-                        <blockquote
-                          className="text-post-media"
-                          data-media-id={decodeThreadsCode(extractThreadsCode(post.post_url))}
-                        >
-                          <a href={post.post_url ?? '#'} target="_blank" rel="noreferrer"
-                            className="text-sm text-blue-500">在 Threads 查看貼文</a>
-                        </blockquote>
+                      <div className="px-8 pt-5 pb-3">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0 rounded-lg"
+                          style={{ height: '900px' }}
+                          allowFullScreen
+                        />
                       </div>
                     ) : (
                       <iframe
