@@ -163,9 +163,9 @@ export function WizardShell() {
         )}
         </div>{/* end main wizard */}
 
-        {/* Sidebar — 特殊提醒 */}
-        <div className="w-56 shrink-0 pt-[72px]">
-          {specialNotes ? (
+        {/* Sidebar — 特殊提醒 + 手動確認 */}
+        <div className="w-56 shrink-0 pt-[72px] space-y-3">
+          {specialNotes && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
               <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -179,9 +179,19 @@ export function WizardShell() {
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="h-1" />
           )}
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+            <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 110 18A9 9 0 0112 3z" />
+              </svg>
+              請手動確認
+            </p>
+            <ul className="text-xs text-amber-700 space-y-1 list-disc pl-4 leading-relaxed">
+              <li>表格：格式不固定，需手動複製貼上</li>
+              <li>YouTube 影片內嵌：iframe 格式各異，需手動貼入</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

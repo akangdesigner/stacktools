@@ -18,10 +18,11 @@ export function getSocialDb(): Database.Database {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS social_clients (
-      id         TEXT PRIMARY KEY,
-      name       TEXT NOT NULL,
-      slack_id   TEXT,
-      created_at TEXT DEFAULT (datetime('now','localtime'))
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      slack_id     TEXT,
+      auto_monitor INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT DEFAULT (datetime('now','localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS social_client_urls (
@@ -56,17 +57,30 @@ export function getSocialDb(): Database.Database {
       post_date   TEXT,
       hashtags    TEXT,
       video_url   TEXT,
+      is_video    INTEGER,
       created_at  TEXT DEFAULT (datetime('now','localtime'))
     );
   `);
 
-  // migration：舊資料庫補欄位
+  // migration：social_clients 補欄位
+  const clientCols = (db.prepare("PRAGMA table_info(social_clients)").all() as { name: string }[]).map((c) => c.name);
+  if (!clientCols.includes('auto_monitor')) {
+    db.exec('ALTER TABLE social_clients ADD COLUMN auto_monitor INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // migration：social_posts 補欄位
   const cols = (db.prepare("PRAGMA table_info(social_posts)").all() as { name: string }[]).map((c) => c.name);
   if (!cols.includes('hashtags')) {
     db.exec('ALTER TABLE social_posts ADD COLUMN hashtags TEXT');
   }
   if (!cols.includes('video_url')) {
     db.exec('ALTER TABLE social_posts ADD COLUMN video_url TEXT');
+  }
+  if (!cols.includes('profile_pic_url')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN profile_pic_url TEXT');
+  }
+  if (!cols.includes('is_video')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN is_video INTEGER');
   }
 
   return db;
@@ -78,6 +92,7 @@ export interface SocialClient {
   id: string;
   name: string;
   slack_id: string | null;
+  auto_monitor: number;
   created_at: string;
 }
 
@@ -109,10 +124,11 @@ export function createClient({ name, slackId }: { name: string; slackId?: string
   return getClient(id)!;
 }
 
-export function updateClient(id: string, { name, slackId }: { name?: string; slackId?: string }) {
+export function updateClient(id: string, { name, slackId, autoMonitor }: { name?: string; slackId?: string; autoMonitor?: boolean }) {
   const db = getSocialDb();
   if (name !== undefined) db.prepare('UPDATE social_clients SET name = ? WHERE id = ?').run(name, id);
   if (slackId !== undefined) db.prepare('UPDATE social_clients SET slack_id = ? WHERE id = ?').run(slackId || null, id);
+  if (autoMonitor !== undefined) db.prepare('UPDATE social_clients SET auto_monitor = ? WHERE id = ?').run(autoMonitor ? 1 : 0, id);
 }
 
 export function deleteClient(id: string) {
@@ -167,9 +183,11 @@ export interface SocialPost {
   comments: number | null;
   views: number | null;
   thumbnail: string | null;
+  profile_pic_url: string | null;
   post_date: string | null;
   hashtags: string | null;
   video_url: string | null;
+  is_video: number | null;
   created_at: string;
 }
 
@@ -199,13 +217,13 @@ export function listJobsByClient(clientId: string): SocialJob[] {
 
 export function savePosts(jobId: string, posts: Partial<SocialPost>[]) {
   const ins = getSocialDb().prepare(
-    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, post_date, hashtags, video_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags, video_url, is_video) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
   getSocialDb().transaction(() => {
     for (const p of posts) {
       ins.run(jobId, p.platform ?? '', p.account ?? null, p.post_url ?? null, p.content ?? null,
-        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.post_date ?? null,
-        p.hashtags ?? null, p.video_url ?? null);
+        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.profile_pic_url ?? null,
+        p.post_date ?? null, p.hashtags ?? null, p.video_url ?? null, p.is_video ?? null);
     }
   })();
 }

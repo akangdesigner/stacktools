@@ -4,17 +4,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
-const navItems = [
-  {
-    href: '/',
-    label: '首頁',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-        <polyline points="9 22 9 12 15 12 15 22" />
-      </svg>
-    ),
-  },
+const homeItem = {
+  href: '/',
+  label: '首頁',
+  icon: (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  ),
+};
+
+const liveItems = [
   {
     href: '/article',
     label: '文章上架工具',
@@ -60,18 +61,35 @@ const navItems = [
       </svg>
     ),
   },
+];
+
+const devItems = [
   {
     href: '/social',
     label: '社群貼文追蹤',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.28h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.04-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.72 16l.2.92z" />
+        <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+];
+
+const extraItems = [
+  {
+    href: '/ai-editor',
+    label: 'AI 小編生成文章',
+    inDev: true,
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
       </svg>
     ),
   },
   {
     href: '/products',
     label: '外部產品',
+    inDev: false,
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -93,28 +111,65 @@ export default function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 px-2 space-y-1">
-        {navItems.map((item) => {
-          const isActive =
-            item.href === '/'
-              ? pathname === '/'
-              : pathname === item.href || pathname.startsWith(item.href + '/');
-
+      <nav className="flex-1 py-4 px-2 space-y-4 overflow-y-auto">
+        {/* 首頁 */}
+        {(() => {
+          const isActive = pathname === '/';
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              {item.icon}
-              {item.label}
+            <Link href={homeItem.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
+              {homeItem.icon}{homeItem.label}
             </Link>
           );
-        })}
+        })()}
+
+        {/* 內部工具 */}
+        <div>
+          <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">內部工具</p>
+          <div className="space-y-1">
+            {liveItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              return (
+                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
+                  {item.icon}{item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 開發中 */}
+        <div>
+          <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">開發中</p>
+          <div className="space-y-1">
+            {devItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              return (
+                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
+                  {item.icon}
+                  <span className="flex-1">{item.label}</span>
+                  {!isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 外部產品 */}
+        <div>
+          <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">外部產品</p>
+          <div className="space-y-1">
+            {extraItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              return (
+                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
+                  {item.icon}
+                  <span className="flex-1">{item.label}</span>
+                  {item.inDev && !isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </nav>
 
 {/* Footer */}
