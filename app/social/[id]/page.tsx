@@ -42,6 +42,28 @@ function proxyImg(url: string | null): string | null {
   return `/api/proxy-image?url=${encodeURIComponent(url)}`;
 }
 
+// 從 Threads URL 提取短代碼（支援 @user/post/CODE 和 /t/CODE 兩種格式）
+function extractThreadsCode(postUrl: string | null): string {
+  if (!postUrl) return '';
+  const m1 = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
+  if (m1) return m1[1];
+  const m2 = postUrl.match(/threads\.net\/t\/([^/?#]+)/);
+  if (m2) return m2[1];
+  return '';
+}
+
+// 短代碼 → 數字 media ID（base64url 解碼，iframe.js 的 data-media-id 需要數字格式）
+const THREADS_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+function decodeThreadsCode(code: string): string {
+  if (!code) return '';
+  let id = BigInt(0);
+  for (const ch of code) {
+    const v = THREADS_CHARS.indexOf(ch);
+    if (v < 0) return '';
+    id = id * BigInt(64) + BigInt(v);
+  }
+  return id.toString();
+}
 
 function getEmbedUrl(platform: string, postUrl: string | null): string | null {
   if (!postUrl) return null;
@@ -114,6 +136,18 @@ export default function ClientDetailPage() {
   const [filterOwner, setFilterOwner] = useState<string | null>(null);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [justCompleted, setJustCompleted] = useState(false);
+
+  // Threads 官方 embed script
+  useEffect(() => {
+    if (!latestJob?.posts.some(p => p.platform === 'Threads')) return;
+    const src = 'https://www.threads.net/embed/iframe.js';
+    if (!document.querySelector(`script[src="${src}"]`)) {
+      const el = document.createElement('script');
+      el.src = src;
+      el.async = true;
+      document.body.appendChild(el);
+    }
+  }, [latestJob]);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -662,19 +696,15 @@ export default function ClientDetailPage() {
                         />
                       </div>
                     ) : post.platform === 'Threads' ? (
-                      <a href={post.post_url ?? '#'} target="_blank" rel="noreferrer"
-                        className="block mx-6 mt-4 mb-2 rounded-xl border border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors p-4 no-underline">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-800 to-gray-600 flex items-center justify-center shrink-0">
-                            <svg viewBox="0 0 192 192" className="w-5 h-5 fill-white"><path d="M141.537 88.988a66.667 66.667 0 0 0-2.518-1.143c-1.482-27.307-16.403-42.94-41.457-43.1h-.34c-14.986 0-27.449 6.396-35.12 18.036l13.779 9.452c5.73-8.695 14.724-10.548 21.348-10.548h.229c8.249.053 14.474 2.452 18.503 7.129 2.932 3.405 4.893 8.111 5.864 14.05-7.314-1.243-15.224-1.626-23.68-1.14-23.82 1.371-39.134 15.264-38.105 34.568.522 9.792 5.4 18.216 13.735 23.719 7.047 4.652 16.124 6.927 25.557 6.412 12.458-.683 22.231-5.436 29.049-14.127 5.178-6.6 8.453-15.153 9.899-25.93 5.937 3.583 10.337 8.298 12.767 13.966 4.132 9.635 4.373 25.468-8.546 38.318-11.319 11.24-24.925 16.1-45.488 16.252-22.788-.169-40.054-7.48-51.317-21.74C35.173 130.045 29.465 110.32 29.253 86c.212-24.32 5.92-44.045 16.963-58.647C57.479 13.092 74.745 5.781 97.533 5.612c22.94.17 40.56 7.512 52.36 21.824 5.786 7.026 10.156 15.86 13.03 26.153l16.147-4.308c-3.44-12.68-8.853-23.606-16.233-32.563C147.036 9.094 125.048-.058 97.667.002h-.2C70.217-.057 48.028 9.124 32.898 27.08 19.613 43.04 12.598 65.3 12.372 86v.02c.226 20.7 7.241 42.96 20.526 58.92C48.028 162.875 70.217 172.057 97.467 172h.2c24.122-.057 41.084-6.5 55.17-20.508 18.oot-17.93 17.816-39.648 11.736-53.168-4.362-10.17-12.853-18.232-23.036-22.965l.0000001.629z"/></svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-800">{post.account ?? 'Threads'}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">點擊在 Threads 查看貼文</p>
-                          </div>
-                          <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                        </div>
-                      </a>
+                      <div className="px-6 pt-4 pb-2">
+                        <blockquote
+                          className="text-post-media"
+                          data-media-id={decodeThreadsCode(extractThreadsCode(post.post_url))}
+                        >
+                          <a href={post.post_url ?? '#'} target="_blank" rel="noreferrer"
+                            className="text-sm text-blue-500">在 Threads 查看貼文</a>
+                        </blockquote>
+                      </div>
                     ) : (
                       <iframe
                         src={embedUrl}
