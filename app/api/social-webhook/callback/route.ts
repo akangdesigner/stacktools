@@ -51,11 +51,16 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
 
 
   // content：中文欄位 / 英文欄位 / Apify caption / Threads text / YT 標題＋描述 / FB 文案
+  // Threads 新格式：caption.text（影片貼文）或 text_post_app_info.text_fragments.fragments[0].plaintext（圖文貼文）
+  const threadsNewText =
+    (p['caption'] && typeof p['caption'] === 'object' ? p['caption']['text'] : null) ??
+    (p['text_post_app_info']?.['text_fragments']?.['fragments']?.[0]?.['plaintext'] ?? null);
   const content =
     p['貼文內容'] ??
     p['文案'] ??
     p['content'] ?? p['Content'] ??
-    p['caption'] ??
+    threadsNewText ??
+    (typeof p['caption'] === 'string' ? p['caption'] : null) ??
     p['text'] ??
     (p['影片標題'] ? `${p['影片標題']}${p['影片描述'] ? '\n\n' + p['影片描述'] : ''}` : null) ??
     null;
@@ -80,10 +85,11 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
   const profile_pic_url = p['大頭貼'] ?? p['大頭照'] ?? p['profilePicUrl'] ?? p['頻道大頭貼'] ?? null;
 
   // thumbnail：只取貼文圖片，不 fallback 到大頭貼
+  // Threads 新格式：image_versions2.candidates[0].url
   const thumbnail =
     p['displayUrl'] ??
     p['thumbnail'] ?? p['Thumbnail'] ??
-    null;
+    (p['image_versions2']?.['candidates']?.[0]?.['url'] ?? null);
 
   // post_date：中文 / 英文 / Apify timestamp / YT 影片日期，統一轉為 ISO 字串
   const post_date = normalizeDate(
@@ -96,7 +102,8 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
   );
 
   const video_url =
-    p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ?? null;
+    p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ??
+    (p['video_versions']?.[0]?.['url'] ?? null);
 
   // is_video：FB 明確回傳 true/false，其他平台保持 null
   // FB 且明確為非影片 → 不匯入
@@ -151,6 +158,9 @@ export async function POST(req: NextRequest) {
   const message = body['message'] ?? null;
   // 支援 posts（英文 key）或 貼文（Threads n8n 用中文 key）
   const rawPosts = body['posts'] ?? body['貼文'];
+  // Threads replies：與 貼文 平行的圖片陣列，replies[i].images[0] 為 貼文[i] 的縮圖
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawReplies: Array<{ images?: string[] } | null> = Array.isArray(body['replies']) ? body['replies'] : [];
   // 外層平台來源，將 n8n 頻道來源名稱對應到內部標準名稱
   const platformMap: Record<string, string> = {
     facebook: 'FB', instagram: 'IG', threads: 'Threads', tiktok: 'TikTok', youtube: 'YT',
@@ -176,10 +186,40 @@ export async function POST(req: NextRequest) {
       const itemPlatform = item['頻道來源']
         ? (platformMap[String(item['頻道來源']).toLowerCase()] ?? String(item['頻道來源']))
         : sourcePlatform;
-      if (Array.isArray(item['貼文'])) {
-        // 每個 item 包含最多 5 筆子貼文
-        for (const sub of item['貼文']) {
-          flatPosts.push({ post: sub, platform: itemPlatform });
+      // 第N篇貼文的code 格式：直接展開成多筆 post（只靠 embed 顯示）
+      const codeKeys = Object.keys(item).filter(k => /篇貼文的code$/.test(k));
+      if (codeKeys.length > 0) {
+        codeKeys.sort();
+        for (const key of codeKeys) {
+          const code = String(item[key] ?? '').trim();
+          if (!code) continue;
+          flatPosts.push({
+            post: {
+              貼文擁有者: item['貼文擁有者'] ?? null,
+              大頭照: item['大頭照'] ?? item['大頭貼'] ?? null,
+              post_url: `https://www.threads.net/t/${code}`,
+            },
+            platform: itemPlatform,
+          });
+        }
+        continue;
+      }
+
+      const subPostsArray = item['貼文'] ?? item['latestPosts'];
+      if (Array.isArray(subPostsArray)) {
+        // 每個 item 包含多筆子貼文，過濾 null，並把外層帳號資訊帶入
+        // 舊格式：replies[i].images[0] 與 貼文[i] 平行對應，作為縮圖
+        for (let i = 0; i < subPostsArray.length; i++) {
+          const sub = subPostsArray[i];
+          if (sub == null) continue;
+          const replyThumbnail = rawReplies[i]?.images?.[0] ?? null;
+          const merged = {
+            ...sub,
+            大頭照: sub['大頭照'] ?? sub['大頭貼'] ?? item['大頭照'] ?? item['大頭貼'] ?? null,
+            貼文擁有者: sub['貼文擁有者'] ?? item['貼文擁有者'] ?? null,
+            thumbnail: sub['thumbnail'] ?? replyThumbnail,
+          };
+          flatPosts.push({ post: merged, platform: itemPlatform });
         }
       } else {
         flatPosts.push({ post: item, platform: itemPlatform });

@@ -37,6 +37,11 @@ interface SocialJob {
 }
 
 
+function proxyImg(url: string | null): string | null {
+  if (!url) return null;
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+}
+
 function getEmbedUrl(platform: string, postUrl: string | null): string | null {
   if (!postUrl) return null;
   if (platform === 'IG') {
@@ -48,8 +53,12 @@ function getEmbedUrl(platform: string, postUrl: string | null): string | null {
     if (m) return `https://www.youtube.com/embed/${m[1]}`;
   }
   if (platform === 'Threads') {
-    const m = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
-    if (m) return `https://www.threads.net/t/${m[1]}/embed`;
+    // 格式1：threads.net/@user/post/CODE
+    const m1 = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
+    if (m1) return `https://www.threads.net/t/${m1[1]}/embed`;
+    // 格式2：threads.net/t/CODE（直接由 code 建構）
+    const m2 = postUrl.match(/threads\.net\/t\/([^/?#]+)/);
+    if (m2) return `https://www.threads.net/t/${m2[1]}/embed`;
   }
   if (platform === 'TikTok') {
     const m = postUrl.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
@@ -434,10 +443,10 @@ export default function ClientDetailPage() {
       {/* ── 區塊 3：報告 ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-800">最新報告</h2>
+          <h2 className="text-base font-semibold text-gray-800">社群貼文報告</h2>
           {latestJob && (
             <span className="text-xs text-gray-400">
-              {latestJob.created_at}・{latestJob.posts.length} 筆貼文
+              {latestJob.created_at.slice(0, 10).replace(/-/g, '/')}・{latestJob.posts.length} 筆貼文
             </span>
           )}
         </div>
@@ -488,7 +497,9 @@ export default function ClientDetailPage() {
           const filtered = job.posts.filter((p) => {
             if (p.platform !== activePlatform) return false;
             if (filterOwner && p.account !== filterOwner) return false;
-            if (appliedDateFrom && p.post_date) {
+            if (appliedDateFrom) {
+              // 沒有日期的貼文，日期篩選時一律排除
+              if (!p.post_date) return false;
               // 穩健解析：新資料已為 ISO，舊資料支援 Unix timestamp / YYYY/MM/DD
               const raw = String(p.post_date);
               let postDate: Date;
@@ -619,11 +630,13 @@ export default function ClientDetailPage() {
 
               // FB 圖片貼文（is_video=0）：不用 embed，避免文案重複
               const isFbImagePost = post.platform === 'FB' && post.is_video === 0;
+              // Threads 有縮圖時直接透過 proxy 顯示
+              const isThreadsWithImage = post.platform === 'Threads' && !!post.thumbnail;
 
               return (
                 <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
                   {/* 內嵌貼文 */}
-                  {embedUrl && !isFbImagePost ? (
+                  {embedUrl && !isFbImagePost && !isThreadsWithImage ? (
                     post.platform === 'YT' ? (
                       <iframe
                         src={embedUrl}
@@ -668,21 +681,35 @@ export default function ClientDetailPage() {
                     )
                   ) : (
                     <>
-                      {/* FB 圖片貼文 or 無內嵌：顯示頭像 + 帳號 */}
+                      {/* 無內嵌：顯示頭像 + 帳號 */}
                       <div className="flex items-center gap-2 px-3 py-2.5">
                         <div className="relative w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
                           <span>{post.account?.[0] ?? '?'}</span>
                           {post.profile_pic_url && (
-                            <img src={post.profile_pic_url} alt="" className="absolute inset-0 w-full h-full object-cover"
+                            <img
+                              src={post.platform === 'Threads' ? (proxyImg(post.profile_pic_url) ?? post.profile_pic_url) : post.profile_pic_url}
+                              alt="" className="absolute inset-0 w-full h-full object-cover"
                               onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                           )}
                         </div>
                         <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
                       </div>
-                      {/* FB 圖片貼文：若有縮圖則顯示 */}
-                      {isFbImagePost && post.thumbnail && (
-                        <img src={post.thumbnail} alt="" className="w-full object-cover"
+                      {/* Threads 影片 */}
+                      {post.platform === 'Threads' && post.video_url && (
+                        <video
+                          src={proxyImg(post.video_url) ?? post.video_url}
+                          className="w-full object-cover"
+                          controls
+                          playsInline
+                          preload="metadata"
+                        />
+                      )}
+                      {/* FB 圖片貼文 or Threads 有縮圖（無影片）：顯示縮圖 */}
+                      {(isFbImagePost || (isThreadsWithImage && !post.video_url)) && post.thumbnail && (
+                        <img
+                          src={post.platform === 'Threads' ? (proxyImg(post.thumbnail) ?? post.thumbnail) : post.thumbnail}
+                          alt="" className="w-full object-cover"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       )}
                     </>
@@ -709,8 +736,8 @@ export default function ClientDetailPage() {
                     )}
                   </div>
 
-                  {/* 內文：Threads embed 已含帳號與內容，不重複顯示 */}
-                  {post.platform !== 'Threads' && (
+                  {/* 內文：Threads 有 embed 才隱藏（embed 已含內容）；無 embed（新格式無 post_url）正常顯示 */}
+                  {!(post.platform === 'Threads' && !!embedUrl) && (
                     <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
                       {post.platform === 'YT' ? (
                         post.content && (

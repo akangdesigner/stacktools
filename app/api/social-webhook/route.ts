@@ -7,14 +7,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '未設定 N8N_SOCIAL_WEBHOOK_URL' }, { status: 500 });
   }
 
-  let body: { clientId?: string; dateFrom?: string; dateTo?: string };
+  let body: { clientId?: string; dateFrom?: string; dateTo?: string; slackChannelId?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: '無效的請求格式' }, { status: 400 });
   }
 
-  const { clientId, dateFrom, dateTo } = body;
+  const { clientId, dateFrom, dateTo, slackChannelId: bodySlackId } = body;
   if (!clientId?.trim()) {
     return NextResponse.json({ error: '請提供客戶 ID' }, { status: 400 });
   }
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         jobId: job.id,
         callbackUrl,
         clientName: client.name,
-        slackChannelId: client.slack_id ?? '',
+        slackChannelId: bodySlackId ?? client.slack_id ?? '',
         platforms,
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
