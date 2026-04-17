@@ -42,6 +42,18 @@ function proxyImg(url: string | null): string | null {
   return `/api/proxy-image?url=${encodeURIComponent(url)}`;
 }
 
+// Threads 短代碼（DXMBcIujwQa）→ 數字 media ID（base64url 解碼）
+const THREADS_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+function decodeThreadsCode(code: string): string {
+  let id = BigInt(0);
+  for (const ch of code) {
+    const v = THREADS_CHARS.indexOf(ch);
+    if (v < 0) return '';
+    id = id * BigInt(64) + BigInt(v);
+  }
+  return id.toString();
+}
+
 function getEmbedUrl(platform: string, postUrl: string | null): string | null {
   if (!postUrl) return null;
   if (platform === 'IG') {
@@ -676,7 +688,7 @@ export default function ClientDetailPage() {
                       <div className="px-6 pt-4 pb-2">
                         <blockquote
                           className="text-post-media"
-                          data-media-id={post.post_url?.match(/threads\.net\/t\/([^/?#]+)/)?.[1] ?? ''}
+                          data-media-id={decodeThreadsCode(post.post_url?.match(/threads\.net\/t\/([^/?#]+)/)?.[1] ?? '')}
                         >
                           <a href={post.post_url ?? '#'} target="_blank" rel="noreferrer"
                             className="text-sm text-blue-500">在 Threads 查看貼文</a>
