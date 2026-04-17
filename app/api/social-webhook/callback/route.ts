@@ -70,10 +70,10 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
     p['留言數'] ?? p['comments'] ?? p['Comments'] ?? p['commentsCount']
   );
 
-  // views：中文 / 英文 / Apify videoPlayCount / videoViewCount
+  // views：中文 / 英文 / Apify videoPlayCount / videoViewCount / FB viewsCount
   const views = toInt(
-    p['觀看數'] ?? p['views'] ?? p['Views'] ??
-    p['videoPlayCount'] ?? p['videoViewCount'] ?? p['videoPlayCount']
+    p['觀看數'] ?? p['viewsCount'] ?? p['views'] ?? p['Views'] ??
+    p['videoPlayCount'] ?? p['videoViewCount']
   );
 
   // profile_pic_url：帳號大頭貼（獨立儲存，不混入貼文縮圖）
@@ -87,6 +87,7 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
 
   // post_date：中文 / 英文 / Apify timestamp / YT 影片日期，統一轉為 ISO 字串
   const post_date = normalizeDate(
+    p['貼文時間'] ??
     p['日期'] ??
     p['影片日期'] ??
     p['postDate'] ?? p['post_date'] ??
@@ -97,7 +98,13 @@ function normalizePost(p: Record<string, any>, sourcePlatform?: string) {
   const video_url =
     p['videoUrl'] ?? p['video_url'] ?? p['影片網址'] ?? null;
 
-  return { platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags: hashtagsStr, video_url };
+  // is_video：FB 明確回傳 true/false，其他平台保持 null
+  // FB 且明確為非影片 → 不匯入
+  const isVideoRaw = p['是否有影片'];
+  if (platform === 'FB' && isVideoRaw === false) return null;
+  const is_video = isVideoRaw === true ? 1 : null;
+
+  return { platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags: hashtagsStr, video_url, is_video };
 }
 
 // 從 threads.net URL 提取帳號名稱，例如 https://www.threads.net/@relove_care/post/xxx → @relove_care

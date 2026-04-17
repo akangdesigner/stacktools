@@ -27,6 +27,7 @@ interface SocialPost {
   content: string | null; likes: number | null; comments: number | null;
   views: number | null; thumbnail: string | null; profile_pic_url: string | null;
   post_date: string | null; hashtags: string | null; video_url: string | null;
+  is_video: number | null;
 }
 
 interface SocialJob {
@@ -616,10 +617,13 @@ export default function ClientDetailPage() {
                 );
               }
 
+              // FB 圖片貼文（is_video=0）：不用 embed，避免文案重複
+              const isFbImagePost = post.platform === 'FB' && post.is_video === 0;
+
               return (
                 <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
                   {/* 內嵌貼文 */}
-                  {embedUrl ? (
+                  {embedUrl && !isFbImagePost ? (
                     post.platform === 'YT' ? (
                       <iframe
                         src={embedUrl}
@@ -664,7 +668,7 @@ export default function ClientDetailPage() {
                     )
                   ) : (
                     <>
-                      {/* 無內嵌：顯示頭像 + 帳號 */}
+                      {/* FB 圖片貼文 or 無內嵌：顯示頭像 + 帳號 */}
                       <div className="flex items-center gap-2 px-3 py-2.5">
                         <div className="relative w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
                           <span>{post.account?.[0] ?? '?'}</span>
@@ -676,6 +680,11 @@ export default function ClientDetailPage() {
                         <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
                         <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
                       </div>
+                      {/* FB 圖片貼文：若有縮圖則顯示 */}
+                      {isFbImagePost && post.thumbnail && (
+                        <img src={post.thumbnail} alt="" className="w-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      )}
                     </>
                   )}
 
