@@ -1,17 +1,109 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+interface AiEditorJob {
+  id: string;
+  status: 'processing' | 'completed' | 'failed';
+  message: string;
+  result?: {
+    draftText?: string;
+    draftImageUrl?: string;
+    raw?: unknown;
+  };
+}
 
 export default function AiEditorPage() {
   const [siteUrl, setSiteUrl] = useState('');
   const [socialAccount, setSocialAccount] = useState('');
   const [lineUid, setLineUid] = useState('');
+  const [articleUrl, setArticleUrl] = useState('');
   const [saved, setSaved] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [triggerError, setTriggerError] = useState('');
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<AiEditorJob | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ai-editor:settings');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        siteUrl?: string;
+        socialAccount?: string;
+        lineUid?: string;
+      };
+      setSiteUrl(parsed.siteUrl ?? '');
+      setSocialAccount(parsed.socialAccount ?? '');
+      setLineUid(parsed.lineUid ?? '');
+    } catch {
+      // ignore invalid localStorage data
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`/api/ai-editor/trigger?jobId=${activeJobId}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as AiEditorJob;
+      setJob(data);
+      if (data.status !== 'processing' && pollRef.current) {
+        clearInterval(pollRef.current);
+        setActiveJobId(null);
+      }
+    }, 2000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [activeJobId]);
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    localStorage.setItem(
+      'ai-editor:settings',
+      JSON.stringify({
+        siteUrl: siteUrl.trim(),
+        socialAccount: socialAccount.trim(),
+        lineUid: lineUid.trim(),
+      })
+    );
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleTrigger() {
+    setTriggering(true);
+    setTriggerError('');
+    setJob(null);
+
+    try {
+      const res = await fetch('/api/ai-editor/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteUrl,
+          socialAccount,
+          lineUid,
+          articleUrl,
+        }),
+      });
+
+      const data = (await res.json()) as { jobId?: string; error?: string };
+      if (!res.ok || !data.jobId) {
+        setTriggerError(data.error ?? '觸發失敗');
+        return;
+      }
+
+      setActiveJobId(data.jobId);
+    } catch (err) {
+      setTriggerError(String(err));
+    } finally {
+      setTriggering(false);
+    }
   }
 
   return (
@@ -114,15 +206,46 @@ export default function AiEditorPage() {
       </form>
 
       {/* 觸發區（佔位） */}
-      <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 text-center space-y-2">
-        <p className="text-sm font-medium text-gray-400">手動觸發（開發中）</p>
-        <p className="text-xs text-gray-300">功能完成後，可在此指定文章網址立即產生 AI 圖文草稿</p>
+      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
+        <p className="text-sm font-semibold text-gray-800">手動觸發</p>
+        <p className="text-xs text-gray-400">可指定單篇文章網址，立即送到 n8n 產生 AI 草稿。</p>
+        <input
+          type="url"
+          value={articleUrl}
+          onChange={(e) => setArticleUrl(e.target.value)}
+          placeholder="https://www.example.com/blog/your-article"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 placeholder-gray-300"
+        />
         <button
-          disabled
-          className="mt-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-300 text-sm font-medium cursor-not-allowed"
+          onClick={handleTrigger}
+          disabled={triggering || !!activeJobId}
+          className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
         >
-          立即產生草稿
+          {triggering ? '送出中…' : activeJobId ? '處理中…' : '立即產生草稿'}
         </button>
+        {triggerError && <p className="text-xs text-red-600">{triggerError}</p>}
+        {job && (
+          <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
+            <p className="text-xs text-gray-500">任務狀態：<span className="font-medium text-gray-700">{job.status}</span></p>
+            <p className="text-sm text-gray-700">{job.message}</p>
+            {job.result?.draftText && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">草稿文字</p>
+                <pre className="text-xs text-gray-700 whitespace-pre-wrap bg-white border border-gray-200 rounded p-2 max-h-56 overflow-auto">{job.result.draftText}</pre>
+              </div>
+            )}
+            {job.result?.draftImageUrl && (
+              <a
+                href={job.result.draftImageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block text-xs text-blue-600 hover:underline"
+              >
+                開啟草稿圖片
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
