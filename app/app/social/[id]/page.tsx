@@ -18,15 +18,16 @@ type PlatformUrls = Record<PlatformKey, string[]>;
 const EMPTY_URLS: PlatformUrls = { FB: [''], IG: [''], YT: [''], TikTok: [''], Threads: [''] };
 
 interface ClientData {
-  id: string; name: string; slack_id: string | null; created_at: string;
+  id: string; name: string; slack_id: string | null; auto_monitor: number; created_at: string;
   platforms: { platform: string; urls: string[] }[];
 }
 
 interface SocialPost {
   id: number; platform: string; account: string | null; post_url: string | null;
   content: string | null; likes: number | null; comments: number | null;
-  views: number | null; thumbnail: string | null; post_date: string | null;
-  hashtags: string | null; video_url: string | null;
+  views: number | null; thumbnail: string | null; profile_pic_url: string | null;
+  post_date: string | null; hashtags: string | null; video_url: string | null;
+  is_video: number | null;
 }
 
 interface SocialJob {
@@ -35,48 +36,45 @@ interface SocialJob {
   message: string | null; created_at: string; posts: SocialPost[];
 }
 
-// ── DEMO 假資料（預覽用，確認後刪除）──────────────────────────
-const DEMO_JOB: SocialJob = {
-  id: 'demo', status: 'completed', date_from: null, date_to: null,
-  message: null, created_at: '2026-04-15 10:00:00',
-  posts: [
-    { id: 1, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example1/',
-      content: '🌿 黑頭粉刺救星降臨！限時 7 天↑入夏寵粉優惠 不用去醫美 在家就能解鎖 0 瑕疵神顏🔑 Relove\1+1 神級組合/強勢登場！利用專利外泌體與拋光酵母 幫肌膚來場深度大掃除',
-      likes: 43, comments: 0, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=400&fit=crop',
-      post_date: '2026-04-06T10:00:00.000Z', hashtags: '#保養 #粉刺 #美肌', video_url: null },
-    { id: 2, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example2/',
-      content: '【Relove × vacanza】強強聯手！承包妳四月的精緻與底氣 🌟 四月最浪漫的跨界合作來了！就是要從內到外都給妳最頂級的呵護 ♡',
-      likes: 128, comments: 5, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
-      post_date: '2026-04-03T08:30:00.000Z', hashtags: '#聯名 #美妝 #保養', video_url: null },
-    { id: 3, platform: 'IG', account: 'relove_care', post_url: 'https://www.instagram.com/p/example3/',
-      content: '#保養教學 很多人問：「棉片不就是敷完就好嗎？」NO、NO、NO 作為抗痘專家 今天教大家如何把一片棉片的價值發揮到 200%！',
-      likes: 276, comments: 12, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273?w=400&h=400&fit=crop',
-      post_date: '2026-03-28T14:00:00.000Z', hashtags: '#保養教學 #棉片 #護膚', video_url: null },
-    { id: 4, platform: 'FB', account: 'Relove 官方', post_url: 'https://www.facebook.com/relove/posts/example4',
-      content: '📣 四月限定優惠開跑！購買任兩件保養品，加贈限量保濕面膜一片。數量有限，售完為止，手刀下單不要猶豫！',
-      likes: 89, comments: 23, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=400&h=400&fit=crop',
-      post_date: '2026-04-01T09:00:00.000Z', hashtags: '#限時優惠 #保養 #Relove', video_url: null },
-    { id: 5, platform: 'YT', account: 'Relove Care', post_url: 'https://www.youtube.com/watch?v=example5',
-      content: '【保養懶人包】5 分鐘搞定早晨護膚步驟！跟著 Relove 一起打造零毛孔底妝感，讓你每天出門都有好氣色✨',
-      likes: 512, comments: 34, views: 8200,
-      thumbnail: 'https://images.unsplash.com/photo-1516975080664-ed2fc6a32937?w=400&h=400&fit=crop',
-      post_date: '2026-03-25T12:00:00.000Z', hashtags: '#保養懶人包 #護膚 #YouTube', video_url: null },
-    { id: 6, platform: 'TikTok', account: '@relove_official', post_url: 'https://www.tiktok.com/@relove/video/example6',
-      content: '敷完面膜後這樣收尾，毛孔縮小效果直接翻倍🔥 學起來！#skincare #保養 #tiktok推薦',
-      likes: 3400, comments: 156, views: 52000,
-      thumbnail: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=400&h=400&fit=crop',
-      post_date: '2026-04-10T18:00:00.000Z', hashtags: '#skincare #保養 #tiktok推薦', video_url: null },
-    { id: 7, platform: 'Threads', account: 'relove_care', post_url: 'https://www.threads.net/@relove/post/example7',
-      content: '素顏才是真的美💪 今天分享一個超簡單的日常，只要三步驟，讓肌膚自己發光。你們都用什麼保養品呢？',
-      likes: 67, comments: 8, views: null,
-      thumbnail: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=400&h=400&fit=crop',
-      post_date: '2026-04-12T20:00:00.000Z', hashtags: '#素顏 #保養 #Threads', video_url: null },
-  ],
-};
+
+function proxyImg(url: string | null): string | null {
+  if (!url) return null;
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+}
+
+
+function getEmbedUrl(platform: string, postUrl: string | null): string | null {
+  if (!postUrl) return null;
+  if (platform === 'IG') {
+    const m = postUrl.match(/instagram\.com\/(?:p|reel)\/([^/?#]+)/);
+    if (m) return `https://www.instagram.com/p/${m[1]}/embed/`;
+  }
+  if (platform === 'YT') {
+    const m = postUrl.match(/[?&]v=([^&]+)/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  }
+  if (platform === 'Threads') {
+    // 格式1：threads.net/@user/post/CODE
+    const m1 = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
+    if (m1) return `https://www.threads.net/t/${m1[1]}/embed`;
+    // 格式2：threads.net/t/CODE（直接由 code 建構）
+    const m2 = postUrl.match(/threads\.net\/t\/([^/?#]+)/);
+    if (m2) return `https://www.threads.net/t/${m2[1]}/embed`;
+  }
+  if (platform === 'TikTok') {
+    const m = postUrl.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+  }
+  if (platform === 'FB') {
+    if (/facebook\.com\/(reel|watch|video)/.test(postUrl) || /facebook\.com\/.*\/videos\//.test(postUrl)) {
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(postUrl)}&show_text=true&width=500`;
+    }
+    if (/facebook\.com\/.+\/posts\//.test(postUrl) || /facebook\.com\/permalink/.test(postUrl)) {
+      return `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(postUrl)}&show_text=true&width=500`;
+    }
+  }
+  return null;
+}
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -92,16 +90,19 @@ export default function ClientDetailPage() {
   const [savingInfo, setSavingInfo] = useState(false);
 
   const [platformUrls, setPlatformUrls] = useState<PlatformUrls>(EMPTY_URLS);
+  const [activePlatforms, setActivePlatforms] = useState<PlatformKey[]>(PLATFORM_DEFS.map(p => p.key));
   const [savingUrls, setSavingUrls] = useState(false);
   const [urlSaved, setUrlSaved] = useState(false);
   const [urlsOpen, setUrlsOpen] = useState(false);
 
   const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [appliedDateFrom, setAppliedDateFrom] = useState('');
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState('');
 
   const [deleting, setDeleting] = useState(false);
+  const [autoMonitor, setAutoMonitor] = useState(false);
+  const [savingMonitor, setSavingMonitor] = useState(false);
 
   // 報告
   const [latestJob, setLatestJob] = useState<SocialJob | null>(null);
@@ -109,6 +110,10 @@ export default function ClientDetailPage() {
   const [timedOut, setTimedOut] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollCountRef = useRef(0);
+  const [filterPlatform, setFilterPlatform] = useState<string | null>(null);
+  const [filterOwner, setFilterOwner] = useState<string | null>(null);
+  const [jobsLoading, setJobsLoading] = useState(true);
+  const [justCompleted, setJustCompleted] = useState(false);
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -119,11 +124,15 @@ export default function ClientDetailPage() {
         setClient(data);
         setEditName(data.name);
         setEditSlack(data.slack_id ?? '');
+        setAutoMonitor(data.auto_monitor === 1);
         const urls: PlatformUrls = { ...EMPTY_URLS };
         for (const { platform, urls: u } of data.platforms) {
           if (platform in urls) urls[platform as PlatformKey] = u.length ? u : [''];
         }
         setPlatformUrls(urls);
+        // 有填入 URL 的平台才顯示，其餘預設也顯示（新客戶全開）
+        const withUrls = data.platforms.filter(p => p.urls.length > 0).map(p => p.platform as PlatformKey);
+        if (withUrls.length > 0) setActivePlatforms(withUrls);
       })
       .finally(() => setLoading(false));
 
@@ -133,12 +142,19 @@ export default function ClientDetailPage() {
   }, [id]);
 
   async function loadJobs() {
-    const res = await fetch(`/api/social-clients/${id}/jobs`);
-    if (res.ok) {
-      const data: SocialJob[] = await res.json();
-      // 只取最新一筆已完成的
-      const latest = data.find((j) => j.status === 'completed') ?? null;
-      setLatestJob(latest);
+    try {
+      const res = await fetch(`/api/social-clients/${id}/jobs`);
+      if (res.ok) {
+        const data: SocialJob[] = await res.json();
+        // 只取有貼文的最新一筆 completed job，避免舊的錯誤資料污染
+        const latest = data.find((j) => j.status === 'completed' && j.posts.length > 0);
+        if (!latest) { setLatestJob(null); return; }
+        // 過濾掉平台為空的異常資料
+        const validPosts = latest.posts.filter((p) => p.platform && p.platform.trim() !== '');
+        setLatestJob({ ...latest, posts: validPosts });
+      }
+    } finally {
+      setJobsLoading(false);
     }
   }
 
@@ -161,7 +177,12 @@ export default function ClientDetailPage() {
       if (job.status !== 'processing') {
         clearInterval(pollRef.current!);
         setActiveJobId(null);
-        if (job.status === 'completed') setLatestJob(job);
+        if (job.status === 'completed') {
+          // 重新 loadJobs 以合併所有 job 貼文
+          await loadJobs();
+          setJustCompleted(true);
+          setTimeout(() => setJustCompleted(false), 5000);
+        }
       }
     }, 10000);
     return () => clearInterval(pollRef.current!);
@@ -179,6 +200,9 @@ export default function ClientDetailPage() {
       const next = prev[key].filter((_, i) => i !== index);
       return { ...prev, [key]: next.length ? next : [''] };
     });
+  }
+  function clearPlatform(key: PlatformKey) {
+    setPlatformUrls((prev) => ({ ...prev, [key]: [''] }));
   }
 
   // ── 基本資料儲存 ───────────────────────────────────────────
@@ -212,7 +236,7 @@ export default function ClientDetailPage() {
     try {
       const res = await fetch('/api/social-webhook', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+        body: JSON.stringify({ clientId: id }),
       });
       let data: { ok?: boolean; jobId?: string; error?: string } = {};
       try { data = await res.json(); } catch { /* ignore */ }
@@ -226,6 +250,17 @@ export default function ClientDetailPage() {
     } finally {
       setTriggering(false);
     }
+  }
+
+  async function toggleAutoMonitor() {
+    setSavingMonitor(true);
+    const next = !autoMonitor;
+    await fetch(`/api/social-clients/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoMonitor: next }),
+    });
+    setAutoMonitor(next);
+    setSavingMonitor(false);
   }
 
   async function handleDelete() {
@@ -284,31 +319,46 @@ export default function ClientDetailPage() {
             </div>
           </div>
         ) : (
+          <>
           <div className="space-y-1 text-sm text-gray-700">
             <p><span className="text-gray-400 text-xs mr-2">名稱</span>{client?.name}</p>
-            <p><span className="text-gray-400 text-xs mr-2">Slack</span>{client?.slack_id || <span className="text-gray-300">（未設定）</span>}</p>
+            <p><span className="text-gray-400 text-xs mr-2">Slack 頻道 ID</span>{client?.slack_id || <span className="text-gray-300">（未設定）</span>}</p>
             <p><span className="text-gray-400 text-xs mr-2">建立</span>{client?.created_at}</p>
           </div>
+
+          {/* 自動監控開關 */}
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <p className="text-sm font-medium text-gray-800">定期自動更新</p>
+              <p className="text-xs text-gray-400 mt-0.5">開啟後，系統會依排程自動抓取最新貼文</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleAutoMonitor}
+              disabled={savingMonitor}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${autoMonitor ? 'bg-gray-900' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${autoMonitor ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          </>
         )}
 
         {/* 抓取觸發 */}
         <div className="pt-2 border-t border-gray-100 space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 shrink-0">貼文日期區間</span>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            <span className="text-xs text-gray-300">—</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            {(dateFrom || dateTo) && (
-              <button type="button" onClick={() => { setDateFrom(''); setDateTo(''); }} className="text-xs text-gray-300 hover:text-gray-500 transition-colors">清除</button>
-            )}
-          </div>
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={triggerWebhook} disabled={triggering || !!activeJobId}
               className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50">
-              {triggering ? '送出中…' : activeJobId ? '抓取中…' : '抓取社群內容'}
+              {triggering ? '送出中…' : activeJobId ? '更新中…' : '手動更新報告'}
             </button>
+            {justCompleted && !activeJobId && (
+              <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                報告已更新完成
+              </span>
+            )}
             {activeJobId && (
               <span className="text-xs text-gray-500 flex items-center gap-1.5">
                 <svg className="animate-spin w-3.5 h-3.5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -334,10 +384,18 @@ export default function ClientDetailPage() {
         </button>
         {urlsOpen && <>
           <div className="space-y-3">
-            {PLATFORM_DEFS.map((p) => (
+            {PLATFORM_DEFS.filter(p => activePlatforms.includes(p.key)).map((p) => (
               <div key={p.key} className="rounded-xl border border-gray-200 px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="w-16 text-center rounded-full px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600">{p.key}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-16 text-center rounded-full px-2 py-0.5 text-xs font-bold bg-gray-100 text-gray-600">{p.key}</span>
+                    <button type="button" onClick={() => { clearPlatform(p.key); setActivePlatforms(prev => prev.filter(k => k !== p.key)); }}
+                      className="text-gray-300 hover:text-red-400 transition-colors" title="刪除此平台">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
                   <button type="button" onClick={() => addUrl(p.key)} className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -360,6 +418,19 @@ export default function ClientDetailPage() {
                 ))}
               </div>
             ))}
+            {/* 已移除的平台 → 可加回 */}
+            {PLATFORM_DEFS.filter(p => !activePlatforms.includes(p.key)).length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                <span className="text-xs text-gray-400">新增平台</span>
+                {PLATFORM_DEFS.filter(p => !activePlatforms.includes(p.key)).map(p => (
+                  <button key={p.key} type="button"
+                    onClick={() => setActivePlatforms(prev => [...prev, p.key])}
+                    className="text-xs px-2.5 py-1 rounded-full border border-dashed border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700 transition-colors">
+                    + {p.key}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button onClick={saveUrls} disabled={savingUrls} className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50">
@@ -373,65 +444,275 @@ export default function ClientDetailPage() {
       {/* ── 區塊 3：報告 ── */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-800">最新報告</h2>
+          <h2 className="text-base font-semibold text-gray-800">社群貼文報告</h2>
           {latestJob && (
             <span className="text-xs text-gray-400">
-              {latestJob.created_at}・{latestJob.posts.length} 筆貼文
+              {latestJob.created_at.slice(0, 10).replace(/-/g, '/')}・{latestJob.posts.length} 筆貼文
             </span>
           )}
         </div>
 
-        {/* 處理中 */}
-        {activeJobId && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <svg className="animate-spin w-4 h-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        {/* 初次載入 */}
+        {jobsLoading && !activeJobId && (
+          <div className="flex items-center gap-2.5 py-2">
+            <svg className="animate-spin w-4 h-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
-            抓取中，約 3 分鐘後自動更新…
+            <span className="text-sm text-gray-400">報告載入中…</span>
+          </div>
+        )}
+
+        {/* 處理中 */}
+        {activeJobId && (
+          <div className="flex items-center gap-2.5 px-1 py-2">
+            <svg className="animate-spin w-4 h-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <span className="text-sm text-gray-500">正在抓取各平台貼文，完成後自動更新…</span>
           </div>
         )}
 
         {/* 逾時 */}
         {timedOut && !activeJobId && (
-          <p className="text-sm text-yellow-600">逾時，請重新按「抓取社群內容」。</p>
+          <p className="text-sm text-yellow-600">逾時，請重新按「手動更新報告」。</p>
         )}
 
         {/* 無資料 */}
-        {!activeJobId && !latestJob && !timedOut && (
-          <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「抓取社群內容」開始。</p>
+        {!activeJobId && !latestJob && !timedOut && !jobsLoading && (
+          <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「手動更新報告」開始。</p>
         )}
 
         {/* 貼文列表 */}
-        {(latestJob ?? DEMO_JOB) && (latestJob ?? DEMO_JOB).posts.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-            {(latestJob ?? DEMO_JOB).posts.map((post) => {
+        {latestJob && latestJob.posts.length > 0 && !jobsLoading && (() => {
+          const job = latestJob;
+          const platforms = Array.from(new Set(job.posts.map((p) => p.platform)));
+          const activePlatform = filterPlatform ?? platforms[0];
+
+          // 擁有者清單（依目前平台）
+          const owners = Array.from(new Set(
+            job.posts.filter((p) => p.platform === activePlatform && p.account).map((p) => p.account!)
+          ));
+
+          const filtered = job.posts.filter((p) => {
+            if (p.platform !== activePlatform) return false;
+            if (filterOwner && p.account !== filterOwner) return false;
+            if (appliedDateFrom) {
+              // 沒有日期的貼文，無法判斷，一律保留顯示
+              if (!p.post_date) return true;
+              // 穩健解析：新資料已為 ISO，舊資料支援 Unix timestamp / YYYY/MM/DD
+              const raw = String(p.post_date);
+              let postDate: Date;
+              if (/^\d{10}$/.test(raw)) {
+                postDate = new Date(Number(raw) * 1000);
+              } else if (/^\d{13}$/.test(raw)) {
+                postDate = new Date(Number(raw));
+              } else {
+                const normalized = raw.replace(/\//g, '-').split('T')[0].split(' ')[0];
+                const [y, m, d] = normalized.split('-').map(Number);
+                postDate = new Date(y, m - 1, d);
+              }
+              const [sy, sm, sd] = appliedDateFrom.split('-').map(Number);
+              const since = new Date(sy, sm - 1, sd);
+              if (postDate < since) return false;
+            }
+            return true;
+          });
+
+          return (
+            <>
+              {/* 篩選器列 */}
+              <div className="space-y-2 pt-1">
+                {/* 平台篩選 */}
+                {platforms.length > 1 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {platforms.map((p) => {
+                      const count = job.posts.filter((post) => post.platform === p).length;
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => { setFilterPlatform(p); setFilterOwner(null); }}
+                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${activePlatform === p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        >
+                          {p}（{count}）
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 擁有者篩選 */}
+                {owners.length > 1 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setFilterOwner(null)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${!filterOwner ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      全部帳號
+                    </button>
+                    {owners.map((o) => (
+                      <button
+                        key={o}
+                        onClick={() => setFilterOwner(o)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterOwner === o ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 日期篩選：某日之後 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 shrink-0">發佈日期在此之後</span>
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                    className="rounded-lg border border-gray-200 px-3 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                  <button
+                    type="button"
+                    onClick={() => setAppliedDateFrom(dateFrom)}
+                    disabled={dateFrom === appliedDateFrom}
+                    className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    套用
+                  </button>
+                  {appliedDateFrom && (
+                    <button type="button" onClick={() => { setDateFrom(''); setAppliedDateFrom(''); }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">清除</button>
+                  )}
+                </div>
+              </div>
+              <div className={`grid pt-2 ${activePlatform === 'TikTok' ? 'grid-cols-2 sm:grid-cols-3 gap-8' : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6'}`}>
+                {filtered.map((post) => {
+              const embedUrl = getEmbedUrl(post.platform, post.post_url);
               const dateStr = post.post_date ? (() => {
                 try { return new Date(post.post_date).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
                 catch { return post.post_date; }
               })() : null;
 
-              return (
-                <div key={post.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col">
-                  {/* 頂部：頭像 + 帳號 + 平台 */}
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 shrink-0 flex items-center justify-center text-white text-xs font-bold">
-                      {post.account ? post.account[0] : '?'}
+              // TikTok 獨立排版：大頭貼＋標題在上，iframe 置中留白
+              if (post.platform === 'TikTok') {
+                const tikEmbedUrl = getEmbedUrl('TikTok', post.post_url);
+                return (
+                  <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col max-w-[300px] mx-auto w-full">
+                    {/* 大頭貼 + 帳號 + 標題 */}
+                    <div className="flex items-start gap-2.5 px-4 pt-4 pb-3">
+                      <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
+                        {post.profile_pic_url ? (
+                          <img src={post.profile_pic_url} alt="" className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        ) : (post.account?.[0] ?? '?')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">{post.account ?? '—'}</p>
+                        {post.content && <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{post.content}</p>}
+                      </div>
+                      {post.post_url && (
+                        <a href={post.post_url} target="_blank" rel="noreferrer" className="shrink-0 text-gray-300 hover:text-gray-600 transition-colors mt-0.5">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </a>
+                      )}
                     </div>
-                    <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
-                    <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
+                    {/* iframe 置中留白 */}
+                    <div className="flex justify-center px-4 pb-4">
+                      {tikEmbedUrl ? (
+                        <iframe
+                          src={tikEmbedUrl}
+                          className="border-0 aspect-[9/16] rounded-xl"
+                          style={{ width: '260px' }}
+                          allowFullScreen
+                        />
+                      ) : (
+                        <p className="text-xs text-gray-300 py-6">無法載入影片</p>
+                      )}
+                    </div>
                   </div>
+                );
+              }
 
-                  {/* 貼文圖片 */}
-                  {post.thumbnail && (
-                    <div className="aspect-square bg-gray-100 overflow-hidden">
-                      <img
-                        src={post.thumbnail}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        onError={(e) => { e.currentTarget.parentElement!.style.display = 'none'; }}
+              // FB 圖片貼文（is_video=0）：不用 embed，避免文案重複
+              const isFbImagePost = post.platform === 'FB' && post.is_video === 0;
+              // Threads 一律用官方 blockquote embed，不走縮圖路徑
+              const isThreadsWithImage = false;
+
+              return (
+                <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col">
+                  {/* 內嵌貼文 */}
+                  {embedUrl && !isFbImagePost && !isThreadsWithImage ? (
+                    post.platform === 'YT' ? (
+                      <iframe
+                        src={embedUrl}
+                        className="w-full border-0 aspect-video"
+                        allowFullScreen
                       />
-                    </div>
+                    ) : post.platform === 'FB' ? (
+                      <div className="px-8 pt-5 pb-3">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0 aspect-[9/16] rounded-lg"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : post.platform === 'IG' ? (
+                      <div className="px-8 pt-5 pb-3">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0 rounded-lg aspect-[4/5]"
+                          scrolling="no"
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : post.platform === 'Threads' ? (
+                      <div className="px-8 pt-5 pb-3">
+                        <iframe
+                          src={embedUrl}
+                          className="w-full border-0 rounded-lg"
+                          style={{ height: '900px' }}
+                          allowFullScreen
+                        />
+                      </div>
+                    ) : (
+                      <iframe
+                        src={embedUrl}
+                        className="w-full border-0"
+                        style={{ height: '600px' }}
+                        scrolling="no"
+                        allowFullScreen
+                      />
+                    )
+                  ) : (
+                    <>
+                      {/* 無內嵌：顯示頭像 + 帳號 */}
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <div className="relative w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
+                          <span>{post.account?.[0] ?? '?'}</span>
+                          {post.profile_pic_url && (
+                            <img
+                              src={post.platform === 'Threads' ? (proxyImg(post.profile_pic_url) ?? post.profile_pic_url) : post.profile_pic_url}
+                              alt="" className="absolute inset-0 w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          )}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800 truncate flex-1">{post.account ?? '—'}</span>
+                        <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 shrink-0">{post.platform}</span>
+                      </div>
+                      {/* Threads 影片 */}
+                      {post.platform === 'Threads' && post.video_url && (
+                        <video
+                          src={proxyImg(post.video_url) ?? post.video_url}
+                          className="w-full object-cover"
+                          controls
+                          playsInline
+                          preload="metadata"
+                        />
+                      )}
+                      {/* FB 圖片貼文 or Threads 有縮圖（無影片）：顯示縮圖 */}
+                      {(isFbImagePost || (isThreadsWithImage && !post.video_url)) && post.thumbnail && (
+                        <img
+                          src={post.platform === 'Threads' ? (proxyImg(post.thumbnail) ?? post.thumbnail) : post.thumbnail}
+                          alt="" className="w-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      )}
+                    </>
                   )}
 
                   {/* 互動數 */}
@@ -455,24 +736,34 @@ export default function ClientDetailPage() {
                     )}
                   </div>
 
-                  {/* 內文 */}
-                  <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
-                    {post.content && (
-                      <p className="text-sm text-gray-800 line-clamp-3">
-                        <span className="font-semibold mr-1">{post.account}</span>
-                        {post.content}
-                      </p>
-                    )}
-                    {post.hashtags && (
-                      <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
-                    )}
-                    {dateStr && <p className="text-xs text-gray-300 pt-0.5">{dateStr}</p>}
-                  </div>
+                  {/* 內文：Threads 有 embed 才隱藏（embed 已含內容）；無 embed（新格式無 post_url）正常顯示 */}
+                  {!(post.platform === 'Threads' && !!embedUrl) && (
+                    <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
+                      {post.platform === 'YT' ? (
+                        post.content && (
+                          <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
+                        )
+                      ) : (
+                        post.content && (
+                          <p className="text-sm text-gray-800 line-clamp-3">
+                            <span className="font-semibold mr-1">{post.account}</span>
+                            {post.content}
+                          </p>
+                        )
+                      )}
+                      {post.hashtags && (
+                        <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
+                      )}
+                      {dateStr && <p className="text-xs text-gray-300 pt-0.5">{dateStr}</p>}
+                    </div>
+                  )}
                 </div>
               );
             })}
-          </div>
-        )}
+              </div>
+            </>
+          );
+        })()}
 
         {latestJob && latestJob.posts.length === 0 && !activeJobId && (
           <p className="text-sm text-gray-300">此次抓取無貼文資料。</p>
