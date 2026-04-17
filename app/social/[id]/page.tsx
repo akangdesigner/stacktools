@@ -499,8 +499,8 @@ export default function ClientDetailPage() {
             if (p.platform !== activePlatform) return false;
             if (filterOwner && p.account !== filterOwner) return false;
             if (appliedDateFrom) {
-              // 沒有日期的貼文，無法判斷，一律保留顯示
-              if (!p.post_date) return true;
+              // 沒有日期的貼文，篩選模式下隱藏
+              if (!p.post_date) return false;
               // 穩健解析：新資料已為 ISO，舊資料支援 Unix timestamp / YYYY/MM/DD
               const raw = String(p.post_date);
               let postDate: Date;
