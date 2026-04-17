@@ -42,9 +42,20 @@ function proxyImg(url: string | null): string | null {
   return `/api/proxy-image?url=${encodeURIComponent(url)}`;
 }
 
-// Threads 短代碼（DXMBcIujwQa）→ 數字 media ID（base64url 解碼）
+// 從 Threads URL 提取短代碼（支援兩種格式）
+function extractThreadsCode(postUrl: string | null): string {
+  if (!postUrl) return '';
+  const m1 = postUrl.match(/threads\.net\/@[^/]+\/post\/([^/?#]+)/);
+  if (m1) return m1[1];
+  const m2 = postUrl.match(/threads\.net\/t\/([^/?#]+)/);
+  if (m2) return m2[1];
+  return '';
+}
+
+// Threads 短代碼 → 數字 media ID（base64url 解碼）
 const THREADS_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 function decodeThreadsCode(code: string): string {
+  if (!code) return '';
   let id = BigInt(0);
   for (const ch of code) {
     const v = THREADS_CHARS.indexOf(ch);
@@ -688,7 +699,7 @@ export default function ClientDetailPage() {
                       <div className="px-6 pt-4 pb-2">
                         <blockquote
                           className="text-post-media"
-                          data-media-id={decodeThreadsCode(post.post_url?.match(/threads\.net\/t\/([^/?#]+)/)?.[1] ?? '')}
+                          data-media-id={decodeThreadsCode(extractThreadsCode(post.post_url))}
                         >
                           <a href={post.post_url ?? '#'} target="_blank" rel="noreferrer"
                             className="text-sm text-blue-500">在 Threads 查看貼文</a>
