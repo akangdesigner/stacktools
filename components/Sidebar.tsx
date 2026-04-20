@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -15,7 +16,7 @@ const homeItem = {
   ),
 };
 
-const liveItems = [
+const liveItems: { href: string; label: string; inDev?: boolean; icon: React.ReactNode }[] = [
   {
     href: '/article',
     label: '文章上架工具',
