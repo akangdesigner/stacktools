@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '找不到任務' }, { status: 404 });
   }
 
-  if (status === 'completed' && Array.isArray(rawPosts) && rawPosts.length > 0) {
+  if (Array.isArray(rawPosts) && rawPosts.length > 0) {
     // 展開巢狀結構：若 item 內有 "貼文" 陣列（Threads 格式），則拆成多筆
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const flatPosts: Array<{ post: Record<string, any>; platform: string | undefined }> = [];

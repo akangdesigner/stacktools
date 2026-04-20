@@ -38,13 +38,22 @@ const internalTools = [
     inDev: false,
   },
   {
+    href: "/gsc",
+    title: "GSC 排名查詢",
+    description: "輸入頁面 URL 與關鍵字，查詢該頁面在 Google 搜尋結果中的平均排名、點擊數與曝光數。",
+    icon: "🔍",
+    color: "bg-teal-50 border-teal-200 hover:border-teal-400",
+    iconBg: "bg-teal-100",
+    inDev: true,
+  },
+  {
     href: "/social",
     title: "社群貼文追蹤",
     description: "設定客戶的社群帳號網址，定期抓取 FB/IG/YT/TikTok/Threads 的最新貼文，並發送通知到 Slack。",
     icon: "📊",
     color: "bg-rose-50 border-rose-200 hover:border-rose-400",
     iconBg: "bg-rose-100",
-    inDev: true,
+    inDev: false,
   },
 ];
 

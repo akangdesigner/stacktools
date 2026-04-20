@@ -175,7 +175,7 @@ export default function ClientDetailPage() {
     setTimedOut(false);
     pollRef.current = setInterval(async () => {
       pollCountRef.current += 1;
-      if (pollCountRef.current > 20) {
+      if (pollCountRef.current > 18) {
         clearInterval(pollRef.current!);
         setTimedOut(true);
         setActiveJobId(null);
@@ -346,7 +346,7 @@ export default function ClientDetailPage() {
           {/* 自動監控開關 */}
           <div className="flex items-center justify-between pt-1">
             <div>
-              <p className="text-sm font-medium text-gray-800">定期自動更新</p>
+              <p className="text-sm font-medium text-gray-800 flex items-center gap-2">定期自動更新<span className="text-xs text-amber-500 font-normal">開發中</span></p>
               <p className="text-xs text-gray-400 mt-0.5">開啟後，系統會依排程自動抓取最新貼文</p>
             </div>
             <button
@@ -383,6 +383,16 @@ export default function ClientDetailPage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                 </svg>
                 處理中，約 3 分鐘…
+                <button
+                  type="button"
+                  onClick={() => { clearInterval(pollRef.current!); setActiveJobId(null); }}
+                  className="ml-1 text-red-400 hover:text-red-600 transition-colors"
+                  title="取消抓取"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
               </span>
             )}
             {triggerError && <span className="text-xs text-red-600">✗ {triggerError}</span>}
