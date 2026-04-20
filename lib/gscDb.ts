@@ -15,9 +15,11 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS gsc_clients (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    name     TEXT NOT NULL,
-    site_url TEXT NOT NULL
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    name      TEXT NOT NULL,
+    site_url  TEXT NOT NULL,
+    sheet_id  TEXT NOT NULL DEFAULT '',
+    sheet_tab TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS gsc_keywords (
@@ -27,6 +29,10 @@ db.exec(`
     label     TEXT NOT NULL DEFAULT ''
   );
 `);
+
+// 遷移：舊資料庫加欄位
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_id  TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_tab TEXT NOT NULL DEFAULT ''`); } catch {}
 
 // ── KV ──────────────────────────────────────────────
 export function getKv(key: string): string | null {
@@ -51,6 +57,8 @@ export interface GscClient {
   id: number;
   name: string;
   site_url: string;
+  sheet_id: string;
+  sheet_tab: string;
 }
 
 export interface GscKeyword {
@@ -66,11 +74,11 @@ export function listClients(): GscClient[] {
 
 export function createClient(name: string, site_url: string): GscClient {
   const result = db.prepare('INSERT INTO gsc_clients (name, site_url) VALUES (?, ?)').run(name, site_url);
-  return { id: result.lastInsertRowid as number, name, site_url };
+  return { id: result.lastInsertRowid as number, name, site_url, sheet_id: '', sheet_tab: '' };
 }
 
-export function updateClient(id: number, name: string, site_url: string): void {
-  db.prepare('UPDATE gsc_clients SET name = ?, site_url = ? WHERE id = ?').run(name, site_url, id);
+export function updateClient(id: number, name: string, site_url: string, sheet_id = '', sheet_tab = ''): void {
+  db.prepare('UPDATE gsc_clients SET name = ?, site_url = ?, sheet_id = ?, sheet_tab = ? WHERE id = ?').run(name, site_url, sheet_id, sheet_tab, id);
 }
 
 export function deleteClient(id: number): void {

@@ -5,7 +5,9 @@ export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
   const error = req.nextUrl.searchParams.get('error');
 
-  const baseUrl = new URL(req.url).origin;
+  const host = req.headers.get('host') ?? 'localhost:3001';
+  const proto = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https';
+  const baseUrl = `${proto}://${host}`;
 
   if (error || !code) {
     return NextResponse.redirect(`${baseUrl}/gsc?error=access_denied`);

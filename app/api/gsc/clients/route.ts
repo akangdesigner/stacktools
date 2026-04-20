@@ -27,12 +27,14 @@ export async function PUT(req: NextRequest) {
     id?: number;
     name?: string;
     site_url?: string;
+    sheet_id?: string;
+    sheet_tab?: string;
     keywords?: { keyword: string; label: string }[];
   };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
 
   if (body.name !== undefined && body.site_url !== undefined) {
-    updateClient(body.id, body.name.trim(), body.site_url.trim());
+    updateClient(body.id, body.name.trim(), body.site_url.trim(), body.sheet_id ?? '', body.sheet_tab ?? '');
   }
   if (body.keywords !== undefined) {
     replaceKeywords(body.id, body.keywords);

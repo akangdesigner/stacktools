@@ -15,7 +15,7 @@ function fmtDate(iso: string) {
 }
 
 interface GscKeyword { id: number; client_id: number; keyword: string; label: string }
-interface GscClient { id: number; name: string; site_url: string; keywords: GscKeyword[] }
+interface GscClient { id: number; name: string; site_url: string; sheet_id: string; sheet_tab: string; keywords: GscKeyword[] }
 interface SingleResult { found: boolean; position?: number; clicks?: number; impressions?: number; ctr?: number }
 interface KwResult { keyword: string; a: SingleResult; b: SingleResult }
 interface QueryResult {
@@ -33,6 +33,53 @@ function TrendCell({ a, b }: { a: SingleResult; b: SingleResult }) {
   if (Math.abs(diff) < 0.05) return <td className="px-3 py-2 text-center text-gray-400 text-xs">—</td>;
   if (diff > 0) return <td className="px-3 py-2 text-center text-red-500 text-xs font-medium">↑ {Math.abs(diff).toFixed(1)}</td>;
   return <td className="px-3 py-2 text-center text-emerald-600 text-xs font-medium">↓ {Math.abs(diff).toFixed(1)}</td>;
+}
+
+function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => void }) {
+  const [sheetId, setSheetId] = useState(client.sheet_id);
+  const [sheetTab, setSheetTab] = useState(client.sheet_tab);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await fetch('/api/gsc/clients', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: client.id, name: client.name, site_url: client.site_url, sheet_id: sheetId, sheet_tab: sheetTab }),
+    });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="space-y-3 max-w-md">
+      <div className="space-y-1">
+        <label className="block text-xs font-medium text-gray-600">Google Sheet ID</label>
+        <input
+          value={sheetId}
+          onChange={e => setSheetId(e.target.value)}
+          placeholder="從 Sheet 網址取得（spreadsheets/d/後面那段）"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gray-400"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="block text-xs font-medium text-gray-600">分頁名稱（Tab）</label>
+        <input
+          value={sheetTab}
+          onChange={e => setSheetTab(e.target.value)}
+          placeholder="例：KW"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+        />
+      </div>
+      <button
+        onClick={save}
+        disabled={saving}
+        className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
+      >
+        {saving ? '儲存中…' : '儲存設定'}
+      </button>
+    </div>
+  );
 }
 
 function KeywordEditor({ client, onSaved }: { client: GscClient; onSaved: () => void }) {
@@ -98,6 +145,7 @@ export default function GscClientPage() {
 
   const [client, setClient] = useState<GscClient | null>(null);
   const [authorized, setAuthorized] = useState(false);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showKeywordEditor, setShowKeywordEditor] = useState(false);
   const [endDate, setEndDate] = useState(defaultEndDate);
@@ -105,6 +153,10 @@ export default function GscClientPage() {
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const [showSheetEditor, setShowSheetEditor] = useState(false);
+  const [sheetWriting, setSheetWriting] = useState(false);
+  const [sheetResult, setSheetResult] = useState<{ updated: number; notFound: string[] } | null>(null);
+  const [sheetError, setSheetError] = useState('');
 
   function loadClient() {
     fetch('/api/gsc/clients')
@@ -120,7 +172,7 @@ export default function GscClientPage() {
   useEffect(() => {
     fetch('/api/gsc/status')
       .then(r => r.json())
-      .then((d: { authorized: boolean }) => setAuthorized(d.authorized))
+      .then((d: { authorized: boolean; email?: string }) => { setAuthorized(d.authorized); setAuthEmail(d.email ?? null); })
       .finally(() => setAuthChecked(true));
   }, []);
 
@@ -132,6 +184,27 @@ export default function GscClientPage() {
       body: JSON.stringify({ id: client.id }),
     });
     router.push('/gsc');
+  }
+
+  async function handleWriteSheet() {
+    if (!client || !queryResult) return;
+    setSheetWriting(true);
+    setSheetResult(null);
+    setSheetError('');
+    try {
+      const res = await fetch('/api/gsc/sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: client.id, results: queryResult.results }),
+      });
+      const data = await res.json() as { updated?: number; notFound?: string[]; error?: string };
+      if (!res.ok) setSheetError(data.error ?? '寫入失敗');
+      else setSheetResult({ updated: data.updated ?? 0, notFound: data.notFound ?? [] });
+    } catch (e) {
+      setSheetError(String(e));
+    } finally {
+      setSheetWriting(false);
+    }
   }
 
   async function handleQuery() {
@@ -204,7 +277,7 @@ export default function GscClientPage() {
           <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
           </svg>
-          <p className="text-sm text-emerald-700">Google 帳號已連結</p>
+          <p className="text-sm text-emerald-700">Google 帳號已連結{authEmail ? `：${authEmail}` : ''}</p>
           <a href="/api/gsc/auth" className="ml-auto text-xs text-emerald-600 hover:underline">重新授權</a>
         </div>
       )}
@@ -225,6 +298,27 @@ export default function GscClientPage() {
           key={client.id}
           client={client}
           onSaved={() => { loadClient(); setShowKeywordEditor(false); }}
+        />
+      )}
+
+      {/* Sheet 設定開關 */}
+      {!showKeywordEditor && (
+        <button
+          onClick={() => setShowSheetEditor(v => !v)}
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7"/>
+          </svg>
+          {showSheetEditor ? '收起 Sheet 設定' : `Sheet 設定${client.sheet_id ? '（已設定）' : '（未設定）'}`}
+        </button>
+      )}
+
+      {showSheetEditor && !showKeywordEditor && (
+        <SheetEditor
+          key={client.id}
+          client={client}
+          onSaved={() => { loadClient(); setShowSheetEditor(false); }}
         />
       )}
 
@@ -255,6 +349,7 @@ export default function GscClientPage() {
 
       {/* 結果表格 */}
       {queryResult && !showKeywordEditor && (
+        <div className="space-y-4">
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-4 text-xs text-gray-400">
             <span>上週：{fmtDate(queryResult.aRange.start)} ~ {fmtDate(queryResult.aRange.end)}</span>
@@ -297,6 +392,32 @@ export default function GscClientPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* 寫入 Sheet */}
+        {client.sheet_id && client.sheet_tab && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              onClick={handleWriteSheet}
+              disabled={sheetWriting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7"/>
+              </svg>
+              {sheetWriting ? '寫入中…' : '寫入 Sheet'}
+            </button>
+            {sheetResult && (
+              <span className="text-sm text-emerald-700">
+                成功更新 {sheetResult.updated} 個欄位
+                {sheetResult.notFound.length > 0 && (
+                  <span className="text-gray-400 ml-2">（找不到：{sheetResult.notFound.join('、')}）</span>
+                )}
+              </span>
+            )}
+            {sheetError && <span className="text-sm text-red-600">{sheetError}</span>}
+          </div>
+        )}
         </div>
       )}
     </div>
