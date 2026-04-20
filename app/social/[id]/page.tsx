@@ -192,12 +192,17 @@ export default function ClientDetailPage() {
           await loadJobs();
           setPostsLoaded(true);
           setJustCompleted(true);
-          setTimeout(() => setJustCompleted(false), 5000);
         }
       }
     }, 10000);
     return () => clearInterval(pollRef.current!);
   }, [activeJobId]);
+
+  // 篩選動作或重新載入時，清掉「更新完成」提示
+  useEffect(() => {
+    setJustCompleted(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterPlatform, filterOwner, appliedDateFrom, appliedLatestN, postsLoaded]);
 
   // ── URL 編輯 ───────────────────────────────────────────────
   function handleUrlChange(key: PlatformKey, index: number, value: string) {
@@ -243,6 +248,7 @@ export default function ClientDetailPage() {
 
   // ── 觸發 ──────────────────────────────────────────────────
   async function triggerWebhook() {
+    setJustCompleted(false);
     setTriggering(true); setTriggerError('');
     try {
       const res = await fetch('/api/social-webhook', {
@@ -841,8 +847,8 @@ export default function ClientDetailPage() {
                   {!(post.platform === 'Threads' && !!embedUrl) && (
                     <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
                       {post.platform === 'YT' ? (
-                        post.account && (
-                          <p className="text-xs text-gray-400">{post.account}</p>
+                        post.content && (
+                          <p className="text-sm text-gray-700 line-clamp-3">{post.content}</p>
                         )
                       ) : (
                         post.content && (

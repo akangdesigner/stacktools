@@ -61,9 +61,6 @@ const liveItems = [
       </svg>
     ),
   },
-];
-
-const devItems = [
   {
     href: '/social',
     label: '社群貼文追蹤',
@@ -130,24 +127,9 @@ export default function Sidebar() {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
-                  {item.icon}{item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 開發中 */}
-        <div>
-          <p className="px-3 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">開發中</p>
-          <div className="space-y-1">
-            {devItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-              return (
-                <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
                   {item.icon}
                   <span className="flex-1">{item.label}</span>
-                  {!isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
+                  {item.inDev && !isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
                 </Link>
               );
             })}
