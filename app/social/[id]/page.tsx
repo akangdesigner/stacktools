@@ -120,8 +120,11 @@ export default function ClientDetailPage() {
   const pollCountRef = useRef(0);
   const [filterPlatform, setFilterPlatform] = useState<string | null>(null);
   const [filterOwner, setFilterOwner] = useState<string | null>(null);
-  const [jobsLoading, setJobsLoading] = useState(true);
+  const [jobsLoading, setJobsLoading] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [postsLoaded, setPostsLoaded] = useState(false);
+  const [latestN, setLatestN] = useState('');
+  const [appliedLatestN, setAppliedLatestN] = useState('');
 
   // ── 初始載入 ──────────────────────────────────────────────
   useEffect(() => {
@@ -144,12 +147,11 @@ export default function ClientDetailPage() {
       })
       .finally(() => setLoading(false));
 
-    // 載入歷史 jobs
-    loadJobs();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function loadJobs() {
+    setJobsLoading(true);
     try {
       const res = await fetch(`/api/social-clients/${id}/jobs`);
       if (res.ok) {
@@ -188,6 +190,7 @@ export default function ClientDetailPage() {
         if (job.status === 'completed') {
           // 重新 loadJobs 以合併所有 job 貼文
           await loadJobs();
+          setPostsLoaded(true);
           setJustCompleted(true);
           setTimeout(() => setJustCompleted(false), 5000);
         }
@@ -460,8 +463,36 @@ export default function ClientDetailPage() {
           )}
         </div>
 
+        {/* 提示輸入日期 */}
+        {!postsLoaded && !activeJobId && !jobsLoading && (
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-gray-500">請選擇篩選方式後載入報告</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+              <span className="text-xs text-gray-300">或</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">每平台最新</span>
+                <input
+                  type="number" min="1" value={latestN} onChange={(e) => setLatestN(e.target.value)} placeholder="N"
+                  className="w-14 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-700 text-center focus:outline-none focus:ring-1 focus:ring-gray-400"
+                />
+                <span className="text-xs text-gray-400">篇</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => { if (dateFrom) setAppliedDateFrom(dateFrom); if (latestN) setAppliedLatestN(latestN); loadJobs(); setPostsLoaded(true); }}
+                disabled={!dateFrom && !latestN}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                載入報告
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 初次載入 */}
-        {jobsLoading && !activeJobId && (
+        {postsLoaded && jobsLoading && !activeJobId && (
           <div className="flex items-center gap-2.5 py-2">
             <svg className="animate-spin w-4 h-4 text-gray-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -488,7 +519,7 @@ export default function ClientDetailPage() {
         )}
 
         {/* 無資料 */}
-        {!activeJobId && !latestJob && !timedOut && !jobsLoading && (
+        {postsLoaded && !activeJobId && !latestJob && !timedOut && !jobsLoading && (
           <p className="text-sm text-gray-300">尚無報告，設定好帳號網址後按「手動更新報告」開始。</p>
         )}
 
@@ -502,6 +533,23 @@ export default function ClientDetailPage() {
           const owners = Array.from(new Set(
             job.posts.filter((p) => p.platform === activePlatform && p.account).map((p) => p.account!)
           ));
+
+          const dateFiltered = appliedDateFrom
+            ? job.posts.filter((p) => {
+                if (!p.post_date) return false;
+                const raw = String(p.post_date);
+                let pd: Date;
+                if (/^\d{10}$/.test(raw)) pd = new Date(Number(raw) * 1000);
+                else if (/^\d{13}$/.test(raw)) pd = new Date(Number(raw));
+                else {
+                  const norm = raw.replace(/\//g, '-').split('T')[0].split(' ')[0];
+                  const [y, m, d] = norm.split('-').map(Number);
+                  pd = new Date(y, m - 1, d);
+                }
+                const [sy, sm, sd] = appliedDateFrom.split('-').map(Number);
+                return pd >= new Date(sy, sm - 1, sd);
+              })
+            : job.posts;
 
           const filtered = job.posts.filter((p) => {
             if (p.platform !== activePlatform) return false;
@@ -528,6 +576,15 @@ export default function ClientDetailPage() {
             return true;
           });
 
+          filtered.sort((a, b) => {
+            if (!a.post_date && !b.post_date) return 0;
+            if (!a.post_date) return 1;
+            if (!b.post_date) return -1;
+            return new Date(b.post_date).getTime() - new Date(a.post_date).getTime();
+          });
+          const limit = parseInt(appliedLatestN) || 0;
+          const displayPosts = limit > 0 ? filtered.slice(0, limit) : filtered;
+
           return (
             <>
               {/* 篩選器列 */}
@@ -536,7 +593,7 @@ export default function ClientDetailPage() {
                 {platforms.length > 1 && (
                   <div className="flex items-center gap-2 flex-wrap">
                     {platforms.map((p) => {
-                      const count = job.posts.filter((post) => post.platform === p).length;
+                      const count = dateFiltered.filter((post) => post.platform === p).length;
                       return (
                         <button
                           key={p}
@@ -588,9 +645,34 @@ export default function ClientDetailPage() {
                     <button type="button" onClick={() => { setDateFrom(''); setAppliedDateFrom(''); }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">清除</button>
                   )}
                 </div>
+
+                {/* 每平台最新 N 篇 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-400 shrink-0">每平台最新</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={latestN}
+                    onChange={(e) => setLatestN(e.target.value)}
+                    placeholder="全部"
+                    className="w-16 rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 text-center focus:outline-none focus:ring-1 focus:ring-gray-400"
+                  />
+                  <span className="text-xs text-gray-400 shrink-0">篇</span>
+                  <button
+                    type="button"
+                    onClick={() => setAppliedLatestN(latestN)}
+                    disabled={latestN === appliedLatestN}
+                    className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    套用
+                  </button>
+                  {appliedLatestN && (
+                    <button type="button" onClick={() => { setLatestN(''); setAppliedLatestN(''); }} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">清除</button>
+                  )}
+                </div>
               </div>
               <div className="grid pt-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filtered.map((post) => {
+                {displayPosts.map((post) => {
               const embedUrl = getEmbedUrl(post.platform, post.post_url);
               const dateStr = post.post_date ? (() => {
                 try { return new Date(post.post_date).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
