@@ -35,11 +35,41 @@ function TrendCell({ a, b }: { a: SingleResult; b: SingleResult }) {
   return <td className="px-3 py-2 text-center text-emerald-600 text-xs font-medium">↓ {Math.abs(diff).toFixed(1)}</td>;
 }
 
+function parseSheetUrl(url: string): { sheetId: string; gid: string } | null {
+  try {
+    const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (!m) return null;
+    const sheetId = m[1];
+    const gidM = url.match(/[?&#]gid=(\d+)/);
+    return { sheetId, gid: gidM ? gidM[1] : '' };
+  } catch { return null; }
+}
+
 function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => void }) {
+  const [url, setUrl] = useState('');
   const [sheetId, setSheetId] = useState(client.sheet_id);
   const [sheetTab, setSheetTab] = useState(client.sheet_tab);
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(client.auto_update === 1);
   const [saving, setSaving] = useState(false);
+
+  async function handleUrlBlur() {
+    const parsed = parseSheetUrl(url);
+    if (!parsed) return;
+    setResolving(true);
+    setResolveError('');
+    try {
+      const res = await fetch(`/api/gsc/sheet-meta?sheetId=${parsed.sheetId}&gid=${parsed.gid}`);
+      const data = await res.json() as { tab?: string; error?: string };
+      if (!res.ok) { setResolveError(data.error ?? '無法讀取'); return; }
+      setSheetId(parsed.sheetId);
+      if (data.tab) setSheetTab(data.tab);
+      setUrl('');
+    } finally {
+      setResolving(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -55,23 +85,23 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
   return (
     <div className="space-y-3 max-w-md">
       <div className="space-y-1">
-        <label className="block text-xs font-medium text-gray-600">Google Sheet ID</label>
+        <label className="block text-xs font-medium text-gray-600">貼上 Google Sheet 網址</label>
         <input
-          value={sheetId}
-          onChange={e => setSheetId(e.target.value)}
-          placeholder="從 Sheet 網址取得（spreadsheets/d/後面那段）"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-gray-400"
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="block text-xs font-medium text-gray-600">分頁名稱（Tab）</label>
-        <input
-          value={sheetTab}
-          onChange={e => setSheetTab(e.target.value)}
-          placeholder="例：KW"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onBlur={handleUrlBlur}
+          placeholder="https://docs.google.com/spreadsheets/d/..."
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
         />
+        {resolving && <p className="text-xs text-gray-400">解析中…</p>}
+        {resolveError && <p className="text-xs text-red-500">{resolveError}</p>}
       </div>
+      {(sheetId || sheetTab) && (
+        <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 space-y-0.5">
+          <p className="text-xs text-gray-500">Sheet ID：<span className="font-mono text-gray-700">{sheetId || '—'}</span></p>
+          <p className="text-xs text-gray-500">分頁：<span className="font-medium text-gray-700">{sheetTab || '—'}</span></p>
+        </div>
+      )}
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <div
           onClick={() => setAutoUpdate(v => !v)}
@@ -83,7 +113,7 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
       </label>
       <button
         onClick={save}
-        disabled={saving}
+        disabled={saving || !sheetId || !sheetTab}
         className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
       >
         {saving ? '儲存中…' : '儲存設定'}
