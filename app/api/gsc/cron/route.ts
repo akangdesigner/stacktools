@@ -54,7 +54,10 @@ async function queryRank(accessToken: string, siteUrl: string, keywords: string[
 async function writeSheet(accessToken: string, client: { sheet_id: string; sheet_tab: string }, results: ReturnType<typeof queryRank> extends Promise<infer T> ? T : never) {
   const readUrl = `${SHEETS_BASE}/${client.sheet_id}/values/${encodeURIComponent(client.sheet_tab)}`;
   const readRes = await fetch(readUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!readRes.ok) return { updated: 0, error: 'read_failed' };
+  if (!readRes.ok) {
+    const errBody = await readRes.json() as { error?: { message?: string } };
+    return { updated: 0, error: `read_failed: ${errBody.error?.message ?? readRes.status}` };
+  }
 
   const sheet = await readRes.json() as { values?: string[][] };
   const rows = sheet.values ?? [];

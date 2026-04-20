@@ -164,6 +164,10 @@ export default function GscClientPage() {
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const [showSheetEditor, setShowSheetEditor] = useState(false);
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editSiteUrl, setEditSiteUrl] = useState('');
+  const [savingInfo, setSavingInfo] = useState(false);
   const [sheetWriting, setSheetWriting] = useState(false);
   const [sheetResult, setSheetResult] = useState<{ updated: number; notFound: string[] } | null>(null);
   const [sheetError, setSheetError] = useState('');
@@ -262,11 +266,52 @@ export default function GscClientPage() {
 
       {/* 客戶資訊 */}
       <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold text-gray-900">{client.name}</h1>
-          <button onClick={deleteClient} className="text-xs text-red-400 hover:text-red-600">刪除</button>
-        </div>
-        <p className="text-xs text-gray-400 mt-0.5">{client.site_url}</p>
+        {editingInfo ? (
+          <div className="space-y-2 max-w-md">
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <input
+              value={editSiteUrl}
+              onChange={e => setEditSiteUrl(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  setSavingInfo(true);
+                  await fetch('/api/gsc/clients', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: client.id, name: editName, site_url: editSiteUrl, sheet_id: client.sheet_id, sheet_tab: client.sheet_tab, auto_update: client.auto_update === 1 }),
+                  });
+                  setSavingInfo(false);
+                  setEditingInfo(false);
+                  loadClient();
+                }}
+                disabled={savingInfo}
+                className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
+              >
+                {savingInfo ? '儲存中…' : '儲存'}
+              </button>
+              <button onClick={() => setEditingInfo(false)} className="px-3 py-1 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-100 transition-colors">取消</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900">{client.name}</h1>
+              <button
+                onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditingInfo(true); }}
+                className="text-xs text-gray-400 hover:text-gray-700"
+              >編輯</button>
+              <button onClick={deleteClient} className="text-xs text-red-400 hover:text-red-600">刪除</button>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">{client.site_url}</p>
+          </div>
+        )}
       </div>
 
       {/* GSC 授權狀態 */}
