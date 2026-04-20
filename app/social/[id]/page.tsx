@@ -17,6 +17,14 @@ const PLATFORM_DEFS: { key: PlatformKey; placeholder: string }[] = [
 type PlatformUrls = Record<PlatformKey, string[]>;
 const EMPTY_URLS: PlatformUrls = { FB: [''], IG: [''], YT: [''], TikTok: [''], Threads: [''] };
 
+const PLATFORM_COLORS: Record<string, string> = {
+  FB: 'bg-blue-600',
+  IG: 'bg-pink-500',
+  YT: 'bg-red-600',
+  TikTok: 'bg-gray-900',
+  Threads: 'bg-gray-700',
+};
+
 interface ClientData {
   id: string; name: string; slack_id: string | null; auto_monitor: number; created_at: string;
   platforms: { platform: string; urls: string[] }[];
@@ -63,7 +71,7 @@ function getEmbedUrl(platform: string, postUrl: string | null): string | null {
   }
   if (platform === 'TikTok') {
     const m = postUrl.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
-    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}?autoplay=0`;
   }
   if (platform === 'FB') {
     if (/facebook\.com\/(reel|watch|video)/.test(postUrl) || /facebook\.com\/.*\/videos\//.test(postUrl)) {
@@ -594,8 +602,14 @@ export default function ClientDetailPage() {
                 const tikEmbedUrl = getEmbedUrl('TikTok', post.post_url);
                 return (
                   <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col">
+                    {dateStr && (
+                      <div className="flex items-center justify-center gap-2 px-4 pt-4">
+                        <span className={`w-3 h-3 rounded-full shrink-0 ${PLATFORM_COLORS[post.platform] ?? 'bg-gray-400'}`} />
+                        <span className="text-sm font-semibold text-gray-600">{dateStr}</span>
+                      </div>
+                    )}
                     {/* 大頭貼 + 帳號 + 標題 */}
-                    <div className="flex items-start gap-2.5 px-4 pt-4 pb-3">
+                    <div className="flex items-start gap-2.5 px-4 pt-3 pb-3">
                       <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
                         {post.profile_pic_url ? (
                           <img src={post.profile_pic_url} alt="" className="w-full h-full object-cover"
@@ -635,6 +649,12 @@ export default function ClientDetailPage() {
 
               return (
                 <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50/60 overflow-hidden flex flex-col">
+                  {dateStr && (
+                    <div className="flex items-center justify-center gap-2 px-3 pt-4">
+                      <span className={`w-3 h-3 rounded-full shrink-0 ${PLATFORM_COLORS[post.platform] ?? 'bg-gray-400'}`} />
+                      <span className="text-sm font-semibold text-gray-600">{dateStr}</span>
+                    </div>
+                  )}
                   {/* 內嵌貼文 */}
                   {embedUrl && !isFbImagePost && !isThreadsWithImage ? (
                     post.platform === 'YT' ? (
@@ -739,8 +759,8 @@ export default function ClientDetailPage() {
                   {!(post.platform === 'Threads' && !!embedUrl) && (
                     <div className="px-3 pb-3 pt-1.5 space-y-1 flex-1">
                       {post.platform === 'YT' ? (
-                        post.content && (
-                          <p className="text-sm text-gray-800 line-clamp-3">{post.content}</p>
+                        post.account && (
+                          <p className="text-xs text-gray-400">{post.account}</p>
                         )
                       ) : (
                         post.content && (
@@ -753,7 +773,6 @@ export default function ClientDetailPage() {
                       {post.hashtags && (
                         <p className="text-xs text-blue-500 line-clamp-2">{post.hashtags}</p>
                       )}
-                      {dateStr && <p className="text-xs text-gray-300 pt-0.5">{dateStr}</p>}
                     </div>
                   )}
                 </div>
