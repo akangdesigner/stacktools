@@ -15,11 +15,12 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS gsc_clients (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    name      TEXT NOT NULL,
-    site_url  TEXT NOT NULL,
-    sheet_id  TEXT NOT NULL DEFAULT '',
-    sheet_tab TEXT NOT NULL DEFAULT ''
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    site_url    TEXT NOT NULL,
+    sheet_id    TEXT NOT NULL DEFAULT '',
+    sheet_tab   TEXT NOT NULL DEFAULT '',
+    auto_update INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS gsc_keywords (
@@ -31,8 +32,9 @@ db.exec(`
 `);
 
 // 遷移：舊資料庫加欄位
-try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_id  TEXT NOT NULL DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_tab TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_id    TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_tab  TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN auto_update INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // ── KV ──────────────────────────────────────────────
 export function getKv(key: string): string | null {
@@ -59,6 +61,7 @@ export interface GscClient {
   site_url: string;
   sheet_id: string;
   sheet_tab: string;
+  auto_update: number;
 }
 
 export interface GscKeyword {
@@ -74,11 +77,11 @@ export function listClients(): GscClient[] {
 
 export function createClient(name: string, site_url: string): GscClient {
   const result = db.prepare('INSERT INTO gsc_clients (name, site_url) VALUES (?, ?)').run(name, site_url);
-  return { id: result.lastInsertRowid as number, name, site_url, sheet_id: '', sheet_tab: '' };
+  return { id: result.lastInsertRowid as number, name, site_url, sheet_id: '', sheet_tab: '', auto_update: 0 };
 }
 
-export function updateClient(id: number, name: string, site_url: string, sheet_id = '', sheet_tab = ''): void {
-  db.prepare('UPDATE gsc_clients SET name = ?, site_url = ?, sheet_id = ?, sheet_tab = ? WHERE id = ?').run(name, site_url, sheet_id, sheet_tab, id);
+export function updateClient(id: number, name: string, site_url: string, sheet_id = '', sheet_tab = '', auto_update = 0): void {
+  db.prepare('UPDATE gsc_clients SET name = ?, site_url = ?, sheet_id = ?, sheet_tab = ?, auto_update = ? WHERE id = ?').run(name, site_url, sheet_id, sheet_tab, auto_update, id);
 }
 
 export function deleteClient(id: number): void {

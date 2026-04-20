@@ -15,7 +15,7 @@ function fmtDate(iso: string) {
 }
 
 interface GscKeyword { id: number; client_id: number; keyword: string; label: string }
-interface GscClient { id: number; name: string; site_url: string; sheet_id: string; sheet_tab: string; keywords: GscKeyword[] }
+interface GscClient { id: number; name: string; site_url: string; sheet_id: string; sheet_tab: string; auto_update: number; keywords: GscKeyword[] }
 interface SingleResult { found: boolean; position?: number; clicks?: number; impressions?: number; ctr?: number }
 interface KwResult { keyword: string; a: SingleResult; b: SingleResult }
 interface QueryResult {
@@ -38,6 +38,7 @@ function TrendCell({ a, b }: { a: SingleResult; b: SingleResult }) {
 function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => void }) {
   const [sheetId, setSheetId] = useState(client.sheet_id);
   const [sheetTab, setSheetTab] = useState(client.sheet_tab);
+  const [autoUpdate, setAutoUpdate] = useState(client.auto_update === 1);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -45,7 +46,7 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
     await fetch('/api/gsc/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: client.name, site_url: client.site_url, sheet_id: sheetId, sheet_tab: sheetTab }),
+      body: JSON.stringify({ id: client.id, name: client.name, site_url: client.site_url, sheet_id: sheetId, sheet_tab: sheetTab, auto_update: autoUpdate }),
     });
     setSaving(false);
     onSaved();
@@ -71,6 +72,15 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
           className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
         />
       </div>
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <div
+          onClick={() => setAutoUpdate(v => !v)}
+          className={`relative w-9 h-5 rounded-full transition-colors ${autoUpdate ? 'bg-emerald-500' : 'bg-gray-200'}`}
+        >
+          <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoUpdate ? 'translate-x-4' : ''}`} />
+        </div>
+        <span className="text-xs text-gray-600">每週一 10:00 自動更新排名</span>
+      </label>
       <button
         onClick={save}
         disabled={saving}

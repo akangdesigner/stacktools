@@ -7,6 +7,8 @@ interface GscClient {
   id: number;
   name: string;
   site_url: string;
+  sheet_id: string;
+  auto_update: number;
   keywords: { id: number; keyword: string; label: string }[];
 }
 
@@ -131,7 +133,15 @@ export default function GscListPage() {
                 </svg>
               </div>
               <p className="text-xs text-gray-400">{c.site_url}</p>
-              <p className="text-xs text-gray-500">追蹤關鍵字：{c.keywords.length} 個</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-500">追蹤關鍵字：{c.keywords.length} 個</p>
+                {c.auto_update === 1 && (
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    自動更新
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>
