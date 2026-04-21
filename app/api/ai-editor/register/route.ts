@@ -1,12 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { upsertClientByLineUid } from '@/lib/aiEditorDb';
 
-export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-secret');
-  if (!secret || secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: '未授權' }, { status: 401 });
-  }
-
+export async function POST(req: Request) {
   const body = await req.json() as {
     lineUid?: string;
     name?: string;
