@@ -412,8 +412,8 @@ export default function GscClientPage() {
         </div>
       )}
 
-      {/* 左右兩欄 */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      {/* 左右兩欄 + 便利貼 */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_280px] gap-8">
 
         {/* ── 左側：關鍵字排名 ── */}
         <div className="space-y-4">
@@ -537,8 +537,6 @@ export default function GscClientPage() {
             </div>
           )}
 
-          <ScriptTip />
-
           {articleResults && !showArticleEditor && (
             <div className="space-y-3">
               <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
@@ -552,7 +550,7 @@ export default function GscClientPage() {
                   <tbody className="divide-y divide-gray-100">
                     {articleResults.map((r, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-700 text-xs max-w-[280px] truncate" title={r.title}>{r.title}</td>
+                        <td className="px-3 py-2 text-gray-700 text-xs max-w-[200px] truncate" title={r.title}>{r.title}</td>
                         <td className="px-3 py-2 text-center font-semibold text-gray-800">{r.position !== null ? `#${r.position}` : '-'}</td>
                       </tr>
                     ))}
@@ -571,6 +569,11 @@ export default function GscClientPage() {
               )}
             </div>
           )}
+        </div>
+
+        {/* ── 第三欄：便利貼 ── */}
+        <div>
+          <ScriptTip />
         </div>
 
       </div>

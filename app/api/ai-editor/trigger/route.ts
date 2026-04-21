@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
         jobId,
         siteUrl: siteUrl.trim(),
         rssUrl,
-        socialAccount: socialAccount.trim(),
+        socialAccount: socialAccount?.trim() ?? '',
         lineUid: lineUid.trim(),
       }),
       signal: controller.signal,
