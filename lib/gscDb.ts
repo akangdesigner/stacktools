@@ -99,7 +99,7 @@ export function listClients(): GscClient[] {
 
 export function createClient(name: string, site_url: string): GscClient {
   const result = db.prepare('INSERT INTO gsc_clients (name, site_url) VALUES (?, ?)').run(name, site_url);
-  return { id: result.lastInsertRowid as number, name, site_url, sheet_id: '', sheet_tab: '', auto_update: 0 };
+  return { id: result.lastInsertRowid as number, name, site_url, sheet_id: '', sheet_tab: '', auto_update: 0, article_sheet_id: '', article_sheet_tab: '' };
 }
 
 export function updateClient(id: number, name: string, site_url: string, sheet_id = '', sheet_tab = '', auto_update = 0, article_sheet_id = '', article_sheet_tab = ''): void {
