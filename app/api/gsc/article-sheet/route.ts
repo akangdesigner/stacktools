@@ -18,7 +18,7 @@ function colLetter(index: number): string {
 export async function POST(req: NextRequest) {
   const body = await req.json() as {
     clientId?: number;
-    results?: { url: string; position: number | null }[];
+    results?: { title: string; position: number | null }[];
   };
 
   if (!body.clientId || !body.results?.length) {
@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(err), needsAuth: true }, { status: 401 });
   }
 
-  // 讀取 Sheet
   const readRes = await fetch(
     `${SHEETS_BASE}/${client.article_sheet_id}/values/${encodeURIComponent(client.article_sheet_tab)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -53,37 +52,32 @@ export async function POST(req: NextRequest) {
   const rows = sheet.values ?? [];
   if (rows.length < 1) return NextResponse.json({ error: 'Sheet 無資料' }, { status: 400 });
 
-  // 找標題列（第 1 列 index 0）中的「原文章連結」和「排名」欄
   const headerRow = rows[0];
-  const urlCol = headerRow.findIndex(h => h?.trim() === '原文章連結');
+  const titleCol = headerRow.findIndex(h => h?.trim() === '文章標題');
   const rankCol = headerRow.findIndex(h => h?.trim() === '排名');
 
-  if (urlCol === -1) return NextResponse.json({ error: '找不到「原文章連結」欄' }, { status: 400 });
+  if (titleCol === -1) return NextResponse.json({ error: '找不到「文章標題」欄' }, { status: 400 });
   if (rankCol === -1) return NextResponse.json({ error: '找不到「排名」欄' }, { status: 400 });
 
-  function normalizeUrl(url: string) {
-    return url.trim().toLowerCase().replace(/\/+$/, '');
-  }
+  const norm = (s: string) => s.trim().toLowerCase();
 
-  // 建立 URL → 列號陣列對應（同一 URL 可能多列）
-  const urlMap = new Map<string, number[]>();
+  const titleMap = new Map<string, number[]>();
   for (let i = 1; i < rows.length; i++) {
-    const url = rows[i][urlCol]?.trim();
-    if (url) {
-      const key = normalizeUrl(url);
-      const arr = urlMap.get(key) ?? [];
+    const t = rows[i][titleCol]?.trim();
+    if (t) {
+      const key = norm(t);
+      const arr = titleMap.get(key) ?? [];
       arr.push(i);
-      urlMap.set(key, arr);
+      titleMap.set(key, arr);
     }
   }
 
-  // 產生批次更新
   const updates: { range: string; value: string }[] = [];
   const notFound: string[] = [];
 
   for (const result of body.results) {
-    const rowIndices = urlMap.get(normalizeUrl(result.url));
-    if (!rowIndices?.length) { notFound.push(result.url); continue; }
+    const rowIndices = titleMap.get(norm(result.title));
+    if (!rowIndices?.length) { notFound.push(result.title); continue; }
     for (const rowIdx of rowIndices) {
       updates.push({
         range: `${client.article_sheet_tab}!${colLetter(rankCol)}${rowIdx + 1}`,

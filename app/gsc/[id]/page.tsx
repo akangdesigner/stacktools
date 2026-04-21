@@ -380,7 +380,7 @@ export default function GscClientPage() {
     try {
       const res = await fetch('/api/gsc/article-sheet', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: client.id, results: articleResults.map(r => ({ url: r.url, position: r.position })) }),
+        body: JSON.stringify({ clientId: client.id, results: articleResults.map(r => ({ title: r.title, position: r.position })) }),
       });
       const data = await res.json() as { updated?: number; notFound?: string[]; error?: string };
       if (!res.ok) setArticleSheetError(data.error ?? '寫入失敗');

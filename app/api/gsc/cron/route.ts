@@ -165,11 +165,11 @@ export async function POST(req: NextRequest) {
               headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ startDate, endDate: endDateStr, dimensionFilterGroups: [{ filters: [{ dimension: 'page', expression: p.url }] }], rowLimit: 1 }),
             });
-            if (!res.ok) return { url: p.url, position: null };
+            if (!res.ok) return { title: p.title, position: null };
             const data = await res.json() as { rows?: { position: number }[] };
             const row = (data.rows ?? [])[0];
-            return { url: p.url, position: row && row.position >= 1 ? Math.floor(row.position) : null };
-          } catch { return { url: p.url, position: null }; }
+            return { title: p.title, position: row && row.position >= 1 ? Math.floor(row.position) : null };
+          } catch { return { title: p.title, position: null }; }
         }));
 
         // 寫入 Sheet
@@ -179,14 +179,14 @@ export async function POST(req: NextRequest) {
         const rows = sheet.values ?? [];
         if (rows.length < 1) { artResults.push({ name: client.name, updated: 0, error: 'empty_sheet' }); continue; }
         const headerRow = rows[0];
-        const urlCol = headerRow.findIndex(h => h?.trim() === '原文章連結');
+        const titleCol = headerRow.findIndex(h => h?.trim() === '文章標題');
         const rankCol = headerRow.findIndex(h => h?.trim() === '排名');
-        if (urlCol === -1 || rankCol === -1) { artResults.push({ name: client.name, updated: 0, error: 'missing_col' }); continue; }
-        const normUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '');
-        const urlMap = new Map<string, number[]>();
-        for (let i = 1; i < rows.length; i++) { const u = rows[i][urlCol]?.trim(); if (u) { const k = normUrl(u); const a = urlMap.get(k) ?? []; a.push(i); urlMap.set(k, a); } }
+        if (titleCol === -1 || rankCol === -1) { artResults.push({ name: client.name, updated: 0, error: 'missing_col' }); continue; }
+        const norm = (s: string) => s.trim().toLowerCase();
+        const titleMap = new Map<string, number[]>();
+        for (let i = 1; i < rows.length; i++) { const t = rows[i][titleCol]?.trim(); if (t) { const k = norm(t); const a = titleMap.get(k) ?? []; a.push(i); titleMap.set(k, a); } }
         const updates = positions.flatMap(p => {
-          const rowIndices = urlMap.get(normUrl(p.url));
+          const rowIndices = titleMap.get(norm(p.title));
           if (!rowIndices?.length) return [];
           return rowIndices.map(ri => ({ range: `${client.article_sheet_tab}!${colLetter(rankCol)}${ri + 1}`, value: p.position !== null ? String(p.position) : '-' }));
         });
