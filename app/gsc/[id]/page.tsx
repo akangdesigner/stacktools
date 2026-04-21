@@ -54,7 +54,6 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
   const [sheetTab, setSheetTab] = useState(client.sheet_tab);
   const [resolving, setResolving] = useState(false);
   const [resolveError, setResolveError] = useState('');
-  const [autoUpdate, setAutoUpdate] = useState(client.auto_update === 1);
   const [saving, setSaving] = useState(false);
 
   async function handleUrlBlur() {
@@ -75,7 +74,7 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
     setSaving(true);
     await fetch('/api/gsc/clients', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: client.name, site_url: client.site_url, sheet_id: sheetId, sheet_tab: sheetTab, auto_update: autoUpdate, article_sheet_id: client.article_sheet_id, article_sheet_tab: client.article_sheet_tab }),
+      body: JSON.stringify({ id: client.id, name: client.name, site_url: client.site_url, sheet_id: sheetId, sheet_tab: sheetTab, auto_update: client.auto_update === 1, article_sheet_id: client.article_sheet_id, article_sheet_tab: client.article_sheet_tab }),
     });
     setSaving(false); onSaved();
   }
@@ -96,12 +95,6 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
           <p className="text-xs text-gray-500">分頁：<span className="font-medium text-gray-700">{sheetTab || '-'}</span></p>
         </div>
       )}
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <div onClick={() => setAutoUpdate(v => !v)} className={`relative w-9 h-5 rounded-full transition-colors ${autoUpdate ? 'bg-emerald-500' : 'bg-gray-200'}`}>
-          <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoUpdate ? 'translate-x-4' : ''}`} />
-        </div>
-        <span className="text-xs text-gray-600">每週一 10:00 自動更新排名</span>
-      </label>
       <button onClick={save} disabled={saving || !sheetId || !sheetTab}
         className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
         {saving ? '儲存中…' : '儲存設定'}
@@ -234,28 +227,47 @@ function ArticleEditor({ client, onSaved }: { client: GscClient; onSaved: () => 
   );
 }
 
+const SCRIPT_ID = '1Asmg4idMPyeie79dNOIvhTvduUh87T3ZY6yocxzA8xF7A155j5zuyoI6';
+const SCRIPT_FN = `function GETLINK(cell) {\n  return seo.GETURL_LIB(cell);\n}`;
+
+function CopyBtn({ text, label }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <button onClick={copy} title="複製" className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-200 hover:bg-amber-300 text-amber-800 transition-colors shrink-0">
+      {copied
+        ? <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+        : <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>}
+      {label && <span>{copied ? '已複製' : label}</span>}
+    </button>
+  );
+}
+
 function ScriptTip() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs space-y-2">
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs space-y-2 w-56">
       <button onClick={() => setOpen(v => !v)} className="flex items-center gap-2 w-full text-left font-medium text-amber-800">
         <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707M6.343 17.657l-.707.707M15.536 8.464A5 5 0 1 1 8.464 15.536M12 17v-2a3 3 0 0 0-3-3H7"/></svg>
-        如何讓 Sheet 自動抓超連結網址？
+        如何自動抓超連結網址？
         <svg className={`w-3 h-3 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
       </button>
       {open && (
         <div className="space-y-3 text-amber-900 leading-relaxed pt-1 border-t border-amber-200">
-          <p>若「原文章連結」欄是超連結文字，需先用腳本取出純網址，工具才能正確比對。</p>
+          <p>若「原文章連結」欄是超連結文字，需先用腳本取出純網址。</p>
           <div className="space-y-1">
             <p className="font-semibold">第一步：在新表格引用程式庫</p>
-            <p>擴充功能 → Apps Script → 資料庫 + → 貼入腳本 ID（<code className="bg-amber-100 px-1 rounded select-all">1Asmg4idMPyeie79dNOIvhTvduUh87T3ZY6yocxzA8xF7A155j5zuyoI6</code>），ID 填入自訂名稱，接著新增下方函式後按上方儲存圖示保存：</p>
-            <pre className="bg-amber-100 rounded p-2 font-mono">{`function GETLINK(cell) {
-  return SEO.GETURL_LIB(cell);
-}`}</pre>
+            <p>擴充功能 → Apps Script → 資料庫 + → 貼入腳本 ID，ID 填入 <code className="bg-amber-100 px-1 rounded">seo</code>，接著新增下方函式後按上方儲存圖示保存：</p>
+            <CopyBtn text={SCRIPT_ID} label="複製腳本 ID" />
+            <CopyBtn text={SCRIPT_FN} label="複製函式" />
           </div>
           <div className="space-y-1">
             <p className="font-semibold">第二步：在表格輸入公式</p>
-            <pre className="bg-amber-100 rounded p-2 font-mono">{`=GETLINK("J2")`}</pre>
+            <CopyBtn text={`=MAP(G2:G, I2:I, LAMBDA(check, link_cell, IF(AND(check=TRUE, link_cell<>""), GETLINK(CELL("address", link_cell)), "")))`} label="複製公式" />
             <p>把回傳的純網址填入「原文章連結」欄，本工具即可正確查詢排名。</p>
           </div>
         </div>
@@ -407,13 +419,23 @@ export default function GscClientPage() {
             <h1 className="text-xl font-bold text-gray-900">{client.name}</h1>
             <button onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditingInfo(true); }} className="text-xs text-gray-400 hover:text-gray-700">編輯</button>
             <button onClick={deleteClient} className="text-xs text-red-400 hover:text-red-600">刪除</button>
+            <button onClick={async () => {
+              const next = client.auto_update === 1 ? 0 : 1;
+              await fetch('/api/gsc/clients', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: client.id, name: client.name, site_url: client.site_url, sheet_id: client.sheet_id, sheet_tab: client.sheet_tab, auto_update: next === 1, article_sheet_id: client.article_sheet_id, article_sheet_tab: client.article_sheet_tab }) });
+              loadClient();
+            }} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors">
+              <div className={`relative w-7 h-4 rounded-full transition-colors ${client.auto_update === 1 ? 'bg-emerald-500' : 'bg-gray-200'}`}>
+                <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${client.auto_update === 1 ? 'translate-x-3' : ''}`} />
+              </div>
+              <span>每週一 10:00 自動更新</span>
+            </button>
           </div>
           <p className="text-xs text-gray-400 mt-0.5">{client.site_url}</p>
         </div>
       )}
 
       {/* 左右兩欄 + 便利貼 */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_280px] gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] gap-8">
 
         {/* ── 左側：關鍵字排名 ── */}
         <div className="space-y-4">
