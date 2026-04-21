@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
             if (!res.ok) return { url: p.url, position: null };
             const data = await res.json() as { rows?: { position: number }[] };
             const row = (data.rows ?? [])[0];
-            return { url: p.url, position: row ? Math.floor(row.position) : null };
+            return { url: p.url, position: row && row.position >= 1 ? Math.floor(row.position) : null };
           } catch { return { url: p.url, position: null }; }
         }));
 

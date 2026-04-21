@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
         if (!res.ok) return { title, url, position: null };
         const data = await res.json() as { rows?: { position: number }[] };
         const row = (data.rows ?? [])[0];
-        const position = row ? Math.floor(row.position) : null;
+        const position = row && row.position >= 1 ? Math.floor(row.position) : null;
         return { title, url, position };
       } catch {
         return { title, url, position: null };
