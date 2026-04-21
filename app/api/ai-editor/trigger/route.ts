@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         siteUrl: siteUrl.trim(),
         rssUrl,
         socialAccount: socialAccount?.trim() ?? '',
-        lineUid: lineUid.trim(),
+        lineUid: lineUid?.trim() ?? '',
       }),
       signal: controller.signal,
     });
