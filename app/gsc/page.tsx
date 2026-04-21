@@ -8,8 +8,12 @@ interface GscClient {
   name: string;
   site_url: string;
   sheet_id: string;
+  sheet_tab: string;
+  article_sheet_id: string;
+  article_sheet_tab: string;
   auto_update: number;
   keywords: { id: number; keyword: string; label: string }[];
+  article_pages: { id: number; title: string; url: string }[];
 }
 
 export default function GscListPage() {
@@ -155,14 +159,23 @@ export default function GscListPage() {
               className="text-left p-5 rounded-xl border-2 border-gray-200 bg-white hover:border-gray-400 transition-all space-y-2"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-gray-900 leading-snug">{c.name}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-gray-900 leading-snug">{c.name}</span>
+                  {!c.sheet_id && <span className="text-xs text-red-500 font-medium">未設定關鍵字 Sheet</span>}
+                  {!c.article_sheet_id && <span className="text-xs text-red-500 font-medium">未設定文章 Sheet</span>}
+                </div>
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0 text-gray-300 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </div>
               <p className="text-xs text-gray-400">{c.site_url}</p>
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-gray-500">追蹤關鍵字：{c.keywords.length} 個</p>
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">
+                  {c.keywords.length === 0 ? '目前未追蹤關鍵字' : `追蹤關鍵字：${c.keywords.length} 個`}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {c.article_pages.length === 0 ? '目前未追蹤文章' : `追蹤文章：${c.article_pages.length} 篇`}
+                </p>
                 {c.auto_update === 1 && (
                   <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
