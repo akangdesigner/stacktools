@@ -1,0 +1,252 @@
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+
+const DB_DIR = path.join(process.cwd(), 'data');
+const DB_PATH = path.join(DB_DIR, 'social.db');
+
+let db: Database.Database | null = null;
+
+export function getSocialDb(): Database.Database {
+  if (db) return db;
+
+  if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+
+  db = new Database(DB_PATH);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS social_clients (
+      id           TEXT PRIMARY KEY,
+      name         TEXT NOT NULL,
+      slack_id     TEXT,
+      auto_monitor INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS social_client_urls (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id  TEXT NOT NULL REFERENCES social_clients(id) ON DELETE CASCADE,
+      platform   TEXT NOT NULL,
+      url        TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS social_jobs (
+      id          TEXT PRIMARY KEY,
+      client_id   TEXT NOT NULL REFERENCES social_clients(id) ON DELETE CASCADE,
+      status      TEXT NOT NULL DEFAULT 'processing',
+      date_from   TEXT,
+      date_to     TEXT,
+      message     TEXT,
+      created_at  TEXT DEFAULT (datetime('now','localtime')),
+      updated_at  TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS social_posts (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id      TEXT NOT NULL REFERENCES social_jobs(id) ON DELETE CASCADE,
+      platform    TEXT NOT NULL,
+      account     TEXT,
+      post_url    TEXT,
+      content     TEXT,
+      likes       INTEGER,
+      comments    INTEGER,
+      views       INTEGER,
+      thumbnail   TEXT,
+      post_date   TEXT,
+      hashtags    TEXT,
+      video_url   TEXT,
+      is_video    INTEGER,
+      created_at  TEXT DEFAULT (datetime('now','localtime'))
+    );
+  `);
+
+  // migration：social_clients 補欄位
+  const clientCols = (db.prepare("PRAGMA table_info(social_clients)").all() as { name: string }[]).map((c) => c.name);
+  if (!clientCols.includes('auto_monitor')) {
+    db.exec('ALTER TABLE social_clients ADD COLUMN auto_monitor INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // migration：social_posts 補欄位
+  const cols = (db.prepare("PRAGMA table_info(social_posts)").all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes('hashtags')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN hashtags TEXT');
+  }
+  if (!cols.includes('video_url')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN video_url TEXT');
+  }
+  if (!cols.includes('profile_pic_url')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN profile_pic_url TEXT');
+  }
+  if (!cols.includes('is_video')) {
+    db.exec('ALTER TABLE social_posts ADD COLUMN is_video INTEGER');
+  }
+
+  return db;
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export interface SocialClient {
+  id: string;
+  name: string;
+  slack_id: string | null;
+  auto_monitor: number;
+  created_at: string;
+}
+
+export interface PlatformGroup {
+  platform: string;
+  urls: string[];
+}
+
+// ── Clients ────────────────────────────────────────────────────────────────
+
+export function listClients(): (SocialClient & { url_count: number })[] {
+  const db = getSocialDb();
+  return db.prepare(`
+    SELECT c.*, COUNT(u.id) AS url_count
+    FROM social_clients c
+    LEFT JOIN social_client_urls u ON u.client_id = c.id
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
+  `).all() as (SocialClient & { url_count: number })[];
+}
+
+export function getClient(id: string): SocialClient | undefined {
+  return getSocialDb().prepare('SELECT * FROM social_clients WHERE id = ?').get(id) as SocialClient | undefined;
+}
+
+export function createClient({ name, slackId }: { name: string; slackId?: string }): SocialClient {
+  const id = crypto.randomUUID();
+  getSocialDb().prepare('INSERT INTO social_clients (id, name, slack_id) VALUES (?, ?, ?)').run(id, name, slackId ?? null);
+  return getClient(id)!;
+}
+
+export function updateClient(id: string, { name, slackId, autoMonitor }: { name?: string; slackId?: string; autoMonitor?: boolean }) {
+  const db = getSocialDb();
+  if (name !== undefined) db.prepare('UPDATE social_clients SET name = ? WHERE id = ?').run(name, id);
+  if (slackId !== undefined) db.prepare('UPDATE social_clients SET slack_id = ? WHERE id = ?').run(slackId || null, id);
+  if (autoMonitor !== undefined) db.prepare('UPDATE social_clients SET auto_monitor = ? WHERE id = ?').run(autoMonitor ? 1 : 0, id);
+}
+
+export function deleteClient(id: string) {
+  getSocialDb().prepare('DELETE FROM social_clients WHERE id = ?').run(id);
+}
+
+// ── URLs ───────────────────────────────────────────────────────────────────
+
+export function getClientUrls(clientId: string): PlatformGroup[] {
+  const rows = getSocialDb().prepare(
+    'SELECT platform, url FROM social_client_urls WHERE client_id = ? ORDER BY platform, id'
+  ).all(clientId) as { platform: string; url: string }[];
+
+  const map = new Map<string, string[]>();
+  for (const { platform, url } of rows) {
+    if (!map.has(platform)) map.set(platform, []);
+    map.get(platform)!.push(url);
+  }
+  return Array.from(map.entries()).map(([platform, urls]) => ({ platform, urls }));
+}
+
+export function exportAllClients(): { name: string; slackId: string | null; platforms: PlatformGroup[] }[] {
+  const clients = listClients();
+  return clients.map((c) => ({
+    name: c.name,
+    slackId: c.slack_id,
+    platforms: getClientUrls(c.id),
+  }));
+}
+
+// ── Jobs ───────────────────────────────────────────────────────────────────
+
+export interface SocialJob {
+  id: string;
+  client_id: string;
+  status: 'processing' | 'completed' | 'failed';
+  date_from: string | null;
+  date_to: string | null;
+  message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SocialPost {
+  id: number;
+  job_id: string;
+  platform: string;
+  account: string | null;
+  post_url: string | null;
+  content: string | null;
+  likes: number | null;
+  comments: number | null;
+  views: number | null;
+  thumbnail: string | null;
+  profile_pic_url: string | null;
+  post_date: string | null;
+  hashtags: string | null;
+  video_url: string | null;
+  is_video: number | null;
+  created_at: string;
+}
+
+export function createJob(clientId: string, dateFrom?: string, dateTo?: string): SocialJob {
+  const id = crypto.randomUUID();
+  getSocialDb().prepare(
+    'INSERT INTO social_jobs (id, client_id, date_from, date_to) VALUES (?, ?, ?, ?)'
+  ).run(id, clientId, dateFrom ?? null, dateTo ?? null);
+  return getSocialDb().prepare('SELECT * FROM social_jobs WHERE id = ?').get(id) as SocialJob;
+}
+
+export function updateJob(jobId: string, status: SocialJob['status'], message?: string) {
+  getSocialDb().prepare(
+    "UPDATE social_jobs SET status = ?, message = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+  ).run(status, message ?? null, jobId);
+}
+
+export function getJob(jobId: string): SocialJob | undefined {
+  return getSocialDb().prepare('SELECT * FROM social_jobs WHERE id = ?').get(jobId) as SocialJob | undefined;
+}
+
+export function listJobsByClient(clientId: string): SocialJob[] {
+  return getSocialDb().prepare(
+    'SELECT * FROM social_jobs WHERE client_id = ? ORDER BY created_at DESC'
+  ).all(clientId) as SocialJob[];
+}
+
+export function savePosts(jobId: string, posts: Partial<SocialPost>[]) {
+  const ins = getSocialDb().prepare(
+    'INSERT INTO social_posts (job_id, platform, account, post_url, content, likes, comments, views, thumbnail, profile_pic_url, post_date, hashtags, video_url, is_video) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  getSocialDb().transaction(() => {
+    for (const p of posts) {
+      ins.run(jobId, p.platform ?? '', p.account ?? null, p.post_url ?? null, p.content ?? null,
+        p.likes ?? null, p.comments ?? null, p.views ?? null, p.thumbnail ?? null, p.profile_pic_url ?? null,
+        p.post_date ?? null, p.hashtags ?? null, p.video_url ?? null, p.is_video ?? null);
+    }
+  })();
+}
+
+export function getPostsByJob(jobId: string): SocialPost[] {
+  return getSocialDb().prepare(
+    'SELECT * FROM social_posts WHERE job_id = ? ORDER BY id'
+  ).all(jobId) as SocialPost[];
+}
+
+// ── URLs ───────────────────────────────────────────────────────────────────
+
+export function setClientUrls(clientId: string, platforms: { platform: string; urls: string[] }[]) {
+  const db = getSocialDb();
+  const del = db.prepare('DELETE FROM social_client_urls WHERE client_id = ?');
+  const ins = db.prepare('INSERT INTO social_client_urls (client_id, platform, url) VALUES (?, ?, ?)');
+
+  db.transaction(() => {
+    del.run(clientId);
+    for (const { platform, urls } of platforms) {
+      for (const url of urls) {
+        if (url.trim()) ins.run(clientId, platform, url.trim());
+      }
+    }
+  })();
+}
