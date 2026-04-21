@@ -5,7 +5,6 @@ interface TriggerBody {
   siteUrl?: string;
   socialAccount?: string;
   lineUid?: string;
-  articleUrl?: string;
 }
 
 function toRssUrl(inputUrl: string): string {
@@ -55,9 +54,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '無效的請求格式' }, { status: 400 });
   }
 
-  const { siteUrl, socialAccount, lineUid, articleUrl } = body;
-  if (!siteUrl?.trim() || !socialAccount?.trim() || !lineUid?.trim()) {
-    return NextResponse.json({ error: '請完整填寫官網網址、社群帳號與 LINE UID' }, { status: 400 });
+  const { siteUrl, socialAccount, lineUid } = body;
+  if (!siteUrl?.trim() || !lineUid?.trim()) {
+    return NextResponse.json({ error: '請完整填寫文章列表網址與 LINE UID' }, { status: 400 });
   }
 
   const rssUrl = toRssUrl(siteUrl);
@@ -81,7 +80,6 @@ export async function POST(req: NextRequest) {
         rssUrl,
         socialAccount: socialAccount.trim(),
         lineUid: lineUid.trim(),
-        articleUrl: articleUrl?.trim() || null,
       }),
       signal: controller.signal,
     });

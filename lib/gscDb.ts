@@ -31,10 +31,22 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gsc_article_pages (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id INTEGER NOT NULL REFERENCES gsc_clients(id) ON DELETE CASCADE,
+    type      TEXT NOT NULL DEFAULT '',
+    title     TEXT NOT NULL DEFAULT '',
+    url       TEXT NOT NULL
+  );
+`);
+
 // 遷移：舊資料庫加欄位
-try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_id    TEXT NOT NULL DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_tab  TEXT NOT NULL DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN auto_update INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_id             TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN sheet_tab            TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN auto_update          INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN article_sheet_id    TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN article_sheet_tab   TEXT NOT NULL DEFAULT ''`); } catch {}
 
 // ── KV ──────────────────────────────────────────────
 export function getKv(key: string): string | null {
@@ -62,6 +74,16 @@ export interface GscClient {
   sheet_id: string;
   sheet_tab: string;
   auto_update: number;
+  article_sheet_id: string;
+  article_sheet_tab: string;
+}
+
+export interface GscArticlePage {
+  id: number;
+  client_id: number;
+  type: string;
+  title: string;
+  url: string;
 }
 
 export interface GscKeyword {
@@ -80,8 +102,8 @@ export function createClient(name: string, site_url: string): GscClient {
   return { id: result.lastInsertRowid as number, name, site_url, sheet_id: '', sheet_tab: '', auto_update: 0 };
 }
 
-export function updateClient(id: number, name: string, site_url: string, sheet_id = '', sheet_tab = '', auto_update = 0): void {
-  db.prepare('UPDATE gsc_clients SET name = ?, site_url = ?, sheet_id = ?, sheet_tab = ?, auto_update = ? WHERE id = ?').run(name, site_url, sheet_id, sheet_tab, auto_update, id);
+export function updateClient(id: number, name: string, site_url: string, sheet_id = '', sheet_tab = '', auto_update = 0, article_sheet_id = '', article_sheet_tab = ''): void {
+  db.prepare('UPDATE gsc_clients SET name = ?, site_url = ?, sheet_id = ?, sheet_tab = ?, auto_update = ?, article_sheet_id = ?, article_sheet_tab = ? WHERE id = ?').run(name, site_url, sheet_id, sheet_tab, auto_update, article_sheet_id, article_sheet_tab, id);
 }
 
 export function deleteClient(id: number): void {
@@ -100,6 +122,20 @@ export function addKeyword(client_id: number, keyword: string, label: string): G
 
 export function deleteKeyword(id: number): void {
   db.prepare('DELETE FROM gsc_keywords WHERE id = ?').run(id);
+}
+
+// ── Article Pages ────────────────────────────────────
+export function listArticlePages(client_id: number): GscArticlePage[] {
+  return db.prepare('SELECT * FROM gsc_article_pages WHERE client_id = ? ORDER BY id').all(client_id) as GscArticlePage[];
+}
+
+export function replaceArticlePages(client_id: number, pages: { type: string; title: string; url: string }[]): void {
+  const del = db.prepare('DELETE FROM gsc_article_pages WHERE client_id = ?');
+  const ins = db.prepare('INSERT INTO gsc_article_pages (client_id, type, title, url) VALUES (?, ?, ?, ?)');
+  db.transaction(() => {
+    del.run(client_id);
+    for (const p of pages) ins.run(client_id, p.type, p.title, p.url);
+  })();
 }
 
 export function replaceKeywords(client_id: number, keywords: { keyword: string; label: string }[]): void {

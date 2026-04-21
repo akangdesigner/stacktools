@@ -1,0 +1,52 @@
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const db = new Database(path.join(DATA_DIR, 'gsc.db'));
+db.pragma('journal_mode = WAL');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS ai_editor_clients (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    site_url       TEXT NOT NULL,
+    social_account TEXT NOT NULL DEFAULT '',
+    line_uid       TEXT NOT NULL DEFAULT ''
+  );
+`);
+
+export interface AiEditorClient {
+  id: number;
+  name: string;
+  site_url: string;
+  social_account: string;
+  line_uid: string;
+}
+
+export function listAiEditorClients(): AiEditorClient[] {
+  return db.prepare('SELECT * FROM ai_editor_clients ORDER BY id').all() as AiEditorClient[];
+}
+
+export function getAiEditorClient(id: number): AiEditorClient | null {
+  return db.prepare('SELECT * FROM ai_editor_clients WHERE id = ?').get(id) as AiEditorClient | null;
+}
+
+export function createAiEditorClient(data: Omit<AiEditorClient, 'id'>): AiEditorClient {
+  const result = db.prepare(
+    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid) VALUES (?, ?, ?, ?)'
+  ).run(data.name, data.site_url, data.social_account, data.line_uid);
+  return getAiEditorClient(result.lastInsertRowid as number)!;
+}
+
+export function updateAiEditorClient(id: number, data: Partial<Omit<AiEditorClient, 'id'>>): void {
+  const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
+  const values = Object.values(data);
+  db.prepare(`UPDATE ai_editor_clients SET ${fields} WHERE id = ?`).run(...values, id);
+}
+
+export function deleteAiEditorClient(id: number): void {
+  db.prepare('DELETE FROM ai_editor_clients WHERE id = ?').run(id);
+}

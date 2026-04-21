@@ -21,12 +21,21 @@ export default function GscListPage() {
   const [siteUrl, setSiteUrl] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [authorized, setAuthorized] = useState(false);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     fetch('/api/gsc/clients')
       .then(r => r.json())
       .then((data: GscClient[]) => { setClients(data); setLoading(false); })
       .catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/gsc/status').then(r => r.json())
+      .then((d: { authorized: boolean; email?: string }) => { setAuthorized(d.authorized); setAuthEmail(d.email ?? null); })
+      .finally(() => setAuthChecked(true));
   }, []);
 
   async function handleCreate(e: React.FormEvent) {
@@ -55,6 +64,7 @@ export default function GscListPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">GSC 關鍵字排名</h1>
           <p className="mt-1 text-sm text-gray-500">管理各客戶的追蹤關鍵字，查詢本週與上週的排名變化。</p>
+          <p className="mt-0.5 text-xs text-gray-400">每週一 09:00 自動更新數據</p>
         </div>
         <button
           onClick={() => { setShowForm(v => !v); setError(''); }}
@@ -66,6 +76,24 @@ export default function GscListPage() {
           新增客戶
         </button>
       </div>
+
+      {!authChecked && <p className="text-sm text-gray-400">檢查授權狀態…</p>}
+      {authChecked && !authorized && (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3 max-w-md">
+          <p className="text-sm text-gray-700 font-medium">尚未連結 Google 帳號</p>
+          <a href="/api/gsc/auth" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 1 1 0-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0 0 12.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-.013z"/></svg>
+            連結 Google 帳號
+          </a>
+        </div>
+      )}
+      {authChecked && authorized && (
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 flex items-center gap-2 max-w-md">
+          <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+          <p className="text-sm text-emerald-700">Google 帳號已連結{authEmail ? `：${authEmail}` : ''}</p>
+          <a href="/api/gsc/auth" className="ml-auto text-xs text-emerald-600 hover:underline">重新授權</a>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleCreate} className="rounded-xl border border-gray-200 bg-gray-50 p-5 space-y-4 max-w-md">
