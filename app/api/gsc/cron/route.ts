@@ -95,11 +95,11 @@ async function writeSheet(accessToken: string, client: { sheet_id: string; sheet
     if (!match) continue;
     const { rowIdx, group } = match;
     const sheetRow = rowIdx + 1;
-    if (group.currentCol !== null && result.b.found) {
-      updates.push({ range: `${client.sheet_tab}!${colLetter(group.currentCol)}${sheetRow}`, value: String(Math.floor(result.b.position ?? 0)) });
+    if (group.currentCol !== null) {
+      updates.push({ range: `${client.sheet_tab}!${colLetter(group.currentCol)}${sheetRow}`, value: result.b.found ? String(Math.floor(result.b.position ?? 0)) : '-' });
     }
-    if (group.lastCol !== null && result.a.found) {
-      updates.push({ range: `${client.sheet_tab}!${colLetter(group.lastCol)}${sheetRow}`, value: String(Math.floor(result.a.position ?? 0)) });
+    if (group.lastCol !== null) {
+      updates.push({ range: `${client.sheet_tab}!${colLetter(group.lastCol)}${sheetRow}`, value: result.a.found ? String(Math.floor(result.a.position ?? 0)) : '-' });
     }
   }
 
