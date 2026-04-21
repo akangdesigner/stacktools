@@ -68,7 +68,7 @@ export default function GscListPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">GSC 關鍵字排名</h1>
           <p className="mt-1 text-sm text-gray-500">管理各客戶的追蹤關鍵字，查詢本週與上週的排名變化。</p>
-          <p className="mt-0.5 text-xs text-gray-400">每週一 09:00 自動更新數據</p>
+          <p className="mt-0.5 text-xs text-gray-400">每週一 10:00 自動更新數據</p>
         </div>
         <button
           onClick={() => { setShowForm(v => !v); setError(''); }}

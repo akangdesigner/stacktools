@@ -40,11 +40,11 @@ const internalTools = [
   {
     href: "/gsc",
     title: "GSC 排名查詢",
-    description: "輸入頁面 URL 與關鍵字，查詢該頁面在 Google 搜尋結果中的平均排名、點擊數與曝光數。",
+    description: "管理各客戶的追蹤關鍵字與文章，查詢本週與上週的排名變化，自動寫入 Google Sheets。",
     icon: "🔍",
     color: "bg-teal-50 border-teal-200 hover:border-teal-400",
     iconBg: "bg-teal-100",
-    inDev: true,
+    inDev: false,
   },
   {
     href: "/social",
