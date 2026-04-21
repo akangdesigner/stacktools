@@ -61,11 +61,15 @@ export async function POST(req: NextRequest) {
   if (urlCol === -1) return NextResponse.json({ error: '找不到「原文章連結」欄' }, { status: 400 });
   if (rankCol === -1) return NextResponse.json({ error: '找不到「排名」欄' }, { status: 400 });
 
+  function normalizeUrl(url: string) {
+    return url.trim().toLowerCase().replace(/\/+$/, '');
+  }
+
   // 建立 URL → 列號對應
   const urlMap = new Map<string, number>();
   for (let i = 1; i < rows.length; i++) {
     const url = rows[i][urlCol]?.trim();
-    if (url) urlMap.set(url, i);
+    if (url) urlMap.set(normalizeUrl(url), i);
   }
 
   // 產生批次更新
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
   const notFound: string[] = [];
 
   for (const result of body.results) {
-    const rowIdx = urlMap.get(result.url.trim());
+    const rowIdx = urlMap.get(normalizeUrl(result.url));
     if (rowIdx === undefined) { notFound.push(result.url); continue; }
     const sheetRow = rowIdx + 1;
     updates.push({

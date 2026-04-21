@@ -96,10 +96,10 @@ async function writeSheet(accessToken: string, client: { sheet_id: string; sheet
     const { rowIdx, group } = match;
     const sheetRow = rowIdx + 1;
     if (group.currentCol !== null) {
-      updates.push({ range: `${client.sheet_tab}!${colLetter(group.currentCol)}${sheetRow}`, value: result.b.found ? String(Math.floor(result.b.position ?? 0)) : '-' });
+      updates.push({ range: `${client.sheet_tab}!${colLetter(group.currentCol)}${sheetRow}`, value: result.b.found && result.b.position != null ? String(Math.floor(result.b.position)) : '-' });
     }
     if (group.lastCol !== null) {
-      updates.push({ range: `${client.sheet_tab}!${colLetter(group.lastCol)}${sheetRow}`, value: result.a.found ? String(Math.floor(result.a.position ?? 0)) : '-' });
+      updates.push({ range: `${client.sheet_tab}!${colLetter(group.lastCol)}${sheetRow}`, value: result.a.found && result.a.position != null ? String(Math.floor(result.a.position)) : '-' });
     }
   }
 
@@ -182,10 +182,11 @@ export async function POST(req: NextRequest) {
         const urlCol = headerRow.findIndex(h => h?.trim() === '原文章連結');
         const rankCol = headerRow.findIndex(h => h?.trim() === '排名');
         if (urlCol === -1 || rankCol === -1) { artResults.push({ name: client.name, updated: 0, error: 'missing_col' }); continue; }
+        const normUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '');
         const urlMap = new Map<string, number>();
-        for (let i = 1; i < rows.length; i++) { const u = rows[i][urlCol]?.trim(); if (u) urlMap.set(u, i); }
+        for (let i = 1; i < rows.length; i++) { const u = rows[i][urlCol]?.trim(); if (u) urlMap.set(normUrl(u), i); }
         const updates = positions.flatMap(p => {
-          const rowIdx = urlMap.get(p.url.trim());
+          const rowIdx = urlMap.get(normUrl(p.url));
           if (rowIdx === undefined) return [];
           return [{ range: `${client.article_sheet_tab}!${colLetter(rankCol)}${rowIdx + 1}`, value: p.position !== null ? String(p.position) : '-' }];
         });
