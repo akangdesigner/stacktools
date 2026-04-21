@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { upsertClientByLineUid } from '@/lib/aiEditorDb';
 
-export async function GET() {
-  return NextResponse.json({ ok: true, message: 'register endpoint is alive' });
-}
-
 export async function POST(req: Request) {
   const body = await req.json() as {
     lineUid?: string;

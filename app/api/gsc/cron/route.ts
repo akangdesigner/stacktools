@@ -183,12 +183,12 @@ export async function POST(req: NextRequest) {
         const rankCol = headerRow.findIndex(h => h?.trim() === '排名');
         if (urlCol === -1 || rankCol === -1) { artResults.push({ name: client.name, updated: 0, error: 'missing_col' }); continue; }
         const normUrl = (u: string) => u.trim().toLowerCase().replace(/\/+$/, '');
-        const urlMap = new Map<string, number>();
-        for (let i = 1; i < rows.length; i++) { const u = rows[i][urlCol]?.trim(); if (u) urlMap.set(normUrl(u), i); }
+        const urlMap = new Map<string, number[]>();
+        for (let i = 1; i < rows.length; i++) { const u = rows[i][urlCol]?.trim(); if (u) { const k = normUrl(u); const a = urlMap.get(k) ?? []; a.push(i); urlMap.set(k, a); } }
         const updates = positions.flatMap(p => {
-          const rowIdx = urlMap.get(normUrl(p.url));
-          if (rowIdx === undefined) return [];
-          return [{ range: `${client.article_sheet_tab}!${colLetter(rankCol)}${rowIdx + 1}`, value: p.position !== null ? String(p.position) : '-' }];
+          const rowIndices = urlMap.get(normUrl(p.url));
+          if (!rowIndices?.length) return [];
+          return rowIndices.map(ri => ({ range: `${client.article_sheet_tab}!${colLetter(rankCol)}${ri + 1}`, value: p.position !== null ? String(p.position) : '-' }));
         });
         if (!updates.length) { artResults.push({ name: client.name, updated: 0 }); continue; }
         const batchRes = await fetch(`${SHEETS_BASE}/${client.article_sheet_id}/values:batchUpdate`, {

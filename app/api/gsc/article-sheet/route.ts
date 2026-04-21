@@ -65,11 +65,16 @@ export async function POST(req: NextRequest) {
     return url.trim().toLowerCase().replace(/\/+$/, '');
   }
 
-  // 建立 URL → 列號對應
-  const urlMap = new Map<string, number>();
+  // 建立 URL → 列號陣列對應（同一 URL 可能多列）
+  const urlMap = new Map<string, number[]>();
   for (let i = 1; i < rows.length; i++) {
     const url = rows[i][urlCol]?.trim();
-    if (url) urlMap.set(normalizeUrl(url), i);
+    if (url) {
+      const key = normalizeUrl(url);
+      const arr = urlMap.get(key) ?? [];
+      arr.push(i);
+      urlMap.set(key, arr);
+    }
   }
 
   // 產生批次更新
@@ -77,13 +82,14 @@ export async function POST(req: NextRequest) {
   const notFound: string[] = [];
 
   for (const result of body.results) {
-    const rowIdx = urlMap.get(normalizeUrl(result.url));
-    if (rowIdx === undefined) { notFound.push(result.url); continue; }
-    const sheetRow = rowIdx + 1;
-    updates.push({
-      range: `${client.article_sheet_tab}!${colLetter(rankCol)}${sheetRow}`,
-      value: result.position !== null ? String(result.position) : '-',
-    });
+    const rowIndices = urlMap.get(normalizeUrl(result.url));
+    if (!rowIndices?.length) { notFound.push(result.url); continue; }
+    for (const rowIdx of rowIndices) {
+      updates.push({
+        range: `${client.article_sheet_tab}!${colLetter(rankCol)}${rowIdx + 1}`,
+        value: result.position !== null ? String(result.position) : '-',
+      });
+    }
   }
 
   if (!updates.length) return NextResponse.json({ updated: 0, notFound });
