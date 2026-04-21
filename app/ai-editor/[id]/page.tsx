@@ -160,12 +160,12 @@ export default function AiEditorClientPage() {
           <p className="text-xs text-gray-400">偵測文章列表頁最新文章，送至 n8n 產生 AI 圖文草稿（RSS: 列表網址 + /feed/）。</p>
           <button
             onClick={handleTrigger}
-            disabled={triggering || !!activeJobId || !client.line_uid}
+            disabled={triggering || !!activeJobId}
             className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {triggering ? '送出中…' : activeJobId ? '處理中…' : '立即產生草稿'}
           </button>
-          {!client.line_uid && <p className="text-xs text-amber-600">請先填寫 LINE UID 才能觸發</p>}
+
           {triggerError && <p className="text-xs text-red-600">{triggerError}</p>}
           {job && (
             <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">

@@ -50,3 +50,15 @@ export function updateAiEditorClient(id: number, data: Partial<Omit<AiEditorClie
 export function deleteAiEditorClient(id: number): void {
   db.prepare('DELETE FROM ai_editor_clients WHERE id = ?').run(id);
 }
+
+export function upsertClientByLineUid(
+  lineUid: string, name: string, siteUrl: string, socialAccount: string
+): { client: AiEditorClient; action: 'created' | 'updated' } {
+  const existing = db.prepare('SELECT * FROM ai_editor_clients WHERE line_uid = ?').get(lineUid) as AiEditorClient | undefined;
+  if (existing) {
+    db.prepare('UPDATE ai_editor_clients SET name = ?, site_url = ?, social_account = ? WHERE line_uid = ?').run(name, siteUrl, socialAccount, lineUid);
+    return { client: getAiEditorClient(existing.id)!, action: 'updated' };
+  }
+  const result = db.prepare('INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid) VALUES (?, ?, ?, ?)').run(name, siteUrl, socialAccount, lineUid);
+  return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
+}

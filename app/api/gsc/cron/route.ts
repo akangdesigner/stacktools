@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/gscAuth';
-import { listClients, listKeywords } from '@/lib/gscDb';
+import { listClients, listKeywords, listArticlePages } from '@/lib/gscDb';
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 const GSC_BASE = 'https://searchconsole.googleapis.com/webmasters/v3';
@@ -133,17 +133,72 @@ export async function POST(req: NextRequest) {
   endDate.setDate(endDate.getDate() - 2);
   const endDateStr = endDate.toISOString().slice(0, 10);
 
-  const clients = listClients().filter(c => c.auto_update === 1 && c.sheet_id && c.sheet_tab);
-  const results: { name: string; updated: number; error?: string }[] = [];
+  const clients = listClients().filter(c => c.auto_update === 1);
+  const kwResults: { name: string; updated: number; error?: string }[] = [];
+  const artResults: { name: string; updated: number; error?: string }[] = [];
 
   for (const client of clients) {
-    const keywords = listKeywords(client.id).map(k => k.keyword);
-    if (!keywords.length) { results.push({ name: client.name, updated: 0, error: 'no_keywords' }); continue; }
+    // 關鍵字排名
+    if (client.sheet_id && client.sheet_tab) {
+      const keywords = listKeywords(client.id).map(k => k.keyword);
+      if (!keywords.length) {
+        kwResults.push({ name: client.name, updated: 0, error: 'no_keywords' });
+      } else {
+        const rankResults = await queryRank(accessToken, client.site_url, keywords, endDateStr);
+        const writeResult = await writeSheet(accessToken, client, rankResults);
+        kwResults.push({ name: client.name, ...writeResult });
+      }
+    }
 
-    const rankResults = await queryRank(accessToken, client.site_url, keywords, endDateStr);
-    const writeResult = await writeSheet(accessToken, client, rankResults);
-    results.push({ name: client.name, ...writeResult });
+    // 文章排名
+    if (client.article_sheet_id && client.article_sheet_tab) {
+      const pages = listArticlePages(client.id);
+      if (!pages.length) {
+        artResults.push({ name: client.name, updated: 0, error: 'no_pages' });
+      } else {
+        // 查 GSC 各頁面排名
+        const startDate = (() => { const d = new Date(endDateStr); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10); })();
+        const positions = await Promise.all(pages.map(async p => {
+          try {
+            const res = await fetch(`${GSC_BASE}/sites/${encodeURIComponent(client.site_url)}/searchAnalytics/query`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ startDate, endDate: endDateStr, dimensionFilterGroups: [{ filters: [{ dimension: 'page', expression: p.url }] }], rowLimit: 1 }),
+            });
+            if (!res.ok) return { url: p.url, position: null };
+            const data = await res.json() as { rows?: { position: number }[] };
+            const row = (data.rows ?? [])[0];
+            return { url: p.url, position: row ? Math.floor(row.position) : null };
+          } catch { return { url: p.url, position: null }; }
+        }));
+
+        // 寫入 Sheet
+        const readRes = await fetch(`${SHEETS_BASE}/${client.article_sheet_id}/values/${encodeURIComponent(client.article_sheet_tab)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!readRes.ok) { artResults.push({ name: client.name, updated: 0, error: 'read_failed' }); continue; }
+        const sheet = await readRes.json() as { values?: string[][] };
+        const rows = sheet.values ?? [];
+        if (rows.length < 1) { artResults.push({ name: client.name, updated: 0, error: 'empty_sheet' }); continue; }
+        const headerRow = rows[0];
+        const urlCol = headerRow.findIndex(h => h?.trim() === '原文章連結');
+        const rankCol = headerRow.findIndex(h => h?.trim() === '排名');
+        if (urlCol === -1 || rankCol === -1) { artResults.push({ name: client.name, updated: 0, error: 'missing_col' }); continue; }
+        const urlMap = new Map<string, number>();
+        for (let i = 1; i < rows.length; i++) { const u = rows[i][urlCol]?.trim(); if (u) urlMap.set(u, i); }
+        const updates = positions.flatMap(p => {
+          const rowIdx = urlMap.get(p.url.trim());
+          if (rowIdx === undefined) return [];
+          return [{ range: `${client.article_sheet_tab}!${colLetter(rankCol)}${rowIdx + 1}`, value: p.position !== null ? String(p.position) : '-' }];
+        });
+        if (!updates.length) { artResults.push({ name: client.name, updated: 0 }); continue; }
+        const batchRes = await fetch(`${SHEETS_BASE}/${client.article_sheet_id}/values:batchUpdate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: updates.map(u => ({ range: u.range, values: [[u.value]] })) }),
+        });
+        artResults.push({ name: client.name, updated: batchRes.ok ? updates.length : 0, ...(batchRes.ok ? {} : { error: 'write_failed' }) });
+      }
+    }
   }
 
-  return NextResponse.json({ date: endDateStr, results });
+  return NextResponse.json({ date: endDateStr, keywords: kwResults, articles: artResults });
 }

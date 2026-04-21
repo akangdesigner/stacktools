@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
   }
 
   const { siteUrl, socialAccount, lineUid } = body;
-  if (!siteUrl?.trim() || !lineUid?.trim()) {
-    return NextResponse.json({ error: '請完整填寫文章列表網址與 LINE UID' }, { status: 400 });
+  if (!siteUrl?.trim()) {
+    return NextResponse.json({ error: '請填寫文章列表網址' }, { status: 400 });
   }
 
   const rssUrl = toRssUrl(siteUrl);
