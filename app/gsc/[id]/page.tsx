@@ -498,7 +498,7 @@ export default function GscClientPage() {
                         return (
                           <tr key={r.keyword} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-gray-800">{r.keyword}</td>
-                            <td className="px-3 py-2">{kwMeta?.label && <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{kwMeta.label}</span>}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{kwMeta?.label && <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{kwMeta.label}</span>}</td>
                             <td className="px-3 py-2 text-center text-gray-500">{r.a.found ? `#${r.a.position}` : '-'}</td>
                             <td className="px-3 py-2 text-center font-semibold text-gray-800">{r.b.found ? `#${r.b.position}` : '-'}</td>
                             <TrendCell a={r.a} b={r.b} />
