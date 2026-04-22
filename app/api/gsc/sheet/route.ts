@@ -63,20 +63,45 @@ export async function POST(req: NextRequest) {
   const sheet = await readRes.json() as { values?: string[][] };
   const rows = sheet.values ?? [];
 
-  if (rows.length === 0) {
-    return NextResponse.json({ error: 'Sheet 無資料' }, { status: 400 });
+  if (rows.length < 2) {
+    return NextResponse.json({ error: 'Sheet 資料不足，找不到標題列' }, { status: 400 });
   }
 
-  const norm = (s: string) => s.trim().normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
+  // 找標題列（第 2 列，index 1）
+  const headerRow = rows[1];
 
-  // 掃描全表，建立 關鍵字 → { rowIdx, colIdx } 對應表
-  // 找到關鍵字後，右邊+1 格寫上週排名，+2 格寫當周排名（相對定位）
-  const kwMap = new Map<string, { rowIdx: number; colIdx: number }>();
-  for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+  // 找所有「關鍵字」欄的 index
+  const kwColIndices: number[] = [];
+  headerRow.forEach((cell, i) => {
+    if (cell?.trim() === '關鍵字') kwColIndices.push(i);
+  });
+
+  if (kwColIndices.length === 0) {
+    return NextResponse.json({ error: '找不到「關鍵字」欄標題' }, { status: 400 });
+  }
+
+  // 對每個關鍵字欄，找對應的「當周排名」「上週排名」「當前排名」欄
+  // 策略：從關鍵字欄開始，找下一個「關鍵字」欄之前的範圍內尋找排名欄
+  type ColMap = { kwCol: number; currentCol: number | null; lastCol: number | null };
+  const groups: ColMap[] = kwColIndices.map((kwCol, groupIdx) => {
+    const nextKwCol = kwColIndices[groupIdx + 1] ?? headerRow.length;
+    let currentCol: number | null = null;
+    let lastCol: number | null = null;
+    for (let i = kwCol + 1; i < nextKwCol; i++) {
+      const h = headerRow[i]?.trim() ?? '';
+      if (h === '當周排名' || h === '當前排名') currentCol = i;
+      if (h === '上週排名') lastCol = i;
+    }
+    return { kwCol, currentCol, lastCol };
+  });
+
+  // 建立關鍵字 → 列 index 的對應表
+  const kwMap = new Map<string, { rowIdx: number; group: ColMap }>();
+  for (let rowIdx = 2; rowIdx < rows.length; rowIdx++) {
     const row = rows[rowIdx];
-    for (let colIdx = 0; colIdx < row.length; colIdx++) {
-      const cell = row[colIdx];
-      if (cell?.trim()) kwMap.set(norm(cell), { rowIdx, colIdx });
+    for (const group of groups) {
+      const kw = row[group.kwCol]?.trim();
+      if (kw) kwMap.set(kw, { rowIdx, group });
     }
   }
 
@@ -85,23 +110,26 @@ export async function POST(req: NextRequest) {
   const notFound: string[] = [];
 
   for (const result of body.results) {
-    const match = kwMap.get(norm(result.keyword));
+    const match = kwMap.get(result.keyword.trim());
     if (!match) {
       notFound.push(result.keyword);
       continue;
     }
-    const { rowIdx, colIdx } = match;
+    const { rowIdx, group } = match;
     const sheetRow = rowIdx + 1; // Sheets API 列號從 1 開始
 
-    // 上週排名（a）寫在關鍵字右邊一格，當周排名（b）寫右邊兩格
-    updates.push({
-      range: `${client.sheet_tab}!${colLetter(colIdx + 1)}${sheetRow}`,
-      value: result.a.found ? String(Math.floor(result.a.position ?? 0)) : '-',
-    });
-    updates.push({
-      range: `${client.sheet_tab}!${colLetter(colIdx + 2)}${sheetRow}`,
-      value: result.b.found ? String(Math.floor(result.b.position ?? 0)) : '-',
-    });
+    if (group.currentCol !== null) {
+      updates.push({
+        range: `${client.sheet_tab}!${colLetter(group.currentCol)}${sheetRow}`,
+        value: result.b.found ? String(Math.floor(result.b.position ?? 0)) : '-',
+      });
+    }
+    if (group.lastCol !== null) {
+      updates.push({
+        range: `${client.sheet_tab}!${colLetter(group.lastCol)}${sheetRow}`,
+        value: result.a.found ? String(Math.floor(result.a.position ?? 0)) : '-',
+      });
+    }
   }
 
   if (updates.length === 0) {

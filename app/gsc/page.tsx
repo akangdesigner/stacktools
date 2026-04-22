@@ -151,7 +151,7 @@ export default function GscListPage() {
           <p className="text-sm">還沒有客戶，點右上角「新增客戶」開始。</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {clients.map(c => (
             <button
               key={c.id}

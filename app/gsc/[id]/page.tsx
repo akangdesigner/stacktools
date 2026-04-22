@@ -49,7 +49,7 @@ function parseSheetUrl(url: string): { sheetId: string; gid: string } | null {
 }
 
 function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => void }) {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(client.sheet_id ? `https://docs.google.com/spreadsheets/d/${client.sheet_id}` : '');
   const [sheetId, setSheetId] = useState(client.sheet_id);
   const [sheetTab, setSheetTab] = useState(client.sheet_tab);
   const [resolving, setResolving] = useState(false);
@@ -66,7 +66,6 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
       if (!res.ok) { setResolveError(data.error ?? '無法讀取'); return; }
       setSheetId(parsed.sheetId);
       if (data.tab) setSheetTab(data.tab);
-      setUrl('');
     } finally { setResolving(false); }
   }
 
@@ -104,7 +103,7 @@ function SheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => vo
 }
 
 function ArticleSheetEditor({ client, onSaved }: { client: GscClient; onSaved: () => void }) {
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(client.article_sheet_id ? `https://docs.google.com/spreadsheets/d/${client.article_sheet_id}` : '');
   const [sheetId, setSheetId] = useState(client.article_sheet_id);
   const [sheetTab, setSheetTab] = useState(client.article_sheet_tab);
   const [resolving, setResolving] = useState(false);
@@ -121,7 +120,6 @@ function ArticleSheetEditor({ client, onSaved }: { client: GscClient; onSaved: (
       if (!res.ok) { setResolveError(data.error ?? '無法讀取'); return; }
       setSheetId(parsed.sheetId);
       if (data.tab) setSheetTab(data.tab);
-      setUrl('');
     } finally { setResolving(false); }
   }
 
@@ -498,7 +496,7 @@ export default function GscClientPage() {
                         return (
                           <tr key={r.keyword} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-gray-800">{r.keyword}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">{kwMeta?.label && <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{kwMeta.label}</span>}</td>
+                            <td className="px-3 py-2">{kwMeta?.label && <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">{kwMeta.label}</span>}</td>
                             <td className="px-3 py-2 text-center text-gray-500">{r.a.found ? `#${r.a.position}` : '-'}</td>
                             <td className="px-3 py-2 text-center font-semibold text-gray-800">{r.b.found ? `#${r.b.position}` : '-'}</td>
                             <TrendCell a={r.a} b={r.b} />
