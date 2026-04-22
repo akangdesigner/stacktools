@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (titleCol === -1) return NextResponse.json({ error: '找不到「文章標題」欄' }, { status: 400 });
   if (rankCol === -1) return NextResponse.json({ error: '找不到「排名」欄' }, { status: 400 });
 
-  const norm = (s: string) => s.trim().toLowerCase();
+  const norm = (s: string) => s.trim().normalize('NFKC').toLowerCase().replace(/\s+/g, ' ');
 
   const titleMap = new Map<string, number[]>();
   for (let i = 1; i < rows.length; i++) {
