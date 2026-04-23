@@ -18,12 +18,19 @@ db.exec(`
   );
 `);
 
+// 自動遷移：補上 keywords 欄位
+const cols = (db.prepare(`PRAGMA table_info(ai_editor_clients)`).all() as { name: string }[]).map(c => c.name);
+if (!cols.includes('keywords')) {
+  db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN keywords TEXT NOT NULL DEFAULT ''`);
+}
+
 export interface AiEditorClient {
   id: number;
   name: string;
   site_url: string;
   social_account: string;
   line_uid: string;
+  keywords: string;
 }
 
 export function listAiEditorClients(): AiEditorClient[] {

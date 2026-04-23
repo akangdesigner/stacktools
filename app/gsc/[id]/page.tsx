@@ -559,18 +559,28 @@ export default function GscClientPage() {
 
           {articleResults && !showArticleEditor && (
             <div className="space-y-3">
+              {articleResults.every(r => r.position === null) && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">所有文章排名皆為空</p>
+                  <p>GSC 使用完全比對，請確認下方 URL 格式與 GSC Search Console 裡顯示的網址一致（http/https、www、結尾斜線都要相符）。</p>
+                </div>
+              )}
               <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="bg-gray-50 text-xs text-gray-500 font-medium">
-                      <th className="px-3 py-2 text-left">文章標題</th>
-                      <th className="px-3 py-2 text-center">排名</th>
+                      <th className="px-3 py-2 text-left w-[60%]">文章標題</th>
+                      <th className="px-3 py-2 text-left w-[30%]">查詢 URL</th>
+                      <th className="px-3 py-2 text-center w-[10%]">排名</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {articleResults.map((r, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-700 text-xs max-w-[200px] truncate" title={r.title}>{r.title}</td>
+                        <td className="px-3 py-2 text-gray-700 text-xs">{r.title}</td>
+                        <td className="px-3 py-2 text-gray-400 text-xs font-mono overflow-hidden">
+                          <ExpandableUrl url={r.url} />
+                        </td>
                         <td className="px-3 py-2 text-center font-semibold text-gray-800">{r.position !== null ? `#${r.position}` : '-'}</td>
                       </tr>
                     ))}
@@ -598,5 +608,18 @@ export default function GscClientPage() {
 
       </div>
     </div>
+  );
+}
+
+function ExpandableUrl({ url }: { url: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <span
+      onClick={() => setExpanded(v => !v)}
+      className={`cursor-pointer hover:text-gray-600 transition-colors ${expanded ? 'break-all' : 'truncate block'}`}
+      title={expanded ? '點擊收起' : '點擊展開'}
+    >
+      {expanded ? url : url}
+    </span>
   );
 }

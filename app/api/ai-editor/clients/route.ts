@@ -25,13 +25,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; site_url?: string; social_account?: string; line_uid?: string };
+  const body = await req.json() as { id?: number; name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
     ...(body.site_url !== undefined && { site_url: body.site_url }),
     ...(body.social_account !== undefined && { social_account: body.social_account }),
     ...(body.line_uid !== undefined && { line_uid: body.line_uid }),
+    ...(body.keywords !== undefined && { keywords: body.keywords }),
   });
   return NextResponse.json({ ok: true });
 }
