@@ -593,7 +593,17 @@ export default function GscClientPage() {
                     <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7"/></svg>
                     {articleSheetWriting ? '寫入中…' : '寫入 Sheet'}
                   </button>
-                  {articleSheetResult && <span className="text-sm text-emerald-700">成功更新 {articleSheetResult.updated} 筆{articleSheetResult.notFound.length > 0 && <span className="text-gray-400 ml-2">（找不到：{articleSheetResult.notFound.length} 筆）</span>}</span>}
+                  {articleSheetResult && (
+                    <div className="text-sm space-y-1">
+                      <span className="text-emerald-700">成功更新 {articleSheetResult.updated} 筆</span>
+                      {articleSheetResult.notFound.length > 0 && (
+                        <div className="text-xs text-red-500 space-y-0.5">
+                          <p>以下 {articleSheetResult.notFound.length} 筆在 Sheet 找不到對應標題：</p>
+                          {articleSheetResult.notFound.map((t, i) => <p key={i} className="font-mono bg-red-50 px-1 rounded">「{t}」</p>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {articleSheetError && <span className="text-sm text-red-600">{articleSheetError}</span>}
                 </div>
               )}

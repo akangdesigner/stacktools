@@ -61,7 +61,10 @@ export async function POST(req: NextRequest) {
   if (rankCol === -1) return NextResponse.json({ error: '找不到「排名」欄' }, { status: 400 });
 
 
+  const loose = (s: string) => norm(s).replace(/\s+/g, '');
+
   const titleMap = new Map<string, number[]>();
+  const titleMapLoose = new Map<string, number[]>();
   for (let i = 1; i < rows.length; i++) {
     const t = rows[i][titleCol]?.trim();
     if (t) {
@@ -69,6 +72,11 @@ export async function POST(req: NextRequest) {
       const arr = titleMap.get(key) ?? [];
       arr.push(i);
       titleMap.set(key, arr);
+
+      const lkey = loose(t);
+      const larr = titleMapLoose.get(lkey) ?? [];
+      larr.push(i);
+      titleMapLoose.set(lkey, larr);
     }
   }
 
@@ -76,7 +84,7 @@ export async function POST(req: NextRequest) {
   const notFound: string[] = [];
 
   for (const result of body.results) {
-    const rowIndices = titleMap.get(norm(result.title));
+    const rowIndices = titleMap.get(norm(result.title)) ?? titleMapLoose.get(loose(result.title));
     if (!rowIndices?.length) { notFound.push(result.title); continue; }
     for (const rowIdx of rowIndices) {
       updates.push({
