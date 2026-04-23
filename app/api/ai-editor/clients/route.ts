@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     site_url: body.site_url.trim(),
     social_account: body.social_account?.trim() ?? '',
     line_uid: body.line_uid?.trim() ?? '',
+    keywords: '',
   });
   return NextResponse.json(client);
 }
