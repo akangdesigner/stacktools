@@ -267,7 +267,7 @@ export default function AiEditorClientPage() {
                 <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">Demo</span>
               </div>
               <p className="text-xs text-gray-400">自動偵測近期節慶，提前提醒安排相關貼文，並推送至 LINE。</p>
-              <HolidayReminderDemo />
+              <HolidayReminderDemo keywords={client?.keywords ?? ''} clientId={client?.id ?? 0} />
             </div>
 
             {/* 留言草稿回覆 */}
@@ -360,37 +360,80 @@ function MonthlyPlanDemo() {
   );
 }
 
-function HolidayReminderDemo() {
+function HolidayCard({ name, days, clientId }: { name: string; days: number; clientId: number }) {
+  const [loading, setLoading] = useState(false);
+  const [titles, setTitles] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState<number | null>(null);
+
+  async function generate() {
+    setLoading(true); setError(''); setTitles([]);
+    try {
+      const res = await fetch('/api/ai-editor/holiday-inspiration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, holiday: name }),
+      });
+      const data = await res.json() as { titles?: string[]; error?: string };
+      if (!res.ok) { setError(data.error ?? '生成失敗'); return; }
+      setTitles(data.titles ?? []);
+    } catch (e) { setError(String(e)); }
+    finally { setLoading(false); }
+  }
+
+  function copy(text: string, idx: number) {
+    navigator.clipboard.writeText(text);
+    setCopied(idx);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  return (
+    <div className={`rounded-lg border p-3 space-y-2 ${days <= 7 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}`}>
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-gray-800">{name}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${days <= 7 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+          {days <= 7 ? `⚡ 剩 ${days} 天` : `${days} 天後`}
+        </span>
+      </div>
+      {titles.length > 0 && (
+        <div className="space-y-1.5">
+          {titles.map((t, i) => (
+            <div key={i} className="flex items-start gap-2 rounded bg-white border border-gray-100 px-2.5 py-1.5">
+              <span className="text-xs text-gray-700 flex-1 leading-relaxed">{t}</span>
+              <button onClick={() => copy(t, i)} className="shrink-0 text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                {copied === i ? '✓' : '複製'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <button onClick={generate} disabled={loading}
+        className="px-3 py-1 rounded text-xs bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 transition-colors">
+        {loading ? '生成中…' : titles.length > 0 ? '重新生成' : '產出貼文靈感'}
+      </button>
+    </div>
+  );
+}
+
+function HolidayReminderDemo({ keywords: _keywords, clientId }: { keywords: string; clientId: number }) {
   const now = new Date();
   const daysUntil = (month: number, day: number) => {
     const target = new Date(now.getFullYear(), month - 1, day);
     if (target < now) target.setFullYear(now.getFullYear() + 1);
     return Math.ceil((target.getTime() - now.getTime()) / 86400000);
   };
+
   const HOLIDAYS = [
-    { name: '母親節', days: daysUntil(5, 12), topics: ['感謝媽媽系列', '親子活動推薦', '母親節限定優惠'] },
-    { name: '端午節', days: daysUntil(6, 10), topics: ['節慶應景貼文', '假期出遊推薦', '傳統文化趣知識'] },
-    { name: '中秋節', days: daysUntil(9, 17), topics: ['月圓家人團聚', '中秋禮盒推薦', '烤肉活動紀錄'] },
+    { name: '母親節', days: daysUntil(5, 12) },
+    { name: '端午節', days: daysUntil(6, 10) },
+    { name: '中秋節', days: daysUntil(9, 17) },
   ].sort((a, b) => a.days - b.days);
+
   return (
     <div className="space-y-3">
       {HOLIDAYS.map((h, i) => (
-        <div key={i} className={`rounded-lg border p-3 space-y-2 ${h.days <= 7 ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'}`}>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-800">{h.name}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${h.days <= 7 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
-              {h.days <= 7 ? `⚡ 剩 ${h.days} 天` : `${h.days} 天後`}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {h.topics.map((t, j) => (
-              <span key={j} className="text-xs bg-white border border-gray-200 rounded px-2 py-0.5 text-gray-600">{t}</span>
-            ))}
-          </div>
-          <button disabled title="開發中" className="px-3 py-1 rounded text-xs border border-gray-200 text-gray-400 cursor-not-allowed">
-            產出草稿（開發中）
-          </button>
-        </div>
+        <HolidayCard key={i} name={h.name} days={h.days} clientId={clientId} />
       ))}
     </div>
   );
