@@ -53,13 +53,13 @@ export async function POST(req: NextRequest) {
   if (rows.length < 1) return NextResponse.json({ error: 'Sheet 無資料' }, { status: 400 });
 
   const headerRow = rows[0];
-  const titleCol = headerRow.findIndex(h => h?.trim() === '文章標題');
-  const rankCol = headerRow.findIndex(h => h?.trim() === '排名');
+  const norm = (s: string) => (s ?? '').normalize('NFKC').trim().toLowerCase();
+  const titleCol = headerRow.findIndex(h => norm(h ?? '') === norm('文章標題'));
+  const rankCol = headerRow.findIndex(h => norm(h ?? '') === norm('排名'));
 
   if (titleCol === -1) return NextResponse.json({ error: '找不到「文章標題」欄' }, { status: 400 });
   if (rankCol === -1) return NextResponse.json({ error: '找不到「排名」欄' }, { status: 400 });
 
-  const norm = (s: string) => s.trim().toLowerCase();
 
   const titleMap = new Map<string, number[]>();
   for (let i = 1; i < rows.length; i++) {
