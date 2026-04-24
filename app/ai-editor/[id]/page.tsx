@@ -20,6 +20,7 @@ interface AiEditorJob {
   result?: {
     draftText?: string;
     draftImageUrl?: string;
+    raw?: Record<string, unknown>;
   };
 }
 
@@ -428,7 +429,7 @@ function TopicCommentGenerator({ clientId }: { clientId: number }) {
   }
 
   const rawComments: string[] = (() => {
-    const raw = job?.result?.raw as Record<string, unknown> | null | undefined;
+    const raw = job?.result?.raw;
     if (Array.isArray(raw?.comments)) return raw.comments as string[];
     if (job?.result?.draftText) return job.result.draftText.split('\n').map(l => l.trim()).filter(Boolean);
     return [];
