@@ -10,6 +10,7 @@ interface AiEditorClient {
   social_account: string;
   line_uid: string;
   keywords: string;
+  persona: string;
 }
 
 export default function AiEditorListPage() {
@@ -92,23 +93,46 @@ export default function AiEditorListPage() {
           <p className="text-sm">尚無客戶，點擊「新增客戶」或透過 LINE 機器人建立。</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
           {clients.map(c => (
             <button
               key={c.id}
               onClick={() => router.push(`/ai-editor/${c.id}`)}
-              className="text-left p-5 rounded-xl border-2 border-gray-200 bg-white hover:border-gray-400 transition-all space-y-2"
+              className="text-left p-5 rounded-xl border-2 border-gray-200 bg-white hover:border-gray-400 transition-all space-y-3"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-gray-900 leading-snug">{c.name}</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0 text-gray-300 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <span className="font-bold text-gray-900 text-base leading-snug">{c.name}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 shrink-0 text-gray-300 mt-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </div>
-              <p className="text-xs text-gray-400 truncate">{c.site_url}</p>
-              {c.social_account && (
-                <p className="text-xs text-gray-500 truncate">{c.social_account}</p>
-              )}
+              <div className="space-y-1.5 text-xs">
+                <div className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-14">網址</span>
+                  <span className="text-gray-600 truncate font-mono">{c.site_url}</span>
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-14">社群</span>
+                  {c.social_account
+                    ? <span className="text-gray-600 truncate whitespace-pre">{c.social_account.split('\n')[0]}</span>
+                    : <span className="text-gray-300">未設定</span>
+                  }
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-14">LINE ID</span>
+                  {c.line_uid
+                    ? <span className="font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded leading-none">{c.line_uid}</span>
+                    : <span className="text-gray-300">未設定</span>
+                  }
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-14">關鍵字</span>
+                  {c.keywords
+                    ? <span className="text-gray-600 truncate">{c.keywords}</span>
+                    : <span className="text-gray-300">未設定</span>
+                  }
+                </div>
+              </div>
             </button>
           ))}
         </div>
