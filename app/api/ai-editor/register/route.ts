@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     social_account: body.socialAccount?.trim() ?? '',
     line_uid: body.lineUid.trim(),
     keywords: '',
+    persona: '',
   });
 
   return NextResponse.json({ ok: true, id: client.id, action: 'created' });
