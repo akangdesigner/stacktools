@@ -1,13 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getAiEditorClient } from '@/lib/aiEditorDb';
 import { createAiEditorJob, getAiEditorJob, updateAiEditorJob } from '@/lib/ai-editor-jobs';
-
-interface TriggerBody {
-  siteUrl?: string;
-  socialAccount?: string;
-  lineUid?: string;
-}
 
 function toRssUrl(inputUrl: string): string {
   const trimmed = inputUrl.trim();
@@ -44,24 +39,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const webhookUrl = process.env.N8N_AI_EDITOR_WEBHOOK_URL;
+  const webhookUrl = process.env.N8N_TRENDING_POST_WEBHOOK_URL;
   if (!webhookUrl) {
-    return NextResponse.json({ error: '尚未設定 N8N_AI_EDITOR_WEBHOOK_URL' }, { status: 500 });
+    return NextResponse.json({ error: '尚未設定 N8N_TRENDING_POST_WEBHOOK_URL' }, { status: 500 });
   }
 
-  let body: TriggerBody;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: '無效的請求格式' }, { status: 400 });
-  }
+  const body = await req.json() as { clientId?: number };
+  if (!body.clientId) return NextResponse.json({ error: '缺少 clientId' }, { status: 400 });
 
-  const { siteUrl, socialAccount, lineUid } = body;
-  if (!siteUrl?.trim()) {
-    return NextResponse.json({ error: '請填寫文章列表網址' }, { status: 400 });
-  }
+  const client = getAiEditorClient(body.clientId);
+  if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
 
-  const rssUrl = toRssUrl(siteUrl);
+  const rssUrl = toRssUrl(client.site_url);
   if (!rssUrl) {
     return NextResponse.json({ error: '官網網址格式不正確，無法轉為 RSS feed URL' }, { status: 400 });
   }
@@ -78,10 +67,18 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jobId,
-        siteUrl: siteUrl.trim(),
+        purpose: '新文章草稿',
+        client: {
+          id: client.id,
+          name: client.name,
+          site_url: client.site_url,
+          social_account: client.social_account,
+          line_uid: client.line_uid,
+          keywords: client.keywords,
+          persona: client.persona,
+        },
+        siteUrl: client.site_url,
         rssUrl,
-        socialAccount: socialAccount?.trim() ?? '',
-        lineUid: lineUid?.trim() ?? '',
       }),
       signal: controller.signal,
     });

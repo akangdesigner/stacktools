@@ -19,7 +19,10 @@
       "mcp__puppeteer__puppeteer_evaluate",
       "Bash(git commit *)",
       "Bash(node *)",
-      "mcp__puppeteer__puppeteer_click"
+      "mcp__puppeteer__puppeteer_click",
+      "Bash(npx tsc *)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(npm install *)"
     ]
   }
 }

@@ -27,13 +27,17 @@ export async function POST(req: NextRequest) {
 
   const groq = new Groq({ apiKey });
 
+  const personaLine = client.persona?.trim()
+    ? `小編人設：${client.persona.trim()}\n`
+    : '';
+
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
       {
         role: 'user',
         content: `你是社群媒體文案專家，擅長繁體中文貼文。
-客戶產業關鍵字清單：${kwList.join('、')}
+${personaLine}客戶產業關鍵字清單：${kwList.join('、')}
 即將到來的節慶：${body.holiday}
 請產出 4 個吸睛的繁體中文貼文標題，每個標題只從清單中自然地挑選 1-2 個最合適的關鍵字融入，不要硬塞所有關鍵字。
 每個標題獨立一行，只輸出標題本身，不加編號、符號或任何說明。`,

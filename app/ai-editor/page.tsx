@@ -22,6 +22,8 @@ export default function AiEditorListPage() {
   const [newSiteUrl, setNewSiteUrl] = useState('');
   const [newSocialAccount, setNewSocialAccount] = useState('');
   const [newLineUid, setNewLineUid] = useState('');
+  const [newKeywords, setNewKeywords] = useState('');
+  const [newPersona, setNewPersona] = useState('');
   const [creating, setCreating] = useState(false);
 
   function loadClients() {
@@ -39,12 +41,12 @@ export default function AiEditorListPage() {
     const res = await fetch('/api/ai-editor/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim(), site_url: newSiteUrl.trim(), social_account: newSocialAccount.trim(), line_uid: newLineUid.trim() }),
+      body: JSON.stringify({ name: newName.trim(), site_url: newSiteUrl.trim(), social_account: newSocialAccount.trim(), line_uid: newLineUid.trim(), keywords: newKeywords.trim(), persona: newPersona.trim() }),
     });
     const data = await res.json() as AiEditorClient;
     setCreating(false);
     setShowForm(false);
-    setNewName(''); setNewSiteUrl(''); setNewSocialAccount(''); setNewLineUid('');
+    setNewName(''); setNewSiteUrl(''); setNewSocialAccount(''); setNewLineUid(''); setNewKeywords(''); setNewPersona('');
     loadClients();
     if (data.id) router.push(`/ai-editor/${data.id}`);
   }
@@ -72,6 +74,8 @@ export default function AiEditorListPage() {
           <input value={newSiteUrl} onChange={e => setNewSiteUrl(e.target.value)} placeholder="文章列表網址 * (https://example.com/blog/)" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <textarea value={newSocialAccount} onChange={e => setNewSocialAccount(e.target.value)} rows={2} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <input value={newLineUid} onChange={e => setNewLineUid(e.target.value)} placeholder="LINE UID（選填）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          <input value={newKeywords} onChange={e => setNewKeywords(e.target.value)} placeholder="產業關鍵字（逗號分隔，例：植牙, 牙齒美白）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          <textarea value={newPersona} onChange={e => setNewPersona(e.target.value)} rows={3} placeholder={`小編人設（例：溫暖親切的醫美診所小編，說話口吻輕鬆但專業，不用過度使用表情符號）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <div className="flex gap-2">
             <button onClick={handleCreate} disabled={creating || !newName.trim() || !newSiteUrl.trim()} className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
               {creating ? '建立中…' : '建立'}

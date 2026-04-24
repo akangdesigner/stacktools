@@ -10,6 +10,7 @@ interface AiEditorClient {
   social_account: string;
   line_uid: string;
   keywords: string;
+  persona: string;
 }
 
 interface AiEditorJob {
@@ -33,6 +34,7 @@ export default function AiEditorClientPage() {
   const [editSocialAccount, setEditSocialAccount] = useState('');
   const [editLineUid, setEditLineUid] = useState('');
   const [editKeywords, setEditKeywords] = useState('');
+  const [editPersona, setEditPersona] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [triggering, setTriggering] = useState(false);
@@ -41,12 +43,6 @@ export default function AiEditorClientPage() {
   const [job, setJob] = useState<AiEditorJob | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const DEMO_COMMENTS = [
-    { id: 1, platform: 'IG', commenter: 'user_abc', content: '請問這個療程大概要多少費用？', postUrl: 'https://instagram.com/p/demo1', draft: '感謝您的詢問！費用會依個人狀況評估，建議您直接私訊或來電，我們為您安排免費諮詢 😊', done: false },
-    { id: 2, platform: 'FB', commenter: '王小明', content: '我之前做過有點痛，你們有麻醉嗎？', postUrl: 'https://facebook.com/demo2', draft: '您好，我們全程使用局部麻醉，術中幾乎不會感到疼痛，術後也有完整衛教讓您安心恢復。有任何問題歡迎私訊！', done: false },
-    { id: 3, platform: 'IG', commenter: 'smile_forever', content: '分享給我朋友看！她也有一樣的困擾', postUrl: 'https://instagram.com/p/demo3', draft: '謝謝您的分享，希望對您的朋友也有幫助！若有任何問題，我們隨時在這裡 💪', done: false },
-  ];
-  const [comments, setComments] = useState(DEMO_COMMENTS);
 
   const [trendingTriggering, setTrendingTriggering] = useState(false);
   const [trendingError, setTrendingError] = useState('');
@@ -101,7 +97,7 @@ export default function AiEditorClientPage() {
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, site_url: editSiteUrl, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords }),
+      body: JSON.stringify({ id: client.id, name: editName, site_url: editSiteUrl, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona }),
     });
     setSaving(false);
     setEditing(false);
@@ -148,11 +144,7 @@ export default function AiEditorClientPage() {
       const res = await fetch('/api/ai-editor/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          siteUrl: client.site_url,
-          socialAccount: client.social_account,
-          lineUid: client.line_uid,
-        }),
+        body: JSON.stringify({ clientId: client.id }),
       });
       const data = (await res.json()) as { jobId?: string; error?: string };
       if (!res.ok || !data.jobId) { setTriggerError(data.error ?? '觸發失敗'); return; }
@@ -184,6 +176,7 @@ export default function AiEditorClientPage() {
             <textarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} rows={3} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <input value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="LINE UID" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="產業關鍵字（逗號分隔，例：植牙, 牙齒美白）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+            <textarea value={editPersona} onChange={e => setEditPersona(e.target.value)} rows={3} placeholder={`小編人設（例：溫暖親切的醫美診所小編，說話口吻輕鬆但專業，不用過度使用表情符號）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <div className="flex gap-2">
               <button onClick={handleSave} disabled={saving} className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
                 {saving ? '儲存中…' : '儲存'}
@@ -195,13 +188,20 @@ export default function AiEditorClientPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{client.name}</h1>
-              <button onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditing(true); }} className="text-xs text-gray-400 hover:text-gray-700">編輯</button>
+              <button onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditing(true); }} className="text-xs text-gray-400 hover:text-gray-700">編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600">刪除</button>
             </div>
             <p className="text-xs text-gray-400">{client.site_url}</p>
             {client.social_account && <p className="text-xs text-gray-500 whitespace-pre-line">{client.social_account}</p>}
-            {client.line_uid && <p className="text-xs text-gray-400 font-mono">LINE: {client.line_uid}</p>}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">LINE ID：</span>
+              {client.line_uid
+                ? <span className="text-xs font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">{client.line_uid}</span>
+                : <span className="text-xs text-gray-300 italic">尚未設定</span>
+              }
+            </div>
             {client.keywords && <p className="text-xs text-gray-500">關鍵字：{client.keywords}</p>}
+            {client.persona && <p className="text-xs text-gray-500 whitespace-pre-line">人設：{client.persona}</p>}
           </div>
         )}
       </div>
@@ -270,42 +270,8 @@ export default function AiEditorClientPage() {
               <HolidayReminderDemo keywords={client?.keywords ?? ''} clientId={client?.id ?? 0} />
             </div>
 
-            {/* 留言草稿回覆 */}
-            <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-800">留言草稿回覆</p>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">Demo</span>
-                <span className="ml-auto text-xs text-gray-400">{comments.filter(c => !c.done).length} 則待處理</span>
-              </div>
-              {comments.length === 0 ? (
-                <p className="text-xs text-gray-400">目前沒有待回覆的留言。</p>
-              ) : (
-                <div className="space-y-3">
-                  {comments.map(c => (
-                    <div key={c.id} className={`rounded-lg border p-3 space-y-2 transition-opacity ${c.done ? 'opacity-40' : 'border-gray-200'}`}>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span className={`px-1.5 py-0.5 rounded font-medium ${c.platform === 'IG' ? 'bg-pink-50 text-pink-500' : 'bg-blue-50 text-blue-500'}`}>{c.platform}</span>
-                        <span className="font-medium text-gray-600">{c.commenter}</span>
-                        <a href={c.postUrl} target="_blank" rel="noreferrer" className="ml-auto hover:text-gray-600 underline underline-offset-2">貼文連結</a>
-                      </div>
-                      <p className="text-sm text-gray-700">「{c.content}」</p>
-                      <div className="rounded bg-indigo-50 border border-indigo-100 px-3 py-2">
-                        <p className="text-xs text-indigo-400 mb-1">AI 草稿</p>
-                        <p className="text-xs text-indigo-900">{c.draft}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => navigator.clipboard.writeText(c.draft)} className="px-2.5 py-1 rounded text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">複製草稿</button>
-                        {c.done ? (
-                          <button onClick={() => setComments(prev => prev.map(x => x.id === c.id ? { ...x, done: false } : x))} className="px-2.5 py-1 rounded text-xs border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">撤銷</button>
-                        ) : (
-                          <button onClick={() => setComments(prev => prev.map(x => x.id === c.id ? { ...x, done: true } : x))} className="px-2.5 py-1 rounded text-xs bg-gray-900 text-white hover:bg-gray-700 transition-colors">已回覆</button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* 話題留言製造 */}
+            <TopicCommentGenerator clientId={client?.id ?? 0} />
           </div>
         </div>
       )}
@@ -412,6 +378,96 @@ function HolidayCard({ name, days, clientId }: { name: string; days: number; cli
         className="px-3 py-1 rounded text-xs bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 transition-colors">
         {loading ? '生成中…' : titles.length > 0 ? '重新生成' : '產出貼文靈感'}
       </button>
+    </div>
+  );
+}
+
+function TopicCommentGenerator({ clientId }: { clientId: number }) {
+  const [topic, setTopic] = useState('');
+  const [triggering, setTriggering] = useState(false);
+  const [error, setError] = useState('');
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<AiEditorJob | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+    pollRef.current = setInterval(async () => {
+      const res = await fetch(`/api/ai-editor/topic-comment?jobId=${activeJobId}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as AiEditorJob;
+      setJob(data);
+      if (data.status !== 'processing' && pollRef.current) {
+        clearInterval(pollRef.current);
+        setActiveJobId(null);
+      }
+    }, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeJobId]);
+
+  async function generate() {
+    setTriggering(true); setError(''); setJob(null);
+    try {
+      const res = await fetch('/api/ai-editor/topic-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, topic: topic.trim() }),
+      });
+      const data = (await res.json()) as { jobId?: string; error?: string };
+      if (!res.ok || !data.jobId) { setError(data.error ?? '觸發失敗'); return; }
+      setActiveJobId(data.jobId);
+    } catch (e) { setError(String(e)); }
+    finally { setTriggering(false); }
+  }
+
+  function copy(text: string, idx: number) {
+    navigator.clipboard.writeText(text);
+    setCopied(idx);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  const rawComments: string[] = (() => {
+    const raw = job?.result?.raw as Record<string, unknown> | null | undefined;
+    if (Array.isArray(raw?.comments)) return raw.comments as string[];
+    if (job?.result?.draftText) return job.result.draftText.split('\n').map(l => l.trim()).filter(Boolean);
+    return [];
+  })();
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <p className="text-sm font-semibold text-gray-800">話題留言製造</p>
+      <p className="text-xs text-gray-400">產出能引發互動討論的留言，適合品牌在自己貼文下方帶動粉絲參與。</p>
+      <div className="flex gap-2">
+        <input
+          value={topic}
+          onChange={e => setTopic(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !triggering && !activeJobId && generate()}
+          placeholder="輸入話題（留空則使用客戶關鍵字）"
+          className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400"
+        />
+        <button
+          onClick={generate}
+          disabled={triggering || !!activeJobId}
+          className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors"
+        >
+          {triggering ? '送出中…' : activeJobId ? '處理中…' : '產出'}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      {job && job.status === 'failed' && <p className="text-xs text-red-500">{job.message}</p>}
+      {rawComments.length > 0 && (
+        <div className="space-y-2">
+          {rawComments.map((c, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+              <span className="text-xs text-gray-700 flex-1 leading-relaxed">{c}</span>
+              <button onClick={() => copy(c, i)} className="shrink-0 text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                {copied === i ? '✓' : '複製'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

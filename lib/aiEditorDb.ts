@@ -18,10 +18,13 @@ db.exec(`
   );
 `);
 
-// 自動遷移：補上 keywords 欄位
+// 自動遷移
 const cols = (db.prepare(`PRAGMA table_info(ai_editor_clients)`).all() as { name: string }[]).map(c => c.name);
 if (!cols.includes('keywords')) {
   db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN keywords TEXT NOT NULL DEFAULT ''`);
+}
+if (!cols.includes('persona')) {
+  db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN persona TEXT NOT NULL DEFAULT ''`);
 }
 
 export interface AiEditorClient {
@@ -31,6 +34,7 @@ export interface AiEditorClient {
   social_account: string;
   line_uid: string;
   keywords: string;
+  persona: string;
 }
 
 export function listAiEditorClients(): AiEditorClient[] {
@@ -43,8 +47,8 @@ export function getAiEditorClient(id: number): AiEditorClient | null {
 
 export function createAiEditorClient(data: Omit<AiEditorClient, 'id'>): AiEditorClient {
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid) VALUES (?, ?, ?, ?)'
-  ).run(data.name, data.site_url, data.social_account, data.line_uid);
+    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid, keywords, persona) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.site_url, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 
