@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     line_uid: body.lineUid.trim(),
     keywords: '',
     persona: '',
+    client_info: '',
   });
 
   return NextResponse.json({ ok: true, id: client.id, action: 'created' });

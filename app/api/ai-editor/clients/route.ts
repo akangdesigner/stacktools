@@ -13,7 +13,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string };
+  const body = await req.json() as { name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string };
   if (!body.name?.trim() || !body.site_url?.trim()) {
     return NextResponse.json({ error: '名稱與官網網址為必填' }, { status: 400 });
   }
@@ -24,12 +24,13 @@ export async function POST(req: NextRequest) {
     line_uid: body.line_uid?.trim() ?? '',
     keywords: body.keywords?.trim() ?? '',
     persona: body.persona?.trim() ?? '',
+    client_info: body.client_info?.trim() ?? '',
   });
   return NextResponse.json(client);
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string };
+  const body = await req.json() as { id?: number; name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
@@ -38,6 +39,7 @@ export async function PUT(req: NextRequest) {
     ...(body.line_uid !== undefined && { line_uid: body.line_uid }),
     ...(body.keywords !== undefined && { keywords: body.keywords }),
     ...(body.persona !== undefined && { persona: body.persona }),
+    ...(body.client_info !== undefined && { client_info: body.client_info }),
   });
   return NextResponse.json({ ok: true });
 }

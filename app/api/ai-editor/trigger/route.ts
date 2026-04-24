@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
           line_uid: client.line_uid,
           keywords: client.keywords,
           persona: client.persona,
+          client_info: client.client_info,
         },
         siteUrl: client.site_url,
         rssUrl,

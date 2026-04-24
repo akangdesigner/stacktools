@@ -11,6 +11,7 @@ interface AiEditorClient {
   line_uid: string;
   keywords: string;
   persona: string;
+  client_info: string;
 }
 
 export default function AiEditorListPage() {
@@ -25,6 +26,7 @@ export default function AiEditorListPage() {
   const [newLineUid, setNewLineUid] = useState('');
   const [newKeywords, setNewKeywords] = useState('');
   const [newPersona, setNewPersona] = useState('');
+  const [newClientInfo, setNewClientInfo] = useState('');
   const [creating, setCreating] = useState(false);
 
   function loadClients() {
@@ -42,12 +44,12 @@ export default function AiEditorListPage() {
     const res = await fetch('/api/ai-editor/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim(), site_url: newSiteUrl.trim(), social_account: newSocialAccount.trim(), line_uid: newLineUid.trim(), keywords: newKeywords.trim(), persona: newPersona.trim() }),
+      body: JSON.stringify({ name: newName.trim(), site_url: newSiteUrl.trim(), social_account: newSocialAccount.trim(), line_uid: newLineUid.trim(), keywords: newKeywords.trim(), persona: newPersona.trim(), client_info: newClientInfo.trim() }),
     });
     const data = await res.json() as AiEditorClient;
     setCreating(false);
     setShowForm(false);
-    setNewName(''); setNewSiteUrl(''); setNewSocialAccount(''); setNewLineUid(''); setNewKeywords(''); setNewPersona('');
+    setNewName(''); setNewSiteUrl(''); setNewSocialAccount(''); setNewLineUid(''); setNewKeywords(''); setNewPersona(''); setNewClientInfo('');
     loadClients();
     if (data.id) router.push(`/ai-editor/${data.id}`);
   }
@@ -77,6 +79,7 @@ export default function AiEditorListPage() {
           <input value={newLineUid} onChange={e => setNewLineUid(e.target.value)} placeholder="LINE UID（選填）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <input value={newKeywords} onChange={e => setNewKeywords(e.target.value)} placeholder="產業關鍵字（逗號分隔，例：植牙, 牙齒美白）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <textarea value={newPersona} onChange={e => setNewPersona(e.target.value)} rows={3} placeholder={`小編人設（例：溫暖親切的醫美診所小編，說話口吻輕鬆但專業，不用過度使用表情符號）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          <textarea value={newClientInfo} onChange={e => setNewClientInfo(e.target.value)} rows={3} placeholder={`客戶資訊（例：台北植牙診所，目標受眾為 30-50 歲上班族，主打無痛療程與透明收費）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <div className="flex gap-2">
             <button onClick={handleCreate} disabled={creating || !newName.trim() || !newSiteUrl.trim()} className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
               {creating ? '建立中…' : '建立'}
@@ -129,6 +132,13 @@ export default function AiEditorListPage() {
                   <span className="text-gray-400 shrink-0 w-14">關鍵字</span>
                   {c.keywords
                     ? <span className="text-gray-600 truncate">{c.keywords}</span>
+                    : <span className="text-gray-300">未設定</span>
+                  }
+                </div>
+                <div className="flex gap-1.5">
+                  <span className="text-gray-400 shrink-0 w-14">客戶資訊</span>
+                  {c.client_info
+                    ? <span className="text-gray-600 truncate">{c.client_info}</span>
                     : <span className="text-gray-300">未設定</span>
                   }
                 </div>

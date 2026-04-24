@@ -11,6 +11,7 @@ interface AiEditorClient {
   line_uid: string;
   keywords: string;
   persona: string;
+  client_info: string;
 }
 
 interface AiEditorJob {
@@ -36,6 +37,7 @@ export default function AiEditorClientPage() {
   const [editLineUid, setEditLineUid] = useState('');
   const [editKeywords, setEditKeywords] = useState('');
   const [editPersona, setEditPersona] = useState('');
+  const [editClientInfo, setEditClientInfo] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [triggering, setTriggering] = useState(false);
@@ -98,7 +100,7 @@ export default function AiEditorClientPage() {
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, site_url: editSiteUrl, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona }),
+      body: JSON.stringify({ id: client.id, name: editName, site_url: editSiteUrl, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo }),
     });
     setSaving(false);
     setEditing(false);
@@ -178,6 +180,7 @@ export default function AiEditorClientPage() {
             <input value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="LINE UID" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="產業關鍵字（逗號分隔，例：植牙, 牙齒美白）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <textarea value={editPersona} onChange={e => setEditPersona(e.target.value)} rows={3} placeholder={`小編人設（例：溫暖親切的醫美診所小編，說話口吻輕鬆但專業，不用過度使用表情符號）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
+            <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder={`客戶資訊（例：台北植牙診所，目標受眾為 30-50 歲上班族，主打無痛療程與透明收費）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
             <div className="flex gap-2">
               <button onClick={handleSave} disabled={saving} className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
                 {saving ? '儲存中…' : '儲存'}
@@ -189,7 +192,7 @@ export default function AiEditorClientPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{client.name}</h1>
-              <button onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditing(true); }} className="text-xs text-gray-400 hover:text-gray-700">編輯</button>
+              <button onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditing(true); }} className="text-xs text-gray-400 hover:text-gray-700">編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600">刪除</button>
             </div>
             <p className="text-xs text-gray-400">{client.site_url}</p>
@@ -203,6 +206,7 @@ export default function AiEditorClientPage() {
             </div>
             {client.keywords && <p className="text-xs text-gray-500">關鍵字：{client.keywords}</p>}
             {client.persona && <p className="text-xs text-gray-500 whitespace-pre-line">人設：{client.persona}</p>}
+            {client.client_info && <p className="text-xs text-gray-500 whitespace-pre-line">客戶資訊：{client.client_info}</p>}
           </div>
         )}
       </div>
