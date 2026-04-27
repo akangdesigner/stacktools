@@ -45,7 +45,7 @@ function generateTocHtml(items: { id: string; text: string }[], linkColor: strin
   const links = items
     .map((item) => `<li><a href="${base}#${item.id}" target="_self" style="color: ${linkColor}; text-decoration: underline; font-weight: 400;">${item.text}</a></li>`)
     .join("");
-  const bgStyle = tocBgColor ? `background-color: ${hexToRgba(tocBgColor, tocBgOpacity)}; ` : "";
+  const bgStyle = tocBgColor ? `background-color: ${hexToRgba(tocBgColor, tocBgOpacity)}; ` : "background-color: transparent; ";
   return `<div class="catalog-box" style="${bgStyle}padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
 }
 
