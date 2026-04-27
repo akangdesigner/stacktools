@@ -29,6 +29,9 @@ if (!cols.includes('persona')) {
 if (!cols.includes('client_info')) {
   db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN client_info TEXT NOT NULL DEFAULT ''`);
 }
+if (!cols.includes('recent_activities')) {
+  db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN recent_activities TEXT NOT NULL DEFAULT ''`);
+}
 
 export interface AiEditorClient {
   id: number;
@@ -39,6 +42,7 @@ export interface AiEditorClient {
   keywords: string;
   persona: string;
   client_info: string;
+  recent_activities: string;
 }
 
 export function listAiEditorClients(): AiEditorClient[] {
@@ -51,8 +55,8 @@ export function getAiEditorClient(id: number): AiEditorClient | null {
 
 export function createAiEditorClient(data: Omit<AiEditorClient, 'id'>): AiEditorClient {
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid, keywords, persona, client_info) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name, data.site_url, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '');
+    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid, keywords, persona, client_info, recent_activities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.site_url, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 

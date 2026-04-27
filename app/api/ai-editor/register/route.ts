@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     keywords: '',
     persona: '',
     client_info: '',
+    recent_activities: '',
   });
 
   return NextResponse.json({ ok: true, id: client.id, action: 'created' });
