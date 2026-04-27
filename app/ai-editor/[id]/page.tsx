@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 interface AiEditorClient {
@@ -96,25 +96,25 @@ export default function AiEditorClientPage() {
         {editing ? (
           <div className="grid grid-cols-2 gap-3">
             <FieldCard label="文章列表網址">
-              <textarea value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} rows={2} placeholder="https://example.com/blog/category/" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} placeholder="https://example.com/blog/category/" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="LINE UID">
-              <textarea value={editLineUid} onChange={e => setEditLineUid(e.target.value)} rows={2} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="社群帳號">
-              <textarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} rows={2} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="產業關鍵字">
-              <textarea value={editKeywords} onChange={e => setEditKeywords(e.target.value)} rows={2} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="客戶資訊">
-              <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="小編人設">
-              <textarea value={editPersona} onChange={e => setEditPersona(e.target.value)} rows={3} placeholder="溫暖親切的醫美診所小編，說話口吻輕鬆但專業" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editPersona} onChange={e => setEditPersona(e.target.value)} placeholder="溫暖親切的醫美診所小編，說話口吻輕鬆但專業" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="近期活動" className="col-span-2">
-              <textarea value={editRecentActivities} onChange={e => setEditRecentActivities(e.target.value)} rows={3} placeholder={`5/10 母親節 8 折優惠\n5/20 院長健康講座（免費報名）`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <AutoTextarea value={editRecentActivities} onChange={e => setEditRecentActivities(e.target.value)} placeholder={`5/10 母親節 8 折優惠\n5/20 院長健康講座（免費報名）`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <div className="col-span-2 flex gap-2">
               <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
@@ -161,5 +161,30 @@ function FieldCard({ label, children, className }: { label: string; children: Re
       <p className="text-sm font-semibold text-gray-500">{label}</p>
       {children}
     </div>
+  );
+}
+
+function AutoTextarea({ value, onChange, placeholder, className }: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.style.height = 'auto';
+    ref.current.style.height = ref.current.scrollHeight + 'px';
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      rows={1}
+      className={className}
+      style={{ overflow: 'hidden' }}
+    />
   );
 }
