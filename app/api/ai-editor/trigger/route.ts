@@ -44,15 +44,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '尚未設定 N8N_TRENDING_POST_WEBHOOK_URL' }, { status: 500 });
   }
 
-  const body = await req.json() as { clientId?: number };
+  const body = await req.json() as { clientId?: number; purpose?: string; holiday?: string };
   if (!body.clientId) return NextResponse.json({ error: '缺少 clientId' }, { status: 400 });
 
   const client = getAiEditorClient(body.clientId);
   if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
 
-  const rssUrl = toRssUrl(client.site_url);
-  if (!rssUrl) {
-    return NextResponse.json({ error: '官網網址格式不正確，無法轉為 RSS feed URL' }, { status: 400 });
+  const purpose = body.purpose ?? '新文章草稿';
+  const holiday = body.holiday;
+
+  let rssUrl = '';
+  if (purpose === '新文章草稿') {
+    rssUrl = toRssUrl(client.site_url);
+    if (!rssUrl) {
+      return NextResponse.json({ error: '官網網址格式不正確，無法轉為 RSS feed URL' }, { status: 400 });
+    }
   }
 
   const jobId = crypto.randomUUID();
@@ -67,7 +73,8 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jobId,
-        purpose: '新文章草稿',
+        purpose,
+        ...(holiday && { holiday }),
         client: {
           id: client.id,
           name: client.name,
@@ -78,8 +85,7 @@ export async function POST(req: NextRequest) {
           persona: client.persona,
           client_info: client.client_info,
         },
-        siteUrl: client.site_url,
-        rssUrl,
+        ...(rssUrl && { siteUrl: client.site_url, rssUrl }),
       }),
       signal: controller.signal,
     });

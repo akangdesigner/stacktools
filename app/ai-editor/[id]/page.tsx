@@ -265,13 +265,12 @@ export default function AiEditorClientPage() {
 
           {/* 右欄 */}
           <div className="space-y-4">
-            {/* 節慶搶先提醒 */}
+            {/* 節慶主題靈感 */}
             <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-800">節慶搶先提醒</p>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">Demo</span>
+                <p className="text-sm font-semibold text-gray-800">節慶主題靈感</p>
               </div>
-              <p className="text-xs text-gray-400">自動偵測近期節慶，提前提醒安排相關貼文，並推送至 LINE。</p>
+              <p className="text-xs text-gray-400">自動偵測近期節慶，觸發 AI 依節慶主題產出貼文靈感，推送至 n8n。</p>
               <HolidayReminderDemo keywords={client?.keywords ?? ''} clientId={client?.id ?? 0} />
             </div>
 
@@ -333,29 +332,22 @@ function MonthlyPlanDemo() {
 
 function HolidayCard({ name, days, clientId }: { name: string; days: number; clientId: number }) {
   const [loading, setLoading] = useState(false);
-  const [titles, setTitles] = useState<string[]>([]);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState<number | null>(null);
 
-  async function generate() {
-    setLoading(true); setError(''); setTitles([]);
+  async function trigger() {
+    setLoading(true); setError(''); setDone(false);
     try {
-      const res = await fetch('/api/ai-editor/holiday-inspiration', {
+      const res = await fetch('/api/ai-editor/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, holiday: name }),
+        body: JSON.stringify({ clientId, purpose: '節慶搶先提醒', holiday: name }),
       });
-      const data = await res.json() as { titles?: string[]; error?: string };
-      if (!res.ok) { setError(data.error ?? '生成失敗'); return; }
-      setTitles(data.titles ?? []);
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? '觸發失敗'); return; }
+      setDone(true);
     } catch (e) { setError(String(e)); }
     finally { setLoading(false); }
-  }
-
-  function copy(text: string, idx: number) {
-    navigator.clipboard.writeText(text);
-    setCopied(idx);
-    setTimeout(() => setCopied(null), 1500);
   }
 
   return (
@@ -366,22 +358,11 @@ function HolidayCard({ name, days, clientId }: { name: string; days: number; cli
           {days <= 7 ? `⚡ 剩 ${days} 天` : `${days} 天後`}
         </span>
       </div>
-      {titles.length > 0 && (
-        <div className="space-y-1.5">
-          {titles.map((t, i) => (
-            <div key={i} className="flex items-start gap-2 rounded bg-white border border-gray-100 px-2.5 py-1.5">
-              <span className="text-xs text-gray-700 flex-1 leading-relaxed">{t}</span>
-              <button onClick={() => copy(t, i)} className="shrink-0 text-xs text-gray-400 hover:text-gray-700 transition-colors">
-                {copied === i ? '✓' : '複製'}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
       {error && <p className="text-xs text-red-500">{error}</p>}
-      <button onClick={generate} disabled={loading}
+      {done && <p className="text-xs text-green-600">已推送至 n8n</p>}
+      <button onClick={trigger} disabled={loading}
         className="px-3 py-1 rounded text-xs bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 transition-colors">
-        {loading ? '生成中…' : titles.length > 0 ? '重新生成' : '產出貼文靈感'}
+        {loading ? '推送中…' : '觸發靈感產出'}
       </button>
     </div>
   );
