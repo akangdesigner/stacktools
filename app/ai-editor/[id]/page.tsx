@@ -96,16 +96,16 @@ export default function AiEditorClientPage() {
         {editing ? (
           <div className="grid grid-cols-2 gap-3">
             <FieldCard label="文章列表網址">
-              <input value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} placeholder="https://example.com/blog/category/" className="w-full bg-transparent text-xs font-mono text-gray-800 focus:outline-none placeholder:text-gray-300" />
+              <textarea value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} rows={2} placeholder="https://example.com/blog/category/" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="LINE UID">
-              <input value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 focus:outline-none placeholder:text-gray-300" />
+              <textarea value={editLineUid} onChange={e => setEditLineUid(e.target.value)} rows={2} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="社群帳號">
               <textarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} rows={2} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="產業關鍵字">
-              <input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+              <textarea value={editKeywords} onChange={e => setEditKeywords(e.target.value)} rows={2} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="客戶資訊">
               <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
