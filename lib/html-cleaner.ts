@@ -123,7 +123,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     li.querySelectorAll("span").forEach((span) => {
       const existing = span.getAttribute("style") || "";
       span.setAttribute("style", mergeStyles(existing, {
-        "font-size": client.listItemFontSize || client.paragraphFontSize,
+        "font-size": client.paragraphFontSize,
         color: client.listItemColor,
       }));
     });
