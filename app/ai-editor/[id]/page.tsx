@@ -107,13 +107,13 @@ export default function AiEditorClientPage() {
             <FieldCard label="產業關鍵字">
               <input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
+            <FieldCard label="客戶資訊" className="col-span-2">
+              <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
             <FieldCard label="小編人設">
               <textarea value={editPersona} onChange={e => setEditPersona(e.target.value)} rows={3} placeholder="溫暖親切的醫美診所小編，說話口吻輕鬆但專業" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
-            <FieldCard label="客戶資訊">
-              <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
-            <FieldCard label="近期活動" className="col-span-2">
+            <FieldCard label="近期活動">
               <textarea value={editRecentActivities} onChange={e => setEditRecentActivities(e.target.value)} rows={3} placeholder={`5/10 母親節 8 折優惠\n5/20 院長健康講座（免費報名）`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <div className="col-span-2 flex gap-2">
@@ -139,13 +139,13 @@ export default function AiEditorClientPage() {
             <FieldCard label="產業關鍵字">
               <p className="text-xs text-gray-700">{client.keywords || '—'}</p>
             </FieldCard>
+            <FieldCard label="客戶資訊" className="col-span-2">
+              <p className="text-xs text-gray-700 whitespace-pre-line">{client.client_info || '—'}</p>
+            </FieldCard>
             <FieldCard label="小編人設">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.persona || '—'}</p>
             </FieldCard>
-            <FieldCard label="客戶資訊">
-              <p className="text-xs text-gray-700 whitespace-pre-line">{client.client_info || '—'}</p>
-            </FieldCard>
-            <FieldCard label="近期活動" className="col-span-2">
+            <FieldCard label="近期活動">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.recent_activities || '—'}</p>
             </FieldCard>
           </div>
@@ -158,7 +158,7 @@ export default function AiEditorClientPage() {
 function FieldCard({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5 ${className ?? ''}`}>
-      <p className="text-xs font-medium text-gray-400">{label}</p>
+      <p className="text-sm font-semibold text-gray-500">{label}</p>
       {children}
     </div>
   );
