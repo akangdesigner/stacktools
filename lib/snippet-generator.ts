@@ -50,7 +50,11 @@ export function getConsoleSnippet(): string {
         else if (tagName === 'p' || tagName === 'ul' || tagName === 'ol') {
             var cleanInner = node.innerHTML.replace(/class=".*?"/g, '').replace(/style=".*?"/g, '');
             if (tagName === 'ul' || tagName === 'ol') {
-                cleanInner = cleanInner.replace(/<li[^>]*>(.*?)<\\/li>/g, '<li style="margin-bottom:10px;"><span style="font-size:18px; color:#454f5e; line-height:1.8;">$1</span></li>');
+                cleanInner = cleanInner.replace(/\\s*data-[\\w-]+="[^"]*"/g, '');
+                cleanInner = cleanInner.replace(/<li[^>]*>([\\s\\S]*?)<\\/li>/g, function(_, inner) {
+                    var flat = inner.replace(/<\\/?p[^>]*>/g, '').replace(/&nbsp;/g, '').trim();
+                    return '<li style="margin-bottom:10px;"><span style="font-size:18px; color:#454f5e; line-height:1.8;">' + flat + '</span></li>';
+                });
             }
             var wrapper = (tagName === 'p') ? \`<span style="font-size:18px; color:#454f5e; line-height:1.8;">\${cleanInner}</span>\` : cleanInner;
             resultHtml += \`<\${tagName} style="margin-bottom:15px;">\${wrapper}</\${tagName}>\\n\`;
