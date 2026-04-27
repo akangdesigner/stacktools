@@ -94,29 +94,29 @@ export default function AiEditorClientPage() {
         </div>
 
         {editing ? (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <Field label="文章列表網址">
-              <input value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} placeholder="https://example.com/blog/category/" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <Field label="LINE UID">
-              <input value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <Field label="社群帳號">
-              <textarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} rows={2} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <Field label="產業關鍵字">
-              <input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <Field label="小編人設">
-              <textarea value={editPersona} onChange={e => setEditPersona(e.target.value)} rows={3} placeholder="溫暖親切的醫美診所小編，說話口吻輕鬆但專業" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <Field label="客戶資訊">
-              <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <Field label="近期活動" className="col-span-2">
-              <textarea value={editRecentActivities} onChange={e => setEditRecentActivities(e.target.value)} rows={3} placeholder={`5/10 母親節 8 折優惠\n5/20 院長健康講座（免費報名）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
-            </Field>
-            <div className="col-span-2 flex gap-2 pt-1">
+          <div className="grid grid-cols-2 gap-3">
+            <FieldCard label="文章列表網址">
+              <input value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} placeholder="https://example.com/blog/category/" className="w-full bg-transparent text-xs font-mono text-gray-800 focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="LINE UID">
+              <input value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="社群帳號">
+              <textarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} rows={2} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="產業關鍵字">
+              <input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="小編人設">
+              <textarea value={editPersona} onChange={e => setEditPersona(e.target.value)} rows={3} placeholder="溫暖親切的醫美診所小編，說話口吻輕鬆但專業" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="客戶資訊">
+              <textarea value={editClientInfo} onChange={e => setEditClientInfo(e.target.value)} rows={3} placeholder="台北植牙診所，目標受眾 30-50 歲上班族，主打無痛療程" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="近期活動" className="col-span-2">
+              <textarea value={editRecentActivities} onChange={e => setEditRecentActivities(e.target.value)} rows={3} placeholder={`5/10 母親節 8 折優惠\n5/20 院長健康講座（免費報名）`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <div className="col-span-2 flex gap-2">
               <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
                 {saving ? '儲存中…' : '儲存'}
               </button>
@@ -124,30 +124,30 @@ export default function AiEditorClientPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            <Field label="文章列表網址">
+          <div className="grid grid-cols-2 gap-3">
+            <FieldCard label="文章列表網址">
               <p className="text-xs text-gray-700 font-mono break-all">{client.site_url || '—'}</p>
-            </Field>
-            <Field label="LINE ID">
+            </FieldCard>
+            <FieldCard label="LINE ID">
               {client.line_uid
-                ? <span className="text-xs font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">{client.line_uid}</span>
+                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.line_uid}</span>
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
-            </Field>
-            <Field label="社群帳號">
+            </FieldCard>
+            <FieldCard label="社群帳號">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.social_account || '—'}</p>
-            </Field>
-            <Field label="產業關鍵字">
+            </FieldCard>
+            <FieldCard label="產業關鍵字">
               <p className="text-xs text-gray-700">{client.keywords || '—'}</p>
-            </Field>
-            <Field label="小編人設">
+            </FieldCard>
+            <FieldCard label="小編人設">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.persona || '—'}</p>
-            </Field>
-            <Field label="客戶資訊">
+            </FieldCard>
+            <FieldCard label="客戶資訊">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.client_info || '—'}</p>
-            </Field>
-            <Field label="近期活動" className="col-span-2">
+            </FieldCard>
+            <FieldCard label="近期活動" className="col-span-2">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.recent_activities || '—'}</p>
-            </Field>
+            </FieldCard>
           </div>
         )}
       </div>
@@ -155,10 +155,10 @@ export default function AiEditorClientPage() {
   );
 }
 
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function FieldCard({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={className}>
-      <p className="text-xs font-medium text-gray-400 mb-1">{label}</p>
+    <div className={`rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5 ${className ?? ''}`}>
+      <p className="text-xs font-medium text-gray-400">{label}</p>
       {children}
     </div>
   );
