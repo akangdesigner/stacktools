@@ -64,6 +64,10 @@ export function getConsoleSnippet(): string {
             var altText = node.alt ? node.alt.trim() : "";
             var originalFilename = node.src.substring(node.src.lastIndexOf('/') + 1).replace(/-\\d+[xX]\\d+(?=[^?#]*$)/, '');
             imageUrls.push({ url: node.src, name: originalFilename });
+            if (!altText) {
+                var rawName = node.src.substring(node.src.lastIndexOf('/') + 1).replace(/[?#].*$/, '').replace(/-\\d+[xX]\\d+(?=\\.[^.]+$)/, '').replace(/\\.[^.]+$/, '');
+                try { altText = decodeURIComponent(rawName).replace(/[-_]+/g, ' ').trim(); } catch(e) { altText = rawName.replace(/[-_]+/g, ' ').trim(); }
+            }
             resultHtml += \`<img src="\${node.src}" alt="\${altText.replace(/"/g, '&quot;')}" style="max-width:100%; height:auto; display:block; margin: 10px auto;"><br>\\n\`;
         }
     });
