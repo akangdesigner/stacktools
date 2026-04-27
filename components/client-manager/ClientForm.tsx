@@ -153,7 +153,6 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
             />
           </label>
           <ColorPicker label="列表顏色" value={form.listItemColor} onChange={(v) => set("listItemColor", v)} />
-          <SizeInput label="列表大小" value={form.listItemFontSize} onChange={(v) => set("listItemFontSize", v)} />
         </div>
       </section>
 
