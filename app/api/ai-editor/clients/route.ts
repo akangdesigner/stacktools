@@ -13,7 +13,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string };
+  const body = await req.json() as { name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_code?: string };
   const client = createAiEditorClient({
     name: body.name?.trim() ?? '',
     site_url: body.site_url?.trim() ?? '',
@@ -23,12 +23,13 @@ export async function POST(req: NextRequest) {
     persona: body.persona?.trim() ?? '',
     client_info: body.client_info?.trim() ?? '',
     recent_activities: body.recent_activities?.trim() ?? '',
+    buffer_code: body.buffer_code?.trim() ?? '',
   });
   return NextResponse.json(client);
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string };
+  const body = await req.json() as { id?: number; name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_code?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
@@ -39,6 +40,7 @@ export async function PUT(req: NextRequest) {
     ...(body.persona !== undefined && { persona: body.persona }),
     ...(body.client_info !== undefined && { client_info: body.client_info }),
     ...(body.recent_activities !== undefined && { recent_activities: body.recent_activities }),
+    ...(body.buffer_code !== undefined && { buffer_code: body.buffer_code }),
   });
   return NextResponse.json({ ok: true });
 }
