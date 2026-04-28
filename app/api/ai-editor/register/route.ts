@@ -19,14 +19,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '缺少必要欄位：lineUid' }, { status: 400 });
   }
 
+  const skip = (v?: string) => v === undefined || v.trim() === '不更動';
+
   const { client, action } = upsertClientByLineUid(body.lineUid.trim(), {
-    ...(body.name !== undefined && { name: body.name.trim() }),
-    ...(body.siteUrl !== undefined && { site_url: body.siteUrl.trim() }),
-    ...(body.socialAccount !== undefined && { social_account: body.socialAccount.trim() }),
-    ...(body.keywords !== undefined && { keywords: body.keywords.trim() }),
-    ...(body.persona !== undefined && { persona: body.persona.trim() }),
-    ...(body.client_info !== undefined && { client_info: body.client_info.trim() }),
-    ...(body.recent_activities !== undefined && { recent_activities: body.recent_activities.trim() }),
+    ...(!skip(body.name) && { name: body.name!.trim() }),
+    ...(!skip(body.siteUrl) && { site_url: body.siteUrl!.trim() }),
+    ...(!skip(body.socialAccount) && { social_account: body.socialAccount!.trim() }),
+    ...(!skip(body.keywords) && { keywords: body.keywords!.trim() }),
+    ...(!skip(body.persona) && { persona: body.persona!.trim() }),
+    ...(!skip(body.client_info) && { client_info: body.client_info!.trim() }),
+    ...(!skip(body.recent_activities) && { recent_activities: body.recent_activities!.trim() }),
   });
 
   return NextResponse.json({ ok: true, id: client.id, action });
