@@ -71,13 +71,18 @@ export function deleteAiEditorClient(id: number): void {
 }
 
 export function upsertClientByLineUid(
-  lineUid: string, name: string, siteUrl: string, socialAccount: string
+  lineUid: string,
+  data: Partial<Omit<AiEditorClient, 'id' | 'line_uid'>>
 ): { client: AiEditorClient; action: 'created' | 'updated' } {
   const existing = db.prepare('SELECT * FROM ai_editor_clients WHERE line_uid = ?').get(lineUid) as AiEditorClient | undefined;
   if (existing) {
-    db.prepare('UPDATE ai_editor_clients SET name = ?, site_url = ?, social_account = ? WHERE line_uid = ?').run(name, siteUrl, socialAccount, lineUid);
+    const fields = Object.keys(data).map(k => `${k} = ?`).join(', ');
+    const values = Object.values(data);
+    if (fields) db.prepare(`UPDATE ai_editor_clients SET ${fields} WHERE line_uid = ?`).run(...values, lineUid);
     return { client: getAiEditorClient(existing.id)!, action: 'updated' };
   }
-  const result = db.prepare('INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid) VALUES (?, ?, ?, ?)').run(name, siteUrl, socialAccount, lineUid);
+  const result = db.prepare(
+    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid, keywords, persona, client_info, recent_activities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name ?? '', data.site_url ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '');
   return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
 }
