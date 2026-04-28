@@ -14,12 +14,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as { name?: string; site_url?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string };
-  if (!body.name?.trim() || !body.site_url?.trim()) {
-    return NextResponse.json({ error: '名稱與官網網址為必填' }, { status: 400 });
-  }
   const client = createAiEditorClient({
-    name: body.name.trim(),
-    site_url: body.site_url.trim(),
+    name: body.name?.trim() ?? '',
+    site_url: body.site_url?.trim() ?? '',
     social_account: body.social_account?.trim() ?? '',
     line_uid: body.line_uid?.trim() ?? '',
     keywords: body.keywords?.trim() ?? '',
