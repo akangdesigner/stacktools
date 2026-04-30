@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
 
   const platforms = getClientUrls(clientId);
   const job = createJob(clientId, dateFrom, dateTo);
-  const callbackUrl = `${req.nextUrl.origin}/api/social-webhook/callback`;
+  const origin = (process.env.NEXTAUTH_URL ?? req.nextUrl.origin).replace(/\/$/, '');
+  const callbackUrl = `${origin}/api/social-webhook/callback`;
 
   try {
     const controller = new AbortController();
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
         callbackUrl,
         clientName: client.name,
         slackChannelId: bodySlackId ?? client.slack_id ?? '',
-        pageUrl: `${req.nextUrl.origin}/social/${clientId}`,
+        pageUrl: `${origin}/social/${clientId}`,
         platforms,
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
