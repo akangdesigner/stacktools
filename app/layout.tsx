@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import Link from "next/link";
+import AuthProvider from "@/components/AuthProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,10 +32,12 @@ export default function RootLayout({
       style={{ colorScheme: 'light' }}
     >
       <body className="min-h-screen flex bg-gray-50">
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
+        <AuthProvider>
+          <Sidebar />
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </AuthProvider>
       </body>
     </html>
   );

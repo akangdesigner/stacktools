@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 
 const homeItem = {
   href: '/',
@@ -109,6 +110,7 @@ const extraItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <aside className="w-56 shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-screen">
@@ -165,7 +167,32 @@ export default function Sidebar() {
       </nav>
 
 {/* Footer */}
-      <div className="px-4 py-3 border-t border-gray-200">
+      <div className="px-4 py-3 border-t border-gray-200 space-y-2">
+        {session?.user && (
+          <div className="flex items-center gap-2">
+            {session.user.image ? (
+              <Image
+                src={session.user.image}
+                alt={session.user.name ?? ""}
+                width={28}
+                height={28}
+                className="rounded-full shrink-0"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+                <span className="text-xs text-gray-500">{session.user.name?.[0] ?? "?"}</span>
+              </div>
+            )}
+            <span className="text-xs text-gray-600 truncate flex-1">{session.user.name}</span>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+              title="登出"
+            >
+              登出
+            </button>
+          </div>
+        )}
         <p className="text-xs text-gray-400">Stacktools v1.0</p>
       </div>
     </aside>
