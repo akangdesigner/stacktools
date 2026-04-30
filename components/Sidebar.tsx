@@ -115,6 +115,7 @@ export default function Sidebar() {
   const [showSuspended, setShowSuspended] = useState(false);
 
   return (
+    <>
     {showSuspended && (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
@@ -228,5 +229,6 @@ export default function Sidebar() {
         <p className="text-xs text-gray-400">Stacktools v1.0</p>
       </div>
     </aside>
+    </>
   );
 }
