@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -112,8 +112,30 @@ const extraItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const [showSuspended, setShowSuspended] = useState(false);
 
   return (
+    {showSuspended && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setShowSuspended(false)}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-xl px-8 py-7 max-w-sm w-full mx-4 text-center"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="text-3xl mb-3">⏸</div>
+          <h2 className="text-lg font-semibold text-gray-800 mb-2">暫時下架</h2>
+          <p className="text-sm text-gray-500 leading-relaxed mb-5">此功能目前暫時下架，如有需要請聯絡管理員。</p>
+          <button
+            onClick={() => setShowSuspended(false)}
+            className="px-5 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            關閉
+          </button>
+        </div>
+      </div>
+    )}
     <aside className="w-56 shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-screen">
       {/* Logo */}
       <div className="flex items-center justify-center px-4 py-3 border-b border-gray-200">
@@ -138,11 +160,19 @@ export default function Sidebar() {
           <div className="space-y-1">
             {liveItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              if (item.suspended) {
+                return (
+                  <button key={item.href} onClick={() => setShowSuspended(true)} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-gray-600 hover:bg-gray-100 hover:text-gray-900 w-full text-left">
+                    {item.icon}
+                    <span className="flex-1">{item.label}</span>
+                    <span className="text-xs text-gray-400 font-normal">暫時下架</span>
+                  </button>
+                );
+              }
               return (
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
                   {item.icon}
                   <span className="flex-1">{item.label}</span>
-                  {item.suspended && !isActive && <span className="text-xs text-gray-400 font-normal">暫時下架</span>}
                   {item.inDev && !isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
                 </Link>
               );
