@@ -15,8 +15,8 @@ export default auth((req) => {
 })
 
 export const config = {
-  // 排除 NextAuth 自身、GSC OAuth、靜態資源、圖片
+  // 只保護頁面路由，API 路由不擋（外部服務如 n8n 需能直接呼叫）
   matcher: [
-    "/((?!api/auth|api/gsc|_next/static|_next/image|favicon\\.ico|.*\\.png$).*)",
+    "/((?!api/|_next/static|_next/image|favicon\\.ico|.*\\.png$).*)",
   ],
 }
