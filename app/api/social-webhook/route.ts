@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
         callbackUrl,
         clientName: client.name,
         slackChannelId: bodySlackId ?? client.slack_id ?? '',
+        pageUrl: `${req.nextUrl.origin}/social/${clientId}`,
         platforms,
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
