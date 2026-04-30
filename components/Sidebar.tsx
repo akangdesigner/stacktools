@@ -17,7 +17,7 @@ const homeItem = {
   ),
 };
 
-const liveItems: { href: string; label: string; inDev?: boolean; icon: React.ReactNode }[] = [
+const liveItems: { href: string; label: string; inDev?: boolean; suspended?: boolean; icon: React.ReactNode }[] = [
   {
     href: '/article',
     label: '文章上架工具',
@@ -34,6 +34,7 @@ const liveItems: { href: string; label: string; inDev?: boolean; icon: React.Rea
   {
     href: '/ig',
     label: 'IG 監控報告',
+    suspended: true,
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
@@ -141,6 +142,7 @@ export default function Sidebar() {
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
                   {item.icon}
                   <span className="flex-1">{item.label}</span>
+                  {item.suspended && !isActive && <span className="text-xs text-gray-400 font-normal">暫時下架</span>}
                   {item.inDev && !isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
                 </Link>
               );

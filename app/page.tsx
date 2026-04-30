@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import Link from "next/link";
 
 const internalTools = [
@@ -18,6 +21,7 @@ const internalTools = [
     color: "bg-purple-50 border-purple-200 hover:border-purple-400",
     iconBg: "bg-purple-100",
     inDev: false,
+    suspended: true,
   },
   {
     href: "/knowledge",
@@ -79,29 +83,74 @@ const externalTools = [
 ];
 
 export default function HomePage() {
+  const [showSuspended, setShowSuspended] = useState(false);
+
+  function renderCard(tool: typeof internalTools[0]) {
+    const badge = tool.suspended
+      ? <span className="absolute top-3 right-3 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-300 rounded-full px-2 py-0.5">暫時下架</span>
+      : tool.inDev
+      ? <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
+      : null;
+
+    const inner = (
+      <>
+        {badge}
+        <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
+          {tool.icon}
+        </div>
+        <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
+        <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
+      </>
+    );
+
+    if (tool.suspended) {
+      return (
+        <button
+          key={tool.href}
+          onClick={() => setShowSuspended(true)}
+          className={`relative block p-5 rounded-xl border-2 transition-all text-left w-full ${tool.color}`}
+        >
+          {inner}
+        </button>
+      );
+    }
+
+    return (
+      <Link key={tool.href} href={tool.href} className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}>
+        {inner}
+      </Link>
+    );
+  }
+
   return (
     <>
+    {showSuspended && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        onClick={() => setShowSuspended(false)}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-xl px-8 py-7 max-w-sm w-full mx-4 text-center"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="text-3xl mb-3">⏸</div>
+          <h2 className="text-lg font-semibold text-gray-800 mb-2">暫時下架</h2>
+          <p className="text-sm text-gray-500 leading-relaxed mb-5">此功能目前暫時下架，如有需要請聯絡管理員。</p>
+          <button
+            onClick={() => setShowSuspended(false)}
+            className="px-5 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            關閉
+          </button>
+        </div>
+      </div>
+    )}
     <div className="p-8 max-w-2xl space-y-10">
       {/* 內部工具 */}
       <div>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">內部工具</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {internalTools.map((tool) => (
-            <Link
-              key={tool.href}
-              href={tool.href}
-              className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
-            >
-              {tool.inDev && (
-                <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
-              )}
-              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
-                {tool.icon}
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
-            </Link>
-          ))}
+          {internalTools.map((tool) => renderCard(tool))}
         </div>
       </div>
 
@@ -109,22 +158,7 @@ export default function HomePage() {
       <div>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">外部產品</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {externalTools.map((tool) => (
-            <Link
-              key={tool.href}
-              href={tool.href}
-              className={`relative block p-5 rounded-xl border-2 transition-all ${tool.color}`}
-            >
-              {tool.inDev && (
-                <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
-              )}
-              <div className={`w-10 h-10 rounded-lg ${tool.iconBg} flex items-center justify-center text-xl mb-3`}>
-                {tool.icon}
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-1">{tool.title}</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">{tool.description}</p>
-            </Link>
-          ))}
+          {externalTools.map((tool) => renderCard(tool))}
         </div>
       </div>
     </div>
