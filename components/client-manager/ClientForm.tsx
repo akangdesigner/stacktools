@@ -41,7 +41,7 @@ function SizeInput({ label, value, onChange }: { label: string; value: string; o
 }
 
 export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
-  const { upsertClient } = useClients();
+  const { upsertClient, clients } = useClients();
   const isEdit = !!initial;
 
   const [form, setForm] = useState<FormData>(() => {
@@ -60,10 +60,18 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
       setNameError("請輸入客戶名稱");
       return;
     }
+    const trimmed = name.trim();
+    const duplicate = clients.find(
+      (c) => c.name.trim() === trimmed && c.id !== initial?.id
+    );
+    if (duplicate) {
+      setNameError("已有相同名稱的客戶，請換一個名稱");
+      return;
+    }
     const now = new Date().toISOString();
     const profile: ClientProfile = {
       id: initial?.id ?? crypto.randomUUID(),
-      name: name.trim(),
+      name: trimmed,
       createdAt: initial?.createdAt ?? now,
       updatedAt: now,
       ...form,
