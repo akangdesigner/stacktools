@@ -6,6 +6,7 @@ import {
   createAiEditorClient,
   updateAiEditorClient,
   deleteAiEditorClient,
+  upsertClientByLineUid,
 } from '@/lib/aiEditorDb';
 
 export async function GET() {
@@ -14,10 +15,23 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as { name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_code?: string };
+  const lineUid = body.line_uid?.trim() ?? '';
+  if (lineUid) {
+    const { client, action } = upsertClientByLineUid(lineUid, {
+      ...(body.name !== undefined && { name: body.name!.trim() }),
+      ...(body.social_account !== undefined && { social_account: body.social_account!.trim() }),
+      ...(body.keywords !== undefined && { keywords: body.keywords!.trim() }),
+      ...(body.persona !== undefined && { persona: body.persona!.trim() }),
+      ...(body.client_info !== undefined && { client_info: body.client_info!.trim() }),
+      ...(body.recent_activities !== undefined && { recent_activities: body.recent_activities!.trim() }),
+      ...(body.buffer_code !== undefined && { buffer_code: body.buffer_code!.trim() }),
+    });
+    return NextResponse.json({ ...client, action });
+  }
   const client = createAiEditorClient({
     name: body.name?.trim() ?? '',
     social_account: body.social_account?.trim() ?? '',
-    line_uid: body.line_uid?.trim() ?? '',
+    line_uid: '',
     keywords: body.keywords?.trim() ?? '',
     persona: body.persona?.trim() ?? '',
     client_info: body.client_info?.trim() ?? '',
