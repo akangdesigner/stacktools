@@ -15,13 +15,15 @@ function getDb() {
     CREATE TABLE IF NOT EXISTS ai_editor_clients (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       name           TEXT NOT NULL,
-      site_url       TEXT NOT NULL,
       social_account TEXT NOT NULL DEFAULT '',
       line_uid       TEXT NOT NULL DEFAULT ''
     );
   `);
 
   const cols = (_db.prepare(`PRAGMA table_info(ai_editor_clients)`).all() as { name: string }[]).map(c => c.name);
+  if (cols.includes('site_url')) {
+    _db.exec(`ALTER TABLE ai_editor_clients DROP COLUMN site_url`);
+  }
   if (!cols.includes('keywords')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN keywords TEXT NOT NULL DEFAULT ''`);
   }
@@ -44,7 +46,6 @@ function getDb() {
 export interface AiEditorClient {
   id: number;
   name: string;
-  site_url: string;
   social_account: string;
   line_uid: string;
   keywords: string;
@@ -65,8 +66,8 @@ export function getAiEditorClient(id: number): AiEditorClient | null {
 export function createAiEditorClient(data: Omit<AiEditorClient, 'id'>): AiEditorClient {
   const db = getDb();
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name, data.site_url, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_code ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_code ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 
@@ -94,7 +95,7 @@ export function upsertClientByLineUid(
     return { client: getAiEditorClient(existing.id)!, action: 'updated' };
   }
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, site_url, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name ?? '', data.site_url ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_code ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_code ?? '');
   return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
 }
