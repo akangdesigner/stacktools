@@ -23,7 +23,6 @@ export default function AiEditorClientPage() {
   const [client, setClient] = useState<AiEditorClient | null>(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editSiteUrl, setEditSiteUrl] = useState('');
   const [editSocialAccount, setEditSocialAccount] = useState('');
   const [editLineUid, setEditLineUid] = useState('');
   const [editKeywords, setEditKeywords] = useState('');
@@ -42,6 +41,7 @@ export default function AiEditorClientPage() {
       });
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadClient(); }, [id]);
 
   async function handleSave() {
@@ -50,7 +50,7 @@ export default function AiEditorClientPage() {
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, site_url: editSiteUrl, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_code: editBufferCode }),
+      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_code: editBufferCode }),
     });
     setSaving(false);
     setEditing(false);
@@ -87,7 +87,7 @@ export default function AiEditorClientPage() {
           {!editing && (
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditName(client.name); setEditSiteUrl(client.site_url); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferCode(client.buffer_code ?? ''); setEditing(true); }}
+                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferCode(client.buffer_code ?? ''); setEditing(true); }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">刪除</button>
@@ -97,9 +97,6 @@ export default function AiEditorClientPage() {
 
         {editing ? (
           <div className="grid grid-cols-2 gap-3">
-            <FieldCard label="文章列表網址">
-              <AutoTextarea value={editSiteUrl} onChange={e => setEditSiteUrl(e.target.value)} placeholder="https://example.com/blog/category/" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
             <FieldCard label="LINE UID">
               <AutoTextarea value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
@@ -130,9 +127,6 @@ export default function AiEditorClientPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <FieldCard label="文章列表網址">
-              <p className="text-xs text-gray-700 font-mono break-all">{client.site_url || '—'}</p>
-            </FieldCard>
             <FieldCard label="LINE ID">
               {client.line_uid
                 ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.line_uid}</span>
