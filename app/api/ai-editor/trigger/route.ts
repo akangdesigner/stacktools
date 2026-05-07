@@ -4,25 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAiEditorClient } from '@/lib/aiEditorDb';
 import { createAiEditorJob, getAiEditorJob, updateAiEditorJob } from '@/lib/ai-editor-jobs';
 
-function toRssUrl(inputUrl: string): string {
-  const trimmed = inputUrl.trim();
-  if (!trimmed) return '';
-
-  let urlObj: URL;
-  try {
-    urlObj = new URL(trimmed);
-  } catch {
-    return '';
-  }
-
-  const pathname = urlObj.pathname.replace(/\/+$/, '');
-  if (pathname.endsWith('/feed')) {
-    return urlObj.toString();
-  }
-
-  urlObj.pathname = `${pathname}/feed/`;
-  return urlObj.toString();
-}
 
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get('jobId');
@@ -53,14 +34,6 @@ export async function POST(req: NextRequest) {
   const purpose = body.purpose ?? '新文章草稿';
   const holiday = body.holiday;
 
-  let rssUrl = '';
-  if (purpose === '新文章草稿') {
-    rssUrl = toRssUrl(client.site_url);
-    if (!rssUrl) {
-      return NextResponse.json({ error: '官網網址格式不正確，無法轉為 RSS feed URL' }, { status: 400 });
-    }
-  }
-
   const jobId = crypto.randomUUID();
   createAiEditorJob(jobId);
 
@@ -78,14 +51,12 @@ export async function POST(req: NextRequest) {
         client: {
           id: client.id,
           name: client.name,
-          site_url: client.site_url,
           social_account: client.social_account,
           line_uid: client.line_uid,
           keywords: client.keywords,
           persona: client.persona,
           client_info: client.client_info,
         },
-        ...(rssUrl && { siteUrl: client.site_url, rssUrl }),
       }),
       signal: controller.signal,
     });
