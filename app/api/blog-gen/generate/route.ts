@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   }
 
   const jobId = crypto.randomUUID();
-  const callbackUrl = `${req.nextUrl.origin}/api/blog-gen/callback`;
+  const callbackBase = process.env.BLOG_GEN_CALLBACK_BASE_URL || req.nextUrl.origin;
+  const callbackUrl = `${callbackBase}/api/blog-gen/callback`;
 
   const chatInput = [
     `客戶名稱：${client.name}`,
