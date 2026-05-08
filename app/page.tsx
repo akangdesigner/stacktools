@@ -59,6 +59,15 @@ const internalTools = [
     iconBg: "bg-rose-100",
     inDev: false,
   },
+  {
+    href: "/blog-gen",
+    title: "部落格文章生成",
+    description: "以客戶為單位，設定 Word 文件網址與 Google Drive 圖片，搭配小編人設，一鍵生成並上架部落格文章。",
+    icon: "✍️",
+    color: "bg-cyan-50 border-cyan-200 hover:border-cyan-400",
+    iconBg: "bg-cyan-100",
+    inDev: false,
+  },
 ];
 
 const externalTools = [
