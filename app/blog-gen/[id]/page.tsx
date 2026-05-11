@@ -9,6 +9,10 @@ interface Client {
   word_url: string;
   gdrive_url: string;
   persona: string;
+  wp_url: string;
+  wp_username: string;
+  wp_app_password: string;
+  wp_category_id: string;
   job_id: string;
   job_status: string;
   job_result: string;
@@ -19,7 +23,7 @@ export default function BlogGenDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [client, setClient] = useState<Client | null>(null);
-  const [form, setForm] = useState({ name: '', word_url: '', gdrive_url: '', persona: '' });
+  const [form, setForm] = useState({ name: '', word_url: '', gdrive_url: '', persona: '', wp_url: '', wp_username: '', wp_app_password: '', wp_category_id: '' });
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -36,7 +40,7 @@ export default function BlogGenDetailPage() {
     if (!res.ok) { router.push('/blog-gen'); return; }
     const data: Client = await res.json();
     setClient(data);
-    setForm({ name: data.name, word_url: data.word_url, gdrive_url: data.gdrive_url, persona: data.persona });
+    setForm({ name: data.name, word_url: data.word_url, gdrive_url: data.gdrive_url, persona: data.persona, wp_url: data.wp_url, wp_username: data.wp_username, wp_app_password: data.wp_app_password, wp_category_id: data.wp_category_id });
     if (data.job_status === 'processing') startPoll();
   }
 
@@ -64,7 +68,7 @@ export default function BlogGenDetailPage() {
     const res = await fetch('/api/blog-gen/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: Number(id), ...form }),
+      body: JSON.stringify({ id: Number(id), ...form, wp_category_id: form.wp_category_id.trim() }),
     });
     setSaving(false);
     if (res.ok) {
@@ -90,6 +94,17 @@ export default function BlogGenDetailPage() {
     }
     setClient(prev => prev ? { ...prev, job_status: 'processing', job_result: '' } : prev);
     startPoll();
+  }
+
+  async function handleCancel() {
+    await fetch('/api/blog-gen/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId: Number(id) }),
+    });
+    stopPoll();
+    setGenerating(false);
+    setClient(prev => prev ? { ...prev, job_status: '', job_id: '', job_result: '' } : prev);
   }
 
   async function handleDelete() {
@@ -122,9 +137,47 @@ export default function BlogGenDetailPage() {
         </button>
       </div>
 
-      {/* 設定欄位 */}
+      {/* 參考資料區 */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-4 space-y-4">
+        <h2 className="text-sm font-semibold text-blue-800">參考資料</h2>
+
+        <div>
+          <label className="block text-xs text-blue-700 mb-1">Word 文件網址</label>
+          <input
+            type="url"
+            value={form.word_url}
+            onChange={e => setForm(f => ({ ...f, word_url: e.target.value }))}
+            placeholder="https://..."
+            className="w-full px-3 py-2 border border-blue-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-blue-700 mb-1">Google Drive 圖片位址</label>
+          <input
+            type="url"
+            value={form.gdrive_url}
+            onChange={e => setForm(f => ({ ...f, gdrive_url: e.target.value }))}
+            placeholder="https://drive.google.com/..."
+            className="w-full px-3 py-2 border border-blue-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? '儲存中...' : '儲存'}
+          </button>
+          {saveMsg && <span className="text-xs text-green-600">{saveMsg}</span>}
+        </div>
+      </div>
+
+      {/* 固定設定 */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">客戶設定</h2>
+        <h2 className="text-sm font-semibold text-gray-700">固定設定</h2>
 
         <div>
           <label className="block text-xs text-gray-500 mb-1">客戶名稱</label>
@@ -132,28 +185,6 @@ export default function BlogGenDetailPage() {
             type="text"
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Word 文件網址</label>
-          <input
-            type="url"
-            value={form.word_url}
-            onChange={e => setForm(f => ({ ...f, word_url: e.target.value }))}
-            placeholder="https://..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Google Drive 圖片位址</label>
-          <input
-            type="url"
-            value={form.gdrive_url}
-            onChange={e => setForm(f => ({ ...f, gdrive_url: e.target.value }))}
-            placeholder="https://drive.google.com/..."
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
@@ -167,6 +198,55 @@ export default function BlogGenDetailPage() {
             placeholder="描述小編的寫作風格、口吻、品牌個性..."
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
           />
+        </div>
+
+        <hr className="border-gray-100" />
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">WordPress 發布設定</p>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">WordPress 站台網址</label>
+          <input
+            type="url"
+            value={form.wp_url}
+            onChange={e => setForm(f => ({ ...f, wp_url: e.target.value }))}
+            placeholder="https://example.com"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">WordPress 帳號</label>
+            <input
+              type="text"
+              value={form.wp_username}
+              onChange={e => setForm(f => ({ ...f, wp_username: e.target.value }))}
+              placeholder="admin"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">分類 ID</label>
+            <input
+              type="text"
+              value={form.wp_category_id}
+              onChange={e => setForm(f => ({ ...f, wp_category_id: e.target.value }))}
+              placeholder="5"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">應用程式密碼</label>
+          <input
+            type="password"
+            value={form.wp_app_password}
+            onChange={e => setForm(f => ({ ...f, wp_app_password: e.target.value }))}
+            placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+          <p className="mt-1 text-xs text-gray-400">WordPress 後台 → 使用者 → 個人資料 → 應用程式密碼</p>
         </div>
 
         <div className="flex items-center gap-3 pt-1">
@@ -192,28 +272,38 @@ export default function BlogGenDetailPage() {
           )}
         </div>
 
-        <button
-          onClick={handleGenerate}
-          disabled={isProcessing}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors mb-4"
-        >
-          {isProcessing ? (
-            <>
-              <svg className="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              生成中，請稍候...
-            </>
-          ) : (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              生成並上架
-            </>
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={handleGenerate}
+            disabled={isProcessing}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {isProcessing ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                生成中，請稍候...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                生成並上架
+              </>
+            )}
+          </button>
+          {isProcessing && (
+            <button
+              onClick={handleCancel}
+              className="px-4 py-3 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              取消
+            </button>
           )}
-        </button>
+        </div>
 
         {/* 結果顯示 */}
         {client.job_status === 'completed' && client.job_result && (

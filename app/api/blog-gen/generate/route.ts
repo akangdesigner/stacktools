@@ -27,7 +27,15 @@ export async function POST(req: NextRequest) {
     `狀態回傳網址：${callbackUrl}`,
   ].join('\n');
 
-  const payload = JSON.stringify({ chatInput, jobId, callbackUrl });
+  const payload = JSON.stringify({
+    chatInput,
+    jobId,
+    callbackUrl,
+    wp_url: client.wp_url,
+    wp_username: client.wp_username,
+    wp_app_password: client.wp_app_password,
+    wp_category_id: client.wp_category_id,
+  });
 
   try {
     const primaryUrl = webhookUrl ?? webhookTestUrl!;

@@ -25,9 +25,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, name, word_url, gdrive_url, persona } = await req.json();
+  const { id, name, word_url, gdrive_url, persona, wp_url, wp_username, wp_app_password, wp_category_id } = await req.json();
   if (!id || !name?.trim()) return NextResponse.json({ error: '缺少必填欄位' }, { status: 400 });
-  updateClient(Number(id), name.trim(), word_url ?? '', gdrive_url ?? '', persona ?? '');
+  updateClient(
+    Number(id),
+    name.trim(),
+    word_url ?? '',
+    gdrive_url ?? '',
+    persona ?? '',
+    (wp_url ?? '').replace(/\/+$/, ''),
+    wp_username ?? '',
+    wp_app_password ?? '',
+    wp_category_id ?? '',
+  );
   return NextResponse.json({ ok: true });
 }
 
