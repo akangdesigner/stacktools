@@ -59,6 +59,11 @@ export interface ClientProfile {
   tocBgOpacity: number;      // TOC background opacity (0-100)
   blogBaseUrl: string;       // e.g. https://www.tantanwow.com/blog/posts/
   specialNotes: string;      // 上架注意事項，顯示於結果頁提醒
+
+  // WordPress 後台快速登入
+  wpAdminUrl: string;        // 後台網址 e.g. https://example.com/wp-admin/
+  wpAdminUsername: string;
+  wpAdminPassword: string;
 }
 
 export interface ImageReplacement {

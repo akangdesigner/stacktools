@@ -180,6 +180,57 @@ export function WizardShell() {
               </div>
             </div>
           )}
+          {selectedClient?.wpAdminUrl && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-700">後台登入</p>
+              <div className="space-y-1.5 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400 w-10 shrink-0">帳號</span>
+                  <span className="text-gray-700 font-mono break-all">{selectedClient.wpAdminUsername}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400 w-10 shrink-0">密碼</span>
+                  <span className="text-gray-700 font-mono break-all">{selectedClient.wpAdminPassword}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const base = selectedClient.wpAdminUrl.replace(/\/+$/, '');
+                  const loginUrl = base.replace(/\/wp-admin$/, '') + '/wp-login.php';
+                  const f = document.createElement('form');
+                  f.method = 'POST';
+                  f.action = loginUrl;
+                  f.target = '_blank';
+                  const fields: Record<string, string> = {
+                    log: selectedClient.wpAdminUsername,
+                    pwd: selectedClient.wpAdminPassword,
+                    redirect_to: '/wp-admin/',
+                    testcookie: '1',
+                  };
+                  Object.entries(fields).forEach(([name, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = value;
+                    f.appendChild(input);
+                  });
+                  document.body.appendChild(f);
+                  f.submit();
+                  document.body.removeChild(f);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-900 text-white text-xs font-medium rounded-xl hover:bg-gray-700 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                前往後台登入
+              </button>
+            </div>
+          )}
+
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
             <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

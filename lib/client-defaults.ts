@@ -41,6 +41,9 @@ export const DEFAULT_CLIENT_PROFILE: Omit<ClientProfile, "id" | "name" | "create
   tocBgOpacity: 100,
   blogBaseUrl: "",
   specialNotes: "",
+  wpAdminUrl: "",
+  wpAdminUsername: "",
+  wpAdminPassword: "",
 };
 
 export function createDefaultClient(name: string): ClientProfile {

@@ -17,7 +17,7 @@ interface Step4CopyResultProps {
 export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRegenerate, isRegenerating }: Step4CopyResultProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const { getClient } = useClients();
+  const { getClient, refetch } = useClients();
   const currentClient = selectedClientId ? getClient(selectedClientId) : null;
 
   return (
@@ -70,7 +70,7 @@ export function Step4CopyResult({ cleanedHtml, onReset, selectedClientId, onRege
       {showEditModal && currentClient && (
         <ClientManagerModal
           initialView={{ type: "form", client: currentClient }}
-          onClose={() => setShowEditModal(false)}
+          onClose={() => { setShowEditModal(false); refetch(); }}
         />
       )}
 

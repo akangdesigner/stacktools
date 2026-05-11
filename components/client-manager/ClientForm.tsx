@@ -405,6 +405,43 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
         </div>
       </section>
 
+      {/* WordPress 後台快速登入 */}
+      <section>
+        <p className="text-sm font-semibold text-gray-800 mb-3 pb-1 border-b border-gray-100">WordPress 後台登入</p>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <span className="text-sm text-gray-600 w-32 shrink-0 pt-2">後台網址</span>
+            <input
+              type="url"
+              value={form.wpAdminUrl}
+              onChange={(e) => set("wpAdminUrl", e.target.value)}
+              placeholder="https://example.com/wp-admin/"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 w-32 shrink-0">帳號</span>
+            <input
+              type="text"
+              value={form.wpAdminUsername}
+              onChange={(e) => set("wpAdminUsername", e.target.value)}
+              placeholder="admin"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600 w-32 shrink-0">密碼</span>
+            <input
+              type="password"
+              value={form.wpAdminPassword}
+              onChange={(e) => set("wpAdminPassword", e.target.value)}
+              placeholder="••••••••"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* Actions */}
       <div className="flex gap-3 pt-2">
         <button

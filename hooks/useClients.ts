@@ -9,7 +9,7 @@ export function useClients() {
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  useEffect(() => {
+  const fetchClients = useCallback(() => {
     fetch('/api/article-clients')
       .then((r) => r.json())
       .then((data: ClientProfile[]) => {
@@ -18,6 +18,10 @@ export function useClients() {
       })
       .catch(() => setIsLoaded(true));
   }, []);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
 
   const upsertClient = useCallback((profile: ClientProfile) => {
     // 樂觀更新：先更新畫面，再同步到伺服器
@@ -55,5 +59,5 @@ export function useClients() {
     localStorage.setItem(SELECTED_KEY, id);
   }, []);
 
-  return { clients, isLoaded, upsertClient, deleteClient, getClient, getLastSelectedId, setLastSelectedId };
+  return { clients, isLoaded, upsertClient, deleteClient, getClient, getLastSelectedId, setLastSelectedId, refetch: fetchClients };
 }

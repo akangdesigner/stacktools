@@ -13,7 +13,7 @@ interface Step3SelectClientProps {
 }
 
 export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onArticleSlugChange, error }: Step3SelectClientProps) {
-  const { clients, isLoaded } = useClients();
+  const { clients, isLoaded, refetch } = useClients();
   const [modalOpen, setModalOpen] = useState(false);
 
   const selected = clients.find((c) => c.id === selectedClientId);
@@ -112,7 +112,7 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
         </p>
       )}
 
-      {modalOpen && <ClientManagerModal onClose={() => setModalOpen(false)} />}
+      {modalOpen && <ClientManagerModal onClose={() => { setModalOpen(false); refetch(); }} />}
     </div>
   );
 }
