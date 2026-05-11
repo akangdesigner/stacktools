@@ -35,6 +35,12 @@ export async function POST(req: NextRequest) {
     wp_username: client.wp_username,
     wp_app_password: client.wp_app_password,
     wp_category_id: client.wp_category_id,
+    h2_color: client.h2_color,
+    h2_size: client.h2_size,
+    h3_color: client.h3_color,
+    h3_size: client.h3_size,
+    faq_q_color: client.faq_q_color,
+    faq_q_size: client.faq_q_size,
   });
 
   try {

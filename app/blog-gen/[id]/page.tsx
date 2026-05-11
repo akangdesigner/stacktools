@@ -13,6 +13,12 @@ interface Client {
   wp_username: string;
   wp_app_password: string;
   wp_category_id: string;
+  h2_color: string;
+  h2_size: string;
+  h3_color: string;
+  h3_size: string;
+  faq_q_color: string;
+  faq_q_size: string;
   job_id: string;
   job_status: string;
   job_result: string;
@@ -23,7 +29,7 @@ export default function BlogGenDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [client, setClient] = useState<Client | null>(null);
-  const [form, setForm] = useState({ name: '', word_url: '', gdrive_url: '', persona: '', wp_url: '', wp_username: '', wp_app_password: '', wp_category_id: '' });
+  const [form, setForm] = useState({ name: '', word_url: '', gdrive_url: '', persona: '', wp_url: '', wp_username: '', wp_app_password: '', wp_category_id: '', h2_color: '', h2_size: '', h3_color: '', h3_size: '', faq_q_color: '#000000', faq_q_size: '16px' });
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -40,7 +46,7 @@ export default function BlogGenDetailPage() {
     if (!res.ok) { router.push('/blog-gen'); return; }
     const data: Client = await res.json();
     setClient(data);
-    setForm({ name: data.name, word_url: data.word_url, gdrive_url: data.gdrive_url, persona: data.persona, wp_url: data.wp_url, wp_username: data.wp_username, wp_app_password: data.wp_app_password, wp_category_id: data.wp_category_id });
+    setForm({ name: data.name, word_url: data.word_url, gdrive_url: data.gdrive_url, persona: data.persona, wp_url: data.wp_url, wp_username: data.wp_username, wp_app_password: data.wp_app_password, wp_category_id: data.wp_category_id, h2_color: data.h2_color, h2_size: data.h2_size, h3_color: data.h3_color, h3_size: data.h3_size, faq_q_color: data.faq_q_color || '#000000', faq_q_size: data.faq_q_size || '16px' });
     if (data.job_status === 'processing') startPoll();
   }
 
@@ -247,6 +253,105 @@ export default function BlogGenDetailPage() {
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
           <p className="mt-1 text-xs text-gray-400">WordPress 後台 → 使用者 → 個人資料 → 應用程式密碼</p>
+        </div>
+
+        <hr className="border-gray-100" />
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">文章樣式設定（選填）</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">H2 顏色</label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="color"
+                value={form.h2_color || '#000000'}
+                onChange={e => setForm(f => ({ ...f, h2_color: e.target.value }))}
+                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5"
+              />
+              <input
+                type="text"
+                value={form.h2_color}
+                onChange={e => setForm(f => ({ ...f, h2_color: e.target.value }))}
+                placeholder="#000000"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">H2 字體大小</label>
+            <input
+              type="text"
+              value={form.h2_size}
+              onChange={e => setForm(f => ({ ...f, h2_size: e.target.value }))}
+              placeholder="24px"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">H3 顏色</label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="color"
+                value={form.h3_color || '#000000'}
+                onChange={e => setForm(f => ({ ...f, h3_color: e.target.value }))}
+                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5"
+              />
+              <input
+                type="text"
+                value={form.h3_color}
+                onChange={e => setForm(f => ({ ...f, h3_color: e.target.value }))}
+                placeholder="#000000"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">H3 字體大小</label>
+            <input
+              type="text"
+              value={form.h3_size}
+              onChange={e => setForm(f => ({ ...f, h3_size: e.target.value }))}
+              placeholder="20px"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+        </div>
+
+        <hr className="border-gray-100" />
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">FAQ 樣式設定</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">問題（Q）顏色</label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="color"
+                value={form.faq_q_color || '#000000'}
+                onChange={e => setForm(f => ({ ...f, faq_q_color: e.target.value }))}
+                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5"
+              />
+              <input
+                type="text"
+                value={form.faq_q_color}
+                onChange={e => setForm(f => ({ ...f, faq_q_color: e.target.value }))}
+                placeholder="#000000"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">問題（Q）字體大小</label>
+            <input
+              type="text"
+              value={form.faq_q_size}
+              onChange={e => setForm(f => ({ ...f, faq_q_size: e.target.value }))}
+              placeholder="16px"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-3 pt-1">

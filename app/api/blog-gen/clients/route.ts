@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, name, word_url, gdrive_url, persona, wp_url, wp_username, wp_app_password, wp_category_id } = await req.json();
+  const { id, name, word_url, gdrive_url, persona, wp_url, wp_username, wp_app_password, wp_category_id, h2_color, h2_size, h3_color, h3_size, faq_q_color, faq_q_size } = await req.json();
   if (!id || !name?.trim()) return NextResponse.json({ error: '缺少必填欄位' }, { status: 400 });
   updateClient(
     Number(id),
@@ -37,6 +37,12 @@ export async function PUT(req: NextRequest) {
     wp_username ?? '',
     wp_app_password ?? '',
     wp_category_id ?? '',
+    h2_color ?? '',
+    h2_size ?? '',
+    h3_color ?? '',
+    h3_size ?? '',
+    faq_q_color ?? '#000000',
+    faq_q_size ?? '16px',
   );
   return NextResponse.json({ ok: true });
 }
