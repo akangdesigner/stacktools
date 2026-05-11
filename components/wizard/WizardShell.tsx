@@ -195,31 +195,7 @@ export function WizardShell() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  const adminUrl = selectedClient.wpAdminUrl.replace(/\/+$/, '');
-                  const origin = new URL(adminUrl).origin;
-                  const loginUrl = origin + '/wp-login.php';
-                  const f = document.createElement('form');
-                  f.method = 'POST';
-                  f.action = loginUrl;
-                  f.target = '_blank';
-                  const fields: Record<string, string> = {
-                    log: selectedClient.wpAdminUsername,
-                    pwd: selectedClient.wpAdminPassword,
-                    redirect_to: adminUrl,
-                    testcookie: '1',
-                  };
-                  Object.entries(fields).forEach(([name, value]) => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = name;
-                    input.value = value;
-                    f.appendChild(input);
-                  });
-                  document.body.appendChild(f);
-                  f.submit();
-                  document.body.removeChild(f);
-                }}
+                onClick={() => window.open(selectedClient.wpAdminUrl, '_blank')}
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-900 text-white text-xs font-medium rounded-xl hover:bg-gray-700 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
