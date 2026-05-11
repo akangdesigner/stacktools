@@ -196,8 +196,9 @@ export function WizardShell() {
               <button
                 type="button"
                 onClick={() => {
-                  const base = selectedClient.wpAdminUrl.replace(/\/+$/, '');
-                  const loginUrl = base.replace(/\/wp-admin$/, '') + '/wp-login.php';
+                  const adminUrl = selectedClient.wpAdminUrl.replace(/\/+$/, '');
+                  const origin = new URL(adminUrl).origin;
+                  const loginUrl = origin + '/wp-login.php';
                   const f = document.createElement('form');
                   f.method = 'POST';
                   f.action = loginUrl;
@@ -205,7 +206,7 @@ export function WizardShell() {
                   const fields: Record<string, string> = {
                     log: selectedClient.wpAdminUsername,
                     pwd: selectedClient.wpAdminPassword,
-                    redirect_to: '/wp-admin/',
+                    redirect_to: adminUrl,
                     testcookie: '1',
                   };
                   Object.entries(fields).forEach(([name, value]) => {
