@@ -1,49 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient, updateClient, deleteClient, listInvoicesByClientId } from '@/lib/financeDb';
+import { initNeonClients, getNeonClient, upsertNeonClient, deleteNeonClient, getContractsByChannelId } from '@/lib/neonClient';
+import { listInvoicesByClientId } from '@/lib/financeDb';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const client = getClient(id);
-  if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
-  const invoices = listInvoicesByClientId(id);
-  return NextResponse.json({ ...client, invoices });
+  try {
+    const { id } = await params;
+    await initNeonClients();
+    const [client, contracts] = await Promise.all([
+      getNeonClient(id),
+      getContractsByChannelId(id),
+    ]);
+    if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
+    const invoices = listInvoicesByClientId(id);
+    return NextResponse.json({ ...client, contracts, invoices });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : '載入失敗' }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const client = getClient(id);
-    if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
-
     const body = await req.json();
-    const { name, tax_id, contact_name, contact_email, contact_phone, notes } = body;
+    const { tax_id, contact_name, contact_email, contact_phone, notes } = body;
 
-    if (name !== undefined && !name.trim()) return NextResponse.json({ error: '客戶名稱不可為空' }, { status: 400 });
-    if (tax_id !== undefined && !/^\d{8}$/.test(tax_id.trim())) return NextResponse.json({ error: '統一編號須為 8 位純數字' }, { status: 400 });
+    if (tax_id !== undefined && tax_id !== null && tax_id.trim() !== '' && !/^\d{8}$/.test(tax_id.trim())) {
+      return NextResponse.json({ error: '統一編號須為 8 位純數字' }, { status: 400 });
+    }
 
-    updateClient(id, {
-      name: name?.trim(),
-      tax_id: tax_id?.trim(),
-      contact_name: contact_name?.trim() ?? undefined,
-      contact_email: contact_email?.trim() ?? undefined,
-      contact_phone: contact_phone?.trim() ?? undefined,
-      notes: notes?.trim() ?? undefined,
+    await initNeonClients();
+    const updated = await upsertNeonClient(id, {
+      tax_id: tax_id?.trim() || null,
+      contact_name: contact_name?.trim() || null,
+      contact_email: contact_email?.trim() || null,
+      contact_phone: contact_phone?.trim() || null,
+      notes: notes?.trim() || null,
     });
-    return NextResponse.json(getClient(id));
+    return NextResponse.json(updated);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : '更新失敗' }, { status: 500 });
   }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const client = getClient(id);
-  if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
+  try {
+    const { id } = await params;
+    await initNeonClients();
+    const client = await getNeonClient(id);
+    if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
 
-  const invoices = listInvoicesByClientId(id);
-  const hasActive = invoices.some(inv => ['pending', 'overdue'].includes(inv.status));
-  if (hasActive) return NextResponse.json({ error: '此客戶尚有未結清發票，無法刪除' }, { status: 400 });
+    const invoices = listInvoicesByClientId(id);
+    const hasActive = invoices.some(inv => ['pending', 'overdue'].includes(inv.status));
+    if (hasActive) return NextResponse.json({ error: '此客戶尚有未結清發票，無法清除資料' }, { status: 400 });
 
-  deleteClient(id);
-  return NextResponse.json({ ok: true });
+    await deleteNeonClient(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : '刪除失敗' }, { status: 500 });
+  }
 }

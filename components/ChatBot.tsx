@@ -39,7 +39,7 @@ export default function ChatBot() {
   }
 
   return (
-    <div className="fixed bottom-6 right-5 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-[76px] right-5 z-50 flex flex-col items-end gap-3">
       {/* 聊天面板 */}
       {showChat && (
         <div className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden" style={{ height: '420px' }}>

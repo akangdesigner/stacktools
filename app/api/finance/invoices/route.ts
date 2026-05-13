@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
+      client_id,
       client_contract_id,
       client_name,
       tax_id,
@@ -23,11 +24,12 @@ export async function POST(req: NextRequest) {
       due_date,
     } = body;
 
-    if (!client_name || !tax_id || !invoice_date || !due_date || tax_inclusive_amount === undefined) {
+    if (!client_name || !invoice_date || !due_date || tax_inclusive_amount === undefined) {
       return NextResponse.json({ error: '缺少必填欄位' }, { status: 400 });
     }
 
     const invoice = createInvoice({
+      client_id,
       client_contract_id,
       client_name,
       tax_id,

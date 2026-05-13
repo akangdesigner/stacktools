@@ -125,6 +125,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (action === 'void') {
       if (!invoice.invoice_number) return NextResponse.json({ error: '草稿無需作廢，請直接刪除' }, { status: 400 });
       if (invoice.status === 'voided') return NextResponse.json({ error: '此發票已作廢' }, { status: 400 });
+      if (invoice.status !== 'paid') return NextResponse.json({ error: '請先確認收款後，才能執行作廢' }, { status: 400 });
       await voidInvoice(invoice.invoice_number, invoice.invoice_date);
       updateInvoice(id, { status: 'voided' });
       return NextResponse.json(getInvoice(id));

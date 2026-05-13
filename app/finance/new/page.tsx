@@ -11,9 +11,10 @@ interface LineItem {
 }
 
 interface Client {
-  id: string;
-  name: string;
-  tax_id: string;
+  channel_id: string;
+  channel_name: string;
+  case_start_date: string | null;
+  tax_id: string | null;
 }
 
 function defaultDueDate() {
@@ -39,7 +40,21 @@ export default function NewInvoicePage() {
     fetch("/api/finance/clients").then(r => r.json()).then(setClients);
   }, []);
 
-  const selectedClient = clients.find(c => c.id === selectedClientId) ?? null;
+  const selectedClient = clients.find(c => c.channel_id === selectedClientId) ?? null;
+
+  function handleSelectClient(channelId: string) {
+    setSelectedClientId(channelId);
+    const client = clients.find(c => c.channel_id === channelId);
+    if (client?.case_start_date) {
+      const start = new Date(client.case_start_date);
+      const now = new Date();
+      const diff = (now.getFullYear() * 12 + now.getMonth()) -
+                   (start.getFullYear() * 12 + start.getMonth());
+      setReminderMonth(String(Math.max(1, diff)));
+    } else {
+      setReminderMonth("");
+    }
+  }
 
   function addItem() {
     setItems((prev) => [...prev, { name: "", qty: 1, price: 0 }]);
@@ -69,9 +84,9 @@ export default function NewInvoicePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          client_id: selectedClient.id,
-          client_name: selectedClient.name,
-          tax_id: selectedClient.tax_id,
+          client_id: selectedClient.channel_id,
+          client_name: selectedClient.channel_name,
+          tax_id: selectedClient.tax_id ?? '',
           reminder_month: reminderMonth ? parseInt(reminderMonth) : null,
           invoice_items: items.filter((i) => i.name.trim()),
           unit_price: subtotal,
@@ -129,13 +144,13 @@ export default function NewInvoicePage() {
           ) : (
             <select
               value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
+              onChange={(e) => handleSelectClient(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
             >
               <option value="">請選擇客戶...</option>
               {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}（{c.tax_id}）
+                <option key={c.channel_id} value={c.channel_id}>
+                  {c.channel_name}{c.tax_id ? `（${c.tax_id}）` : ''}
                 </option>
               ))}
             </select>
@@ -145,17 +160,19 @@ export default function NewInvoicePage() {
             <div className="flex gap-4 text-sm bg-gray-50 rounded-lg px-4 py-3">
               <div>
                 <span className="text-xs text-gray-400">客戶名稱</span>
-                <p className="font-medium text-gray-800">{selectedClient.name}</p>
+                <p className="font-medium text-gray-800">{selectedClient.channel_name}</p>
               </div>
               <div>
                 <span className="text-xs text-gray-400">統一編號</span>
-                <p className="font-medium text-gray-800">{selectedClient.tax_id}</p>
+                <p className="font-medium text-gray-800">{selectedClient.tax_id || '未填'}</p>
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">合約月份（對應業務助理）</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              合約月份{selectedClient?.case_start_date && <span className="ml-1 text-xs font-normal text-gray-400">（開案 {selectedClient.case_start_date}）</span>}
+            </label>
             <select
               value={reminderMonth}
               onChange={(e) => setReminderMonth(e.target.value)}
@@ -173,37 +190,47 @@ export default function NewInvoicePage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">發票明細</h2>
 
-          <div className="space-y-3">
+          {/* 欄位標題 */}
+          <div className="grid grid-cols-[1fr_72px_100px_80px_32px] gap-2 px-1">
+            <span className="text-xs text-gray-400">品項名稱</span>
+            <span className="text-xs text-gray-400 text-center">數量</span>
+            <span className="text-xs text-gray-400 text-right">單價（未稅）</span>
+            <span className="text-xs text-gray-400 text-right">小計</span>
+            <span />
+          </div>
+
+          <div className="space-y-2">
             {items.map((item, idx) => (
-              <div key={idx} className="flex gap-2 items-start">
+              <div key={idx} className="grid grid-cols-[1fr_72px_100px_80px_32px] gap-2 items-center">
                 <input
                   type="text"
-                  placeholder="品項名稱"
+                  placeholder="例：SEO 顧問服務費"
                   value={item.name}
                   onChange={(e) => updateItem(idx, "name", e.target.value)}
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                 />
                 <input
                   type="number"
                   min={1}
-                  placeholder="數量"
                   value={item.qty}
                   onChange={(e) => updateItem(idx, "qty", parseInt(e.target.value) || 1)}
-                  className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-gray-900"
                 />
                 <input
                   type="number"
                   min={0}
-                  placeholder="單價"
                   value={item.price}
                   onChange={(e) => updateItem(idx, "price", parseFloat(e.target.value) || 0)}
-                  className="w-28 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-gray-900"
                 />
+                <p className="text-sm text-gray-600 text-right tabular-nums">
+                  {(item.qty * item.price).toLocaleString()}
+                </p>
                 <button
                   type="button"
                   onClick={() => removeItem(idx)}
                   disabled={items.length === 1}
-                  className="p-2 text-gray-400 hover:text-red-500 disabled:opacity-30 transition-colors"
+                  className="flex items-center justify-center text-gray-300 hover:text-red-400 disabled:opacity-20 transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />

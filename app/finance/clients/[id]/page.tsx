@@ -17,14 +17,23 @@ interface Invoice {
   paid_date: string | null;
 }
 
-interface Client {
+interface Contract {
   id: string;
-  name: string;
-  tax_id: string;
+  channel_name: string;
+  case_start_date: string;
+  base_date: string | null;
+  contract_end_date: string;
+}
+
+interface Client {
+  channel_id: string;
+  channel_name: string;
+  tax_id: string | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
   notes: string | null;
+  contracts: Contract[];
   invoices: Invoice[];
 }
 
@@ -36,10 +45,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   voided:  { label: '已作廢', cls: 'bg-gray-100 text-gray-400' },
 };
 
-function displayStatus(inv: Invoice) {
-  if (!inv.invoice_number) return 'draft';
-  return inv.status;
-}
+const emptyForm = { tax_id: "", contact_name: "", contact_email: "", contact_phone: "", notes: "" };
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -47,7 +53,7 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", tax_id: "", contact_name: "", contact_email: "", contact_phone: "", notes: "" });
+  const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -59,8 +65,7 @@ export default function ClientDetailPage() {
     const data: Client = await res.json();
     setClient(data);
     setForm({
-      name: data.name,
-      tax_id: data.tax_id,
+      tax_id: data.tax_id ?? "",
       contact_name: data.contact_name ?? "",
       contact_email: data.contact_email ?? "",
       contact_phone: data.contact_phone ?? "",
@@ -100,14 +105,14 @@ export default function ClientDetailPage() {
       const res = await fetch(`/api/finance/clients/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "刪除失敗");
+        alert(data.error || "清除失敗");
         setDeleting(false);
         setConfirmDelete(false);
         return;
       }
       router.push("/finance/clients");
     } catch {
-      alert("刪除失敗");
+      alert("清除失敗");
       setDeleting(false);
     }
   }
@@ -130,8 +135,12 @@ export default function ClientDetailPage() {
             </svg>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
-            <p className="text-sm text-gray-400 mt-0.5">統編 {client.tax_id}</p>
+            <h1 className="text-2xl font-bold text-gray-900">{client.channel_name}</h1>
+            {client.tax_id ? (
+              <p className="text-sm text-gray-400 mt-0.5">統編 {client.tax_id}</p>
+            ) : (
+              <p className="text-sm text-amber-500 mt-0.5">尚未填寫統編</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -139,13 +148,13 @@ export default function ClientDetailPage() {
             onClick={() => { setEditing(true); setSaveError(""); }}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            編輯
+            編輯資料
           </button>
           <button
             onClick={() => setConfirmDelete(true)}
             className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
           >
-            刪除客戶
+            清除補充資料
           </button>
         </div>
       </div>
@@ -178,14 +187,42 @@ export default function ClientDetailPage() {
         )}
       </div>
 
+      {/* Contracts */}
+      {client.contracts.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">合約紀錄（{client.contracts.length} 筆）</h2>
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {client.contracts.map((ct) => {
+              const today = new Date().toISOString().slice(0, 10);
+              const active = ct.contract_end_date >= today;
+              return (
+                <div key={ct.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+                  <div>
+                    <p className="font-medium text-gray-800">開案 {ct.case_start_date}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {ct.base_date && <span>基準日 {ct.base_date}　</span>}
+                      到期 {ct.contract_end_date}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-medium rounded-full px-2.5 py-0.5 ${
+                    active
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {active ? '執行中' : '已到期'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Invoice History */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-700">發票紀錄（{client.invoices.length} 張）</h2>
-          <Link
-            href={`/finance/new`}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-          >
+          <Link href="/finance/new" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
             + 新增發票
           </Link>
         </div>
@@ -197,14 +234,12 @@ export default function ClientDetailPage() {
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {client.invoices.map((inv) => {
-              const st = displayStatus(inv);
+              const st = inv.invoice_number ? inv.status : 'draft';
               const badge = STATUS_LABEL[st] ?? STATUS_LABEL.draft;
               return (
                 <div key={inv.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
                   <div>
-                    <p className="font-medium text-gray-800">
-                      NT$ {inv.tax_inclusive_amount.toLocaleString()}
-                    </p>
+                    <p className="font-medium text-gray-800">NT$ {inv.tax_inclusive_amount.toLocaleString()}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {inv.invoice_date}
                       {inv.invoice_number && <span className="ml-2">{inv.invoice_number}</span>}
@@ -224,34 +259,26 @@ export default function ClientDetailPage() {
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditing(false)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">編輯客戶資料</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">編輯客戶資料</h2>
+            <p className="text-xs text-gray-400 mb-4">{client.channel_name}</p>
             <form onSubmit={handleSave} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">客戶名稱 *</label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">統一編號 *</label>
-                  <input
-                    type="text"
-                    maxLength={8}
-                    value={form.tax_id}
-                    onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">統一編號</label>
+                <input
+                  type="text"
+                  placeholder="12345678"
+                  maxLength={8}
+                  value={form.tax_id}
+                  onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">聯絡人</label>
                   <input
                     type="text"
+                    placeholder="姓名"
                     value={form.contact_name}
                     onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
@@ -261,6 +288,7 @@ export default function ClientDetailPage() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">聯絡電話</label>
                   <input
                     type="text"
+                    placeholder="0912-345-678"
                     value={form.contact_phone}
                     onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
@@ -271,6 +299,7 @@ export default function ClientDetailPage() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
                 <input
                   type="email"
+                  placeholder="contact@example.com"
                   value={form.contact_email}
                   onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
@@ -280,6 +309,7 @@ export default function ClientDetailPage() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">備註</label>
                 <textarea
                   rows={2}
+                  placeholder="合約備注、付款條件..."
                   value={form.notes}
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
@@ -308,14 +338,17 @@ export default function ClientDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setConfirmDelete(false)}>
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-6 text-center" onClick={e => e.stopPropagation()}>
             <p className="text-2xl mb-3">⚠️</p>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">確定刪除客戶？</h2>
-            <p className="text-sm text-gray-500 mb-5">「{client.name}」的所有聯絡資料將被刪除，但發票紀錄會保留。有未結清發票時無法刪除。</p>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">清除補充資料？</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              「{client.channel_name}」的統編與聯絡資料將被清除。<br />
+              <span className="text-gray-400">清除後此客戶仍會出現在列表（來自合約紀錄）。</span>
+            </p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(false)} className="flex-1 px-4 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 transition-colors">
                 取消
               </button>
               <button onClick={handleDelete} disabled={deleting} className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">
-                {deleting ? "刪除中..." : "確定刪除"}
+                {deleting ? "清除中..." : "確定清除"}
               </button>
             </div>
           </div>
