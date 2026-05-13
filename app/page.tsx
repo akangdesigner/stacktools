@@ -35,7 +35,7 @@ const internalTools = [
   {
     href: "/recommendation",
     title: "推薦文生成器",
-    description: "填入被推薦人資訊與事蹟，AI 自動生成一封正式、有說服力的推薦文。",
+    description: "填入文章標題、關鍵字、搜尋項目與必須包含品牌，AI 自動生成推薦型 SEO 文章並上架至 WordPress。",
     icon: "✉️",
     color: "bg-orange-50 border-orange-200 hover:border-orange-400",
     iconBg: "bg-orange-100",
@@ -192,6 +192,7 @@ export default function HomePage() {
       </svg>
       工具箱回饋
     </Link>
+
     </>
   );
 }

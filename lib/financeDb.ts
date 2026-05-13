@@ -17,8 +17,21 @@ export function getFinanceDb(): Database.Database {
   db.pragma('foreign_keys = ON');
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS clients (
+      id            TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      tax_id        TEXT NOT NULL,
+      contact_name  TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      notes         TEXT,
+      created_at    TEXT DEFAULT (datetime('now','localtime')),
+      updated_at    TEXT DEFAULT (datetime('now','localtime'))
+    );
+
     CREATE TABLE IF NOT EXISTS invoices (
       id                    TEXT PRIMARY KEY,
+      client_id             TEXT REFERENCES clients(id),
       client_contract_id    TEXT,
       client_name           TEXT NOT NULL,
       tax_id                TEXT NOT NULL,
@@ -41,6 +54,12 @@ export function getFinanceDb(): Database.Database {
     );
   `);
 
+  // 既存 DB に client_id 列がなければ追加（マイグレーション）
+  const cols = db.prepare("PRAGMA table_info(invoices)").all() as { name: string }[];
+  if (!cols.some(c => c.name === 'client_id')) {
+    db.exec('ALTER TABLE invoices ADD COLUMN client_id TEXT');
+  }
+
   return db;
 }
 
@@ -56,6 +75,7 @@ export type InvoiceStatus = 'pending' | 'paid' | 'overdue' | 'voided';
 
 export interface Invoice {
   id: string;
+  client_id: string | null;
   client_contract_id: string | null;
   client_name: string;
   tax_id: string;
@@ -105,6 +125,7 @@ export function getInvoice(id: string): InvoiceWithItems | undefined {
 }
 
 export interface CreateInvoiceInput {
+  client_id?: string;
   client_contract_id?: string;
   client_name: string;
   tax_id: string;
@@ -123,12 +144,13 @@ export function createInvoice(input: CreateInvoiceInput): InvoiceWithItems {
   const id = crypto.randomUUID();
   getFinanceDb().prepare(`
     INSERT INTO invoices (
-      id, client_contract_id, client_name, tax_id, reminder_month,
+      id, client_id, client_contract_id, client_name, tax_id, reminder_month,
       invoice_number, invoice_items, unit_price, quantity, discount,
       tax_inclusive_amount, invoice_date, due_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
+    input.client_id ?? null,
     input.client_contract_id ?? null,
     input.client_name,
     input.tax_id,
@@ -193,6 +215,120 @@ export function updateInvoice(id: string, input: UpdateInvoiceInput): void {
 
 export function deleteInvoice(id: string): void {
   getFinanceDb().prepare('DELETE FROM invoices WHERE id = ?').run(id);
+}
+
+// ── Clients ────────────────────────────────────────────────────────────────
+
+export interface Client {
+  id: string;
+  name: string;
+  tax_id: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClientWithStats extends Client {
+  invoice_count: number;
+  outstanding_amount: number;
+  last_invoice_date: string | null;
+}
+
+export interface CreateClientInput {
+  name: string;
+  tax_id: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  notes?: string;
+}
+
+export interface UpdateClientInput {
+  name?: string;
+  tax_id?: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  notes?: string;
+}
+
+export function listClients(): Client[] {
+  return getFinanceDb()
+    .prepare('SELECT * FROM clients ORDER BY name ASC')
+    .all() as Client[];
+}
+
+export function listClientsWithStats(): ClientWithStats[] {
+  const rows = getFinanceDb().prepare(`
+    SELECT
+      c.*,
+      COUNT(i.id) AS invoice_count,
+      COALESCE(SUM(CASE WHEN i.status IN ('pending','overdue') THEN i.tax_inclusive_amount ELSE 0 END), 0) AS outstanding_amount,
+      MAX(i.invoice_date) AS last_invoice_date
+    FROM clients c
+    LEFT JOIN invoices i ON i.client_id = c.id
+    GROUP BY c.id
+    ORDER BY c.name ASC
+  `).all() as ClientWithStats[];
+  return rows;
+}
+
+export function getClient(id: string): Client | undefined {
+  return getFinanceDb()
+    .prepare('SELECT * FROM clients WHERE id = ?')
+    .get(id) as Client | undefined;
+}
+
+export function createClient(input: CreateClientInput): Client {
+  const id = crypto.randomUUID();
+  getFinanceDb().prepare(`
+    INSERT INTO clients (id, name, tax_id, contact_name, contact_email, contact_phone, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    input.name,
+    input.tax_id,
+    input.contact_name ?? null,
+    input.contact_email ?? null,
+    input.contact_phone ?? null,
+    input.notes ?? null,
+  );
+  return getClient(id)!;
+}
+
+export function updateClient(id: string, input: UpdateClientInput): void {
+  const db = getFinanceDb();
+  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).replace('T', ' ');
+  const cols: string[] = [];
+  const vals: unknown[] = [];
+
+  function set(col: string, val: unknown) { cols.push(`${col} = ?`); vals.push(val); }
+
+  if (input.name !== undefined) set('name', input.name);
+  if (input.tax_id !== undefined) set('tax_id', input.tax_id);
+  if (input.contact_name !== undefined) set('contact_name', input.contact_name);
+  if (input.contact_email !== undefined) set('contact_email', input.contact_email);
+  if (input.contact_phone !== undefined) set('contact_phone', input.contact_phone);
+  if (input.notes !== undefined) set('notes', input.notes);
+
+  if (cols.length === 0) return;
+  cols.push('updated_at = ?');
+  vals.push(now, id);
+  db.prepare(`UPDATE clients SET ${cols.join(', ')} WHERE id = ?`).run(...vals);
+}
+
+export function deleteClient(id: string): void {
+  getFinanceDb().prepare('DELETE FROM clients WHERE id = ?').run(id);
+}
+
+export function listInvoicesByClientId(clientId: string): InvoiceWithItems[] {
+  const rows = getFinanceDb()
+    .prepare('SELECT * FROM invoices WHERE client_id = ? ORDER BY created_at DESC')
+    .all(clientId) as Invoice[];
+  return rows.map(parseItems);
 }
 
 // ── 提醒查詢（供 n8n 呼叫）─────────────────────────────────────────────────

@@ -87,10 +87,19 @@ export default function BlogGenDetailPage() {
   async function handleGenerate() {
     if (!client?.word_url) { alert('請先填入 Word 文件網址'); return; }
     setGenerating(true);
+
+    let wpPosts: { title: string; link: string }[] = [];
+    if (client.wp_url) {
+      try {
+        const r = await fetch(`/api/blog-gen/fetch-posts?clientId=${id}`);
+        if (r.ok) wpPosts = await r.json();
+      } catch { /* 抓不到就跳過，不阻擋生成 */ }
+    }
+
     const res = await fetch('/api/blog-gen/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId: Number(id) }),
+      body: JSON.stringify({ clientId: Number(id), wpPosts: wpPosts.length > 0 ? wpPosts : undefined }),
     });
     if (!res.ok) {
       const err = await res.json();

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#9333EA"/>
+    </linearGradient>
+    <linearGradient id="eye" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#818CF8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圓 -->
+  <circle cx="50" cy="50" r="50" fill="url(#bg)"/>
+
+  <!-- 天線桿 -->
+  <rect x="47" y="16" width="6" height="15" rx="3" fill="white" opacity="0.9"/>
+  <!-- 天線球 -->
+  <circle cx="50" cy="12" r="5.5" fill="white" opacity="0.9"/>
+  <circle cx="50" cy="12" r="3.5" fill="url(#eye)"/>
+
+  <!-- 頭部外框 -->
+  <rect x="17" y="30" width="66" height="52" rx="14" fill="white" opacity="0.18"/>
+
+  <!-- 左眼框 -->
+  <rect x="24" y="40" width="22" height="15" rx="5" fill="white" opacity="0.95"/>
+  <!-- 左眼珠 -->
+  <rect x="27" y="43" width="9" height="9" rx="3" fill="url(#eye)"/>
+  <!-- 左眼光點 -->
+  <circle cx="34" cy="46" r="2" fill="white" opacity="0.85"/>
+
+  <!-- 右眼框 -->
+  <rect x="54" y="40" width="22" height="15" rx="5" fill="white" opacity="0.95"/>
+  <!-- 右眼珠 -->
+  <rect x="57" y="43" width="9" height="9" rx="3" fill="url(#eye)"/>
+  <!-- 右眼光點 -->
+  <circle cx="64" cy="46" r="2" fill="white" opacity="0.85"/>
+
+  <!-- 嘴巴底框 -->
+  <rect x="30" y="62" width="40" height="11" rx="5.5" fill="white" opacity="0.85"/>
+  <!-- 嘴巴燈點 -->
+  <circle cx="40" cy="67.5" r="3" fill="url(#bg)"/>
+  <circle cx="50" cy="67.5" r="3" fill="url(#bg)"/>
+  <circle cx="60" cy="67.5" r="3" fill="url(#bg)"/>
+
+  <!-- 左耳釘 -->
+  <circle cx="14" cy="53" r="3.5" fill="white" opacity="0.5"/>
+  <!-- 右耳釘 -->
+  <circle cx="86" cy="53" r="3.5" fill="white" opacity="0.5"/>
+</svg>

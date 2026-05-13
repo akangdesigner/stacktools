@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getClient, setJobProcessing } from '@/lib/blogGenDb';
 
 export async function POST(req: NextRequest) {
-  const { clientId } = await req.json();
+  const { clientId, wpPosts } = await req.json();
   if (!clientId) return NextResponse.json({ error: '缺少 clientId' }, { status: 400 });
 
   const client = getClient(Number(clientId));
@@ -18,6 +18,10 @@ export async function POST(req: NextRequest) {
   const callbackBase = process.env.BLOG_GEN_CALLBACK_BASE_URL || req.nextUrl.origin;
   const callbackUrl = `${callbackBase}/api/blog-gen/callback`;
 
+  const internalLinksBlock = Array.isArray(wpPosts) && wpPosts.length > 0
+    ? `\n內部文章連結（可用於文章內超連結）：\n${wpPosts.map((p: { title: string; link: string }) => `- ${p.title}：${p.link}`).join('\n')}`
+    : '';
+
   const chatInput = [
     `客戶名稱：${client.name}`,
     `Word 網址：${client.word_url}`,
@@ -25,7 +29,7 @@ export async function POST(req: NextRequest) {
     `小編人設：${client.persona}`,
     `任務ID：${jobId}`,
     `狀態回傳網址：${callbackUrl}`,
-  ].join('\n');
+  ].join('\n') + internalLinksBlock;
 
   const payload = JSON.stringify({
     chatInput,

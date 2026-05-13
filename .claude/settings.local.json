@@ -72,7 +72,12 @@
       "mcp__n8n-dg166__n8n_create_workflow",
       "WebFetch(domain:invoice.amego.tw)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\stacktools\\\\app\\\\api\\\\finance\\\\clients\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\stacktools\\\\app\\\\api\\\\finance\\\\clients\\\\[id]\")",
+      "PowerShell(Get-ChildItem \"C:\\\\stacktools\\\\app\\\\blog-gen\" -Recurse -Force | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"C:\\\\stacktools\\\\app\\\\api\\\\blog-gen\" -Recurse -Force | ForEach-Object { $_.FullName })"
     ]
   }
 }

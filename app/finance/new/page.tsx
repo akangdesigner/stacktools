@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -8,6 +8,12 @@ interface LineItem {
   name: string;
   qty: number;
   price: number;
+}
+
+interface Client {
+  id: string;
+  name: string;
+  tax_id: string;
 }
 
 function defaultDueDate() {
@@ -19,8 +25,8 @@ function defaultDueDate() {
 export default function NewInvoicePage() {
   const router = useRouter();
 
-  const [clientName, setClientName] = useState("");
-  const [taxId, setTaxId] = useState("");
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [reminderMonth, setReminderMonth] = useState<string>("");
   const [items, setItems] = useState<LineItem[]>([{ name: "", qty: 1, price: 0 }]);
   const [discount, setDiscount] = useState<number>(0);
@@ -28,6 +34,12 @@ export default function NewInvoicePage() {
   const [dueDate, setDueDate] = useState(defaultDueDate());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/finance/clients").then(r => r.json()).then(setClients);
+  }, []);
+
+  const selectedClient = clients.find(c => c.id === selectedClientId) ?? null;
 
   function addItem() {
     setItems((prev) => [...prev, { name: "", qty: 1, price: 0 }]);
@@ -48,8 +60,7 @@ export default function NewInvoicePage() {
     e.preventDefault();
     setError("");
 
-    if (!clientName.trim()) { setError("請填寫客戶名稱"); return; }
-    if (!/^\d{8}$/.test(taxId.trim())) { setError("統一編號須為 8 位純數字"); return; }
+    if (!selectedClient) { setError("請選擇客戶"); return; }
     if (taxInclusiveAmount <= 0) { setError("含稅金額需大於 0"); return; }
 
     setSubmitting(true);
@@ -58,8 +69,9 @@ export default function NewInvoicePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          client_name: clientName.trim(),
-          tax_id: taxId.trim(),
+          client_id: selectedClient.id,
+          client_name: selectedClient.name,
+          tax_id: selectedClient.tax_id,
           reminder_month: reminderMonth ? parseInt(reminderMonth) : null,
           invoice_items: items.filter((i) => i.name.trim()),
           unit_price: subtotal,
@@ -93,37 +105,55 @@ export default function NewInvoicePage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">新增發票</h1>
-          <p className="text-sm text-gray-500 mt-0.5">填寫發票資料並建立付款追蹤</p>
+          <p className="text-sm text-gray-500 mt-0.5">選擇客戶並填寫發票資料</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 客戶資訊 */}
+        {/* 選擇客戶 */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">客戶資訊</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">客戶名稱（簡稱）</label>
-              <input
-                type="text"
-                placeholder="例：小積木行銷"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">統一編號</label>
-              <input
-                type="text"
-                placeholder="12345678"
-                maxLength={8}
-                value={taxId}
-                onChange={(e) => setTaxId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
-            </div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">客戶</h2>
+            <Link href="/finance/clients" className="text-xs text-blue-600 hover:text-blue-800">
+              管理客戶
+            </Link>
           </div>
+
+          {clients.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-sm text-gray-400 mb-2">尚無客戶資料</p>
+              <Link href="/finance/clients" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                前往新增客戶
+              </Link>
+            </div>
+          ) : (
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 bg-white"
+            >
+              <option value="">請選擇客戶...</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}（{c.tax_id}）
+                </option>
+              ))}
+            </select>
+          )}
+
+          {selectedClient && (
+            <div className="flex gap-4 text-sm bg-gray-50 rounded-lg px-4 py-3">
+              <div>
+                <span className="text-xs text-gray-400">客戶名稱</span>
+                <p className="font-medium text-gray-800">{selectedClient.name}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-400">統一編號</span>
+                <p className="font-medium text-gray-800">{selectedClient.tax_id}</p>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">合約月份（對應業務助理）</label>
             <select
@@ -224,7 +254,7 @@ export default function NewInvoicePage() {
           </div>
         </div>
 
-        {/* 發票與日期 */}
+        {/* 日期 */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">日期</h2>
           <div className="grid grid-cols-2 gap-4">
@@ -267,7 +297,7 @@ export default function NewInvoicePage() {
           </Link>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !selectedClient}
             className="flex-1 px-4 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {submitting ? "儲存中..." : "儲存草稿"}
