@@ -17,7 +17,7 @@ const homeItem = {
   ),
 };
 
-const liveItems: { href: string; label: string; inDev?: boolean; suspended?: boolean; icon: React.ReactNode }[] = [
+const liveItems: { href: string; label: string; inDev?: boolean; suspended?: boolean; hrOnly?: boolean; icon: React.ReactNode }[] = [
   {
     href: '/article',
     label: '文章上架工具',
@@ -90,6 +90,17 @@ const liveItems: { href: string; label: string; inDev?: boolean; suspended?: boo
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
         <polyline points="14 2 14 8 20 8" />
         <path d="M12 18v-6" /><path d="M9 15l3-3 3 3" />
+      </svg>
+    ),
+  },
+  {
+    href: '/finance',
+    label: '財務發票管理',
+    hrOnly: true,
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
       </svg>
     ),
   },
@@ -185,6 +196,7 @@ export default function Sidebar() {
                 <Link key={item.href} href={item.href} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}>
                   {item.icon}
                   <span className="flex-1">{item.label}</span>
+                  {item.hrOnly && !isActive && <span className="text-xs text-purple-500 font-normal">🔒 HR</span>}
                   {item.inDev && !isActive && <span className="text-xs text-amber-500 font-normal">開發中</span>}
                 </Link>
               );

@@ -30,6 +30,7 @@ function PostCard({ post }: { post: Post }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {post.avatarUrl && !imgError ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={`/api/avatar?url=${encodeURIComponent(post.avatarUrl)}`}
               alt={post.owner}
@@ -130,6 +131,7 @@ function TrackList({ avatarMap: externalAvatarMap }: { avatarMap: Record<string,
     }).finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   async function handleDelete(url: string) {
@@ -191,6 +193,7 @@ function TrackList({ avatarMap: externalAvatarMap }: { avatarMap: Record<string,
                       ?? Object.entries(ownersAvatarMap).find(([owner]) => fuzzyMatch(owner, a.name))?.[1];
                     if (!raw) return null;
                     return (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={`/api/avatar?url=${encodeURIComponent(raw)}`}
                         alt={a.name}

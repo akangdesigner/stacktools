@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/gscAuth';
-import { listClients, listKeywords } from '@/lib/gscDb';
+import { listClients } from '@/lib/gscDb';
 
 interface SingleResult {
   found: boolean;

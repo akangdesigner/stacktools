@@ -68,6 +68,16 @@ const internalTools = [
     iconBg: "bg-cyan-100",
     inDev: false,
   },
+  {
+    href: "/finance",
+    title: "財務發票管理",
+    description: "開立發票紀錄、追蹤客戶付款狀態，自動在到期前提醒，HR 確認匯款後更新收款紀錄。",
+    icon: "💳",
+    color: "bg-green-50 border-green-200 hover:border-green-400",
+    iconBg: "bg-green-100",
+    inDev: false,
+    hrOnly: true,
+  },
 ];
 
 const externalTools = [
@@ -99,6 +109,8 @@ export default function HomePage() {
       ? <span className="absolute top-3 right-3 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-300 rounded-full px-2 py-0.5">暫時下架</span>
       : tool.inDev
       ? <span className="absolute top-3 right-3 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">開發中</span>
+      : (tool as { hrOnly?: boolean }).hrOnly
+      ? <span className="absolute top-3 right-3 text-xs font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5">🔒 HR 專用</span>
       : null;
 
     const inner = (

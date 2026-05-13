@@ -76,6 +76,7 @@ export default function RecommendationPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!isProcessing) { setDots("."); return; }
     const id = setInterval(() => {
       setDots((d) => (d.length >= 3 ? "." : d + "."));

@@ -1,4 +1,4 @@
-import { parse } from "node-html-parser";
+import { parse, HTMLElement as NHTMLElement } from "node-html-parser";
 import type { ClientProfile } from "@/types";
 
 function parseStyleString(style: string): Map<string, string> {
@@ -61,13 +61,13 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   let h3Count = 1;
   let faqSectionActive = false;
 
-  function walkHeadings(node: ReturnType<typeof parse>) {
+  function walkHeadings(node: NHTMLElement) {
     for (const child of node.childNodes) {
-      const tag = (child as any).tagName?.toLowerCase();
+      const el = child instanceof NHTMLElement ? child : null;
+      const tag = el?.tagName?.toLowerCase();
       if (tag === "h2") {
-        const el = child as ReturnType<typeof root.querySelector>;
         const text = el!.innerText.trim();
-        if (!text) { walkHeadings(child as any); continue; }
+        if (!text) { walkHeadings(el!); continue; }
         const id = `title-${h2Count++}`;
         el!.setAttribute("id", id);
         el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
@@ -78,9 +78,8 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
           h3Count = 1;
         }
       } else if (tag === "h3") {
-        const el = child as ReturnType<typeof root.querySelector>;
         const text = el!.innerText.trim();
-        if (!text) { walkHeadings(child as any); continue; }
+        if (!text) { walkHeadings(el!); continue; }
         const isFaq = client.faqEnabled && faqSectionActive;
         const h3Color   = isFaq ? (client.faqH3Color   || client.h3Color)    : client.h3Color;
         const h3Size    = isFaq ? (client.faqH3FontSize || client.h3FontSize) : client.h3FontSize;
@@ -94,12 +93,12 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
           h3Count++;
         }
         el!.innerHTML = `<span style="color: ${h3Color};">${h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
-      } else if ((child as any).childNodes?.length) {
-        walkHeadings(child as any);
+      } else if (el?.childNodes?.length) {
+        walkHeadings(el);
       }
     }
   }
-  walkHeadings(root as any);
+  walkHeadings(root);
 
   // ── 3. p > span (font-size / color / line-height)
   // Skip spans that are inside <a> to avoid overriding link color
@@ -107,7 +106,16 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     const spans = p.querySelectorAll("span");
     if (spans.length > 0) {
       spans.forEach((span) => {
-        if (span.closest("a")) return;
+        if (span.closest("a")) {
+          // 移除 span 上的 color，讓顏色繼承自 <a> 的設定
+          const existing = span.getAttribute("style") || "";
+          const styleMap = parseStyleString(existing);
+          styleMap.delete("color");
+          const cleaned = serializeStyleMap(styleMap);
+          if (cleaned) span.setAttribute("style", cleaned);
+          else span.removeAttribute("style");
+          return;
+        }
         const existing = span.getAttribute("style") || "";
         span.setAttribute("style", mergeStyles(existing, {
           "font-size": client.paragraphFontSize,

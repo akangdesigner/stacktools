@@ -147,7 +147,6 @@ export default function ClientDetailPage() {
       })
       .finally(() => setLoading(false));
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function loadJobs() {
@@ -172,6 +171,7 @@ export default function ClientDetailPage() {
   useEffect(() => {
     if (!activeJobId) return;
     pollCountRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimedOut(false);
     pollRef.current = setInterval(async () => {
       pollCountRef.current += 1;
@@ -196,12 +196,13 @@ export default function ClientDetailPage() {
       }
     }, 10000);
     return () => clearInterval(pollRef.current!);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeJobId]);
 
   // 篩選動作或重新載入時，清掉「更新完成」提示
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setJustCompleted(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterPlatform, filterOwner, appliedDateFrom, appliedLatestN, postsLoaded]);
 
   // ── URL 編輯 ───────────────────────────────────────────────
@@ -710,6 +711,7 @@ export default function ClientDetailPage() {
                     <div className="flex items-start gap-2.5 px-4 pt-3 pb-3">
                       <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-gray-300 to-gray-500 flex items-center justify-center text-white text-xs font-bold">
                         {post.profile_pic_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={post.profile_pic_url} alt="" className="w-full h-full object-cover"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         ) : (post.account?.[0] ?? '?')}
@@ -803,6 +805,7 @@ export default function ClientDetailPage() {
                         <div className="relative w-8 h-8 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-400 via-pink-400 to-orange-300 flex items-center justify-center text-white text-xs font-bold">
                           <span>{post.account?.[0] ?? '?'}</span>
                           {post.profile_pic_url && (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={post.platform === 'Threads' ? (proxyImg(post.profile_pic_url) ?? post.profile_pic_url) : post.profile_pic_url}
                               alt="" className="absolute inset-0 w-full h-full object-cover"
@@ -824,6 +827,7 @@ export default function ClientDetailPage() {
                       )}
                       {/* FB 圖片貼文 or Threads 有縮圖（無影片）：顯示縮圖 */}
                       {(isFbImagePost || (isThreadsWithImage && !post.video_url)) && post.thumbnail && (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={post.platform === 'Threads' ? (proxyImg(post.thumbnail) ?? post.thumbnail) : post.thumbnail}
                           alt="" className="w-full object-cover"

@@ -13,6 +13,7 @@ function Step({ index, text, image }: { index: number; text: string; image?: str
       <div className="flex-1">
         <p className="text-sm text-gray-700 leading-relaxed">{text}</p>
         {image && (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image}
             alt={`步驟 ${index} 示意圖`}

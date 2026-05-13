@@ -49,7 +49,7 @@ export async function GET() {
     }
 
     return NextResponse.json(map);
-  } catch (err) {
+  } catch {
     return NextResponse.json({}, { status: 500 });
   }
 }

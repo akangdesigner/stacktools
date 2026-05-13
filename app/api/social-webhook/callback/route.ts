@@ -178,7 +178,6 @@ export async function POST(req: NextRequest) {
   // 支援 posts（英文 key）或 貼文（Threads n8n 用中文 key）
   const rawPosts = body['posts'] ?? body['貼文'];
   // Threads replies：與 貼文 平行的圖片陣列，replies[i].images[0] 為 貼文[i] 的縮圖
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawReplies: Array<{ images?: string[] } | null> = Array.isArray(body['replies']) ? body['replies'] : [];
   // 外層平台來源，將 n8n 頻道來源名稱對應到內部標準名稱
   const platformMap: Record<string, string> = {

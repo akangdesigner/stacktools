@@ -314,6 +314,7 @@ export default function GscClientPage() {
     });
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadClient(); }, [id]);
   async function deleteClient() {
     if (!client || !confirm('確定刪除此客戶？')) return;

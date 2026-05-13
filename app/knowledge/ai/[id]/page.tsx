@@ -8,7 +8,7 @@ import ArticleBody from '../../_components/ArticleBody';
 export default async function AIArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const db = getArticlesDb();
-  const article = db.prepare('SELECT * FROM articles WHERE id = ? AND category = ?').get(id, 'ai') as any;
+  const article = db.prepare('SELECT * FROM articles WHERE id = ? AND category = ?').get(id, 'ai') as { title: string; content: string; published_at: string; source_url: string } | undefined;
   if (!article) notFound();
 
   return (
