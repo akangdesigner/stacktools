@@ -34,6 +34,8 @@ export default function BlogGenDetailPage() {
   const [generating, setGenerating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [editingRef, setEditingRef] = useState(false);
+  const [editingSettings, setEditingSettings] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function BlogGenDetailPage() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
-  async function handleSave() {
+  async function handleSave(section: 'ref' | 'settings') {
     setSaving(true);
     setSaveMsg('');
     const res = await fetch('/api/blog-gen/clients', {
@@ -78,9 +80,9 @@ export default function BlogGenDetailPage() {
     });
     setSaving(false);
     if (res.ok) {
-      setSaveMsg('已儲存');
       setClient(prev => prev ? { ...prev, ...form } : prev);
-      setTimeout(() => setSaveMsg(''), 2000);
+      if (section === 'ref') setEditingRef(false);
+      else setEditingSettings(false);
     }
   }
 
@@ -154,7 +156,16 @@ export default function BlogGenDetailPage() {
 
       {/* 參考資料區 */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-4 space-y-4">
-        <h2 className="text-sm font-semibold text-blue-800">參考資料</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-blue-800">參考資料</h2>
+          {!editingRef && (
+            <button onClick={() => setEditingRef(true)} className="text-blue-400 hover:text-blue-600 transition-colors" title="編輯">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         <div>
           <label className="block text-xs text-blue-700 mb-1">Word 文件網址</label>
@@ -162,8 +173,9 @@ export default function BlogGenDetailPage() {
             type="url"
             value={form.word_url}
             onChange={e => setForm(f => ({ ...f, word_url: e.target.value }))}
+            readOnly={!editingRef}
             placeholder="https://..."
-            className="w-full px-3 py-2 border border-blue-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingRef ? 'border-blue-200 bg-white focus:ring-2 focus:ring-blue-400' : 'border-transparent bg-blue-100/50 text-blue-900 cursor-default select-all'}`}
           />
         </div>
 
@@ -173,26 +185,43 @@ export default function BlogGenDetailPage() {
             type="url"
             value={form.gdrive_url}
             onChange={e => setForm(f => ({ ...f, gdrive_url: e.target.value }))}
+            readOnly={!editingRef}
             placeholder="https://drive.google.com/..."
-            className="w-full px-3 py-2 border border-blue-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingRef ? 'border-blue-200 bg-white focus:ring-2 focus:ring-blue-400' : 'border-transparent bg-blue-100/50 text-blue-900 cursor-default select-all'}`}
           />
         </div>
 
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? '儲存中...' : '儲存'}
-          </button>
-          {saveMsg && <span className="text-xs text-green-600">{saveMsg}</span>}
-        </div>
+        {editingRef && (
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={() => handleSave('ref')}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? '儲存中...' : '儲存'}
+            </button>
+            <button
+              onClick={() => { setForm(f => ({ ...f, word_url: client!.word_url, gdrive_url: client!.gdrive_url })); setEditingRef(false); }}
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 固定設定 */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">固定設定</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">固定設定</h2>
+          {!editingSettings && (
+            <button onClick={() => setEditingSettings(true)} className="text-gray-400 hover:text-gray-600 transition-colors" title="編輯">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+          )}
+        </div>
 
         <div>
           <label className="block text-xs text-gray-500 mb-1">客戶名稱</label>
@@ -200,7 +229,8 @@ export default function BlogGenDetailPage() {
             type="text"
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            readOnly={!editingSettings}
+            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
           />
         </div>
 
@@ -210,8 +240,9 @@ export default function BlogGenDetailPage() {
             value={form.persona}
             onChange={e => setForm(f => ({ ...f, persona: e.target.value }))}
             rows={4}
+            readOnly={!editingSettings}
             placeholder="描述小編的寫作風格、口吻、品牌個性..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none resize-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
           />
         </div>
 
@@ -224,8 +255,9 @@ export default function BlogGenDetailPage() {
             type="url"
             value={form.wp_url}
             onChange={e => setForm(f => ({ ...f, wp_url: e.target.value }))}
+            readOnly={!editingSettings}
             placeholder="https://example.com"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
           />
         </div>
 
@@ -236,8 +268,9 @@ export default function BlogGenDetailPage() {
               type="text"
               value={form.wp_username}
               onChange={e => setForm(f => ({ ...f, wp_username: e.target.value }))}
+              readOnly={!editingSettings}
               placeholder="admin"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
             />
           </div>
           <div>
@@ -246,8 +279,9 @@ export default function BlogGenDetailPage() {
               type="text"
               value={form.wp_category_id}
               onChange={e => setForm(f => ({ ...f, wp_category_id: e.target.value }))}
+              readOnly={!editingSettings}
               placeholder="5"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
             />
           </div>
         </div>
@@ -255,13 +289,14 @@ export default function BlogGenDetailPage() {
         <div>
           <label className="block text-xs text-gray-500 mb-1">應用程式密碼</label>
           <input
-            type="password"
-            value={form.wp_app_password}
+            type={editingSettings ? 'password' : 'text'}
+            value={editingSettings ? form.wp_app_password : (form.wp_app_password ? '••••••••' : '')}
             onChange={e => setForm(f => ({ ...f, wp_app_password: e.target.value }))}
+            readOnly={!editingSettings}
             placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
           />
-          <p className="mt-1 text-xs text-gray-400">WordPress 後台 → 使用者 → 個人資料 → 應用程式密碼</p>
+          {editingSettings && <p className="mt-1 text-xs text-gray-400">WordPress 後台 → 使用者 → 個人資料 → 應用程式密碼</p>}
         </div>
 
         <hr className="border-gray-100" />
@@ -275,14 +310,16 @@ export default function BlogGenDetailPage() {
                 type="color"
                 value={form.h2_color || '#000000'}
                 onChange={e => setForm(f => ({ ...f, h2_color: e.target.value }))}
-                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5"
+                disabled={!editingSettings}
+                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5 disabled:cursor-default disabled:opacity-70"
               />
               <input
                 type="text"
                 value={form.h2_color}
                 onChange={e => setForm(f => ({ ...f, h2_color: e.target.value }))}
+                readOnly={!editingSettings}
                 placeholder="#000000"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
               />
             </div>
           </div>
@@ -292,8 +329,9 @@ export default function BlogGenDetailPage() {
               type="text"
               value={form.h2_size}
               onChange={e => setForm(f => ({ ...f, h2_size: e.target.value }))}
+              readOnly={!editingSettings}
               placeholder="24px"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
             />
           </div>
         </div>
@@ -306,14 +344,16 @@ export default function BlogGenDetailPage() {
                 type="color"
                 value={form.h3_color || '#000000'}
                 onChange={e => setForm(f => ({ ...f, h3_color: e.target.value }))}
-                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5"
+                disabled={!editingSettings}
+                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5 disabled:cursor-default disabled:opacity-70"
               />
               <input
                 type="text"
                 value={form.h3_color}
                 onChange={e => setForm(f => ({ ...f, h3_color: e.target.value }))}
+                readOnly={!editingSettings}
                 placeholder="#000000"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
               />
             </div>
           </div>
@@ -323,8 +363,9 @@ export default function BlogGenDetailPage() {
               type="text"
               value={form.h3_size}
               onChange={e => setForm(f => ({ ...f, h3_size: e.target.value }))}
+              readOnly={!editingSettings}
               placeholder="20px"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
             />
           </div>
         </div>
@@ -340,14 +381,16 @@ export default function BlogGenDetailPage() {
                 type="color"
                 value={form.faq_q_color || '#000000'}
                 onChange={e => setForm(f => ({ ...f, faq_q_color: e.target.value }))}
-                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5"
+                disabled={!editingSettings}
+                className="w-9 h-9 rounded border border-gray-200 cursor-pointer p-0.5 disabled:cursor-default disabled:opacity-70"
               />
               <input
                 type="text"
                 value={form.faq_q_color}
                 onChange={e => setForm(f => ({ ...f, faq_q_color: e.target.value }))}
+                readOnly={!editingSettings}
                 placeholder="#000000"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
               />
             </div>
           </div>
@@ -357,22 +400,30 @@ export default function BlogGenDetailPage() {
               type="text"
               value={form.faq_q_size}
               onChange={e => setForm(f => ({ ...f, faq_q_size: e.target.value }))}
+              readOnly={!editingSettings}
               placeholder="16px"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none transition-colors ${editingSettings ? 'border-gray-200 focus:ring-2 focus:ring-gray-900' : 'border-transparent bg-gray-50 cursor-default'}`}
             />
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? '儲存中...' : '儲存設定'}
-          </button>
-          {saveMsg && <span className="text-xs text-green-600">{saveMsg}</span>}
-        </div>
+        {editingSettings && (
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={() => handleSave('settings')}
+              disabled={saving}
+              className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? '儲存中...' : '儲存設定'}
+            </button>
+            <button
+              onClick={() => { setForm(f => ({ ...f, name: client!.name, persona: client!.persona, wp_url: client!.wp_url, wp_username: client!.wp_username, wp_app_password: client!.wp_app_password, wp_category_id: client!.wp_category_id, h2_color: client!.h2_color, h2_size: client!.h2_size, h3_color: client!.h3_color, h3_size: client!.h3_size, faq_q_color: client!.faq_q_color || '#000000', faq_q_size: client!.faq_q_size || '16px' })); setEditingSettings(false); }}
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 生成區 */}

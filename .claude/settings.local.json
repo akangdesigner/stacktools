@@ -77,7 +77,12 @@
       "Bash(Out-Null)",
       "Bash(New-Item -ItemType Directory -Force \"C:\\\\stacktools\\\\app\\\\api\\\\finance\\\\clients\\\\[id]\")",
       "PowerShell(Get-ChildItem \"C:\\\\stacktools\\\\app\\\\blog-gen\" -Recurse -Force | ForEach-Object { $_.FullName })",
-      "PowerShell(Get-ChildItem \"C:\\\\stacktools\\\\app\\\\api\\\\blog-gen\" -Recurse -Force | ForEach-Object { $_.FullName })"
+      "PowerShell(Get-ChildItem \"C:\\\\stacktools\\\\app\\\\api\\\\blog-gen\" -Recurse -Force | ForEach-Object { $_.FullName })",
+      "Bash(Get-ChildItem -Recurse -Depth 2)",
+      "Bash(Select-Object FullName)",
+      "Bash(not exist *)",
+      "Bash(Get-ChildItem -Path C:\\\\stacktools -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }
