@@ -12,10 +12,11 @@ interface ElementorClient {
   url: string;
   username: string;
   password: string;
+  notes: string;
 }
 
 const ELEMENTOR_KEY = "elementor:clients";
-const emptyForm = { name: "", url: "", username: "", password: "" };
+const emptyForm = { name: "", url: "", username: "", password: "", notes: "" };
 
 function ElementorClientDashboard({
   onBack,
@@ -67,7 +68,7 @@ function ElementorClientDashboard({
 
   function openEdit(c: ElementorClient, e: React.MouseEvent) {
     e.stopPropagation();
-    setForm({ name: c.name, url: c.url, username: c.username, password: c.password });
+    setForm({ name: c.name, url: c.url, username: c.username, password: c.password, notes: c.notes ?? "" });
     setEditTarget(c);
     setShowModal(true);
   }
@@ -154,6 +155,14 @@ function ElementorClientDashboard({
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-1">{c.name}</h3>
                 <p className="text-xs text-gray-400 truncate">{c.url}</p>
+                {c.notes && (
+                  <div className="mt-2.5 flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    <svg className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                    <p className="text-xs text-amber-700 line-clamp-2 leading-relaxed">{c.notes}</p>
+                  </div>
+                )}
               </button>
 
               {/* Copy buttons */}
@@ -260,6 +269,16 @@ function ElementorClientDashboard({
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">備註</label>
+                <textarea
+                  rows={2}
+                  placeholder="例：聯絡人 Alex、每次要換購買連結…"
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                 />
               </div>
             </div>
