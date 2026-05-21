@@ -58,6 +58,7 @@ export interface ClientProfile {
   tocBgColor: string;        // TOC box background color; "" = transparent
   tocBgOpacity: number;      // TOC background opacity (0-100)
   blogBaseUrl: string;       // e.g. https://www.tantanwow.com/blog/posts/
+  notes: string;             // 客戶備註（內部用，不影響輸出）
   specialNotes: string;      // 上架注意事項，顯示於結果頁提醒
 
   // WordPress 後台快速登入

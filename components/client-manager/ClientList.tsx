@@ -31,6 +31,9 @@ export function ClientList({ onEdit }: ClientListProps) {
             <div>
               <p className="text-sm font-semibold text-gray-800">{client.name}</p>
               <p className="text-xs text-gray-400">H2: {client.h2FontSize} · H3: {client.h3FontSize} · 段落: {client.paragraphFontSize}</p>
+              {client.notes && (
+                <p className="text-xs text-gray-500 mt-0.5 max-w-xs truncate">{client.notes}</p>
+              )}
             </div>
           </div>
 

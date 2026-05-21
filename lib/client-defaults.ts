@@ -40,6 +40,7 @@ export const DEFAULT_CLIENT_PROFILE: Omit<ClientProfile, "id" | "name" | "create
   tocBgColor: "#f9f9f9",
   tocBgOpacity: 100,
   blogBaseUrl: "",
+  notes: "",
   specialNotes: "",
   wpAdminUrl: "",
   wpAdminUsername: "",

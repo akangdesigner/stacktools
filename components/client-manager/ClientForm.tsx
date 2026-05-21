@@ -97,6 +97,18 @@ export function ClientForm({ initial, onDone, onCancel }: ClientFormProps) {
         {nameError && <p className="mt-1 text-xs text-red-600">{nameError}</p>}
       </div>
 
+      {/* Notes */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">備註</label>
+        <textarea
+          value={form.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          rows={2}
+          placeholder="內部備忘，例如：聯絡人是 Alex、每次要多寬版…"
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 resize-none"
+        />
+      </div>
+
       {/* Headings */}
       <section>
         <p className="text-sm font-semibold text-gray-800 mb-3 pb-1 border-b border-gray-100">標題樣式</p>
