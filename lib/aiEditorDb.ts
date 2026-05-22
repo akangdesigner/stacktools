@@ -36,9 +36,6 @@ function getDb() {
   if (!cols.includes('recent_activities')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN recent_activities TEXT NOT NULL DEFAULT ''`);
   }
-  if (!cols.includes('buffer_code')) {
-    _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN buffer_code TEXT NOT NULL DEFAULT ''`);
-  }
   if (!cols.includes('buffer_ig')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN buffer_ig TEXT NOT NULL DEFAULT ''`);
   }
@@ -61,7 +58,6 @@ export interface AiEditorClient {
   persona: string;
   client_info: string;
   recent_activities: string;
-  buffer_code: string;
   buffer_ig: string;
   buffer_thread: string;
   buffer_fb: string;
@@ -78,8 +74,8 @@ export function getAiEditorClient(id: number): AiEditorClient | null {
 export function createAiEditorClient(data: Omit<AiEditorClient, 'id'>): AiEditorClient {
   const db = getDb();
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_code, buffer_ig, buffer_thread, buffer_fb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_code ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_ig, buffer_thread, buffer_fb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 
@@ -107,7 +103,7 @@ export function upsertClientByLineUid(
     return { client: getAiEditorClient(existing.id)!, action: 'updated' };
   }
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_code, buffer_ig, buffer_thread, buffer_fb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_code ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_ig, buffer_thread, buffer_fb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '');
   return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
 }
