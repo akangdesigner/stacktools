@@ -13,7 +13,6 @@ interface AiEditorClient {
   persona: string;
   client_info: string;
   recent_activities: string;
-  buffer_code: string;
   buffer_ig: string;
   buffer_thread: string;
   buffer_fb: string;
@@ -32,7 +31,6 @@ export default function AiEditorClientPage() {
   const [editPersona, setEditPersona] = useState('');
   const [editClientInfo, setEditClientInfo] = useState('');
   const [editRecentActivities, setEditRecentActivities] = useState('');
-  const [editBufferCode, setEditBufferCode] = useState('');
   const [editBufferIg, setEditBufferIg] = useState('');
   const [editBufferThread, setEditBufferThread] = useState('');
   const [editBufferFb, setEditBufferFb] = useState('');
@@ -56,7 +54,7 @@ export default function AiEditorClientPage() {
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_code: editBufferCode, buffer_ig: editBufferIg, buffer_thread: editBufferThread, buffer_fb: editBufferFb }),
+      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_ig: editBufferIg, buffer_thread: editBufferThread, buffer_fb: editBufferFb }),
     });
     setSaving(false);
     setEditing(false);
@@ -93,7 +91,7 @@ export default function AiEditorClientPage() {
           {!editing && (
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferCode(client.buffer_code ?? ''); setEditBufferIg(client.buffer_ig ?? ''); setEditBufferThread(client.buffer_thread ?? ''); setEditBufferFb(client.buffer_fb ?? ''); setEditing(true); }}
+                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferIg(client.buffer_ig ?? ''); setEditBufferThread(client.buffer_thread ?? ''); setEditBufferFb(client.buffer_fb ?? ''); setEditing(true); }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">刪除</button>

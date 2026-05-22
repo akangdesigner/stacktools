@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_code?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string };
+  const body = await req.json() as { name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string };
   const lineUid = body.line_uid?.trim() ?? '';
   if (lineUid) {
     const { client, action } = upsertClientByLineUid(lineUid, {
@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
       ...(body.persona !== undefined && { persona: body.persona!.trim() }),
       ...(body.client_info !== undefined && { client_info: body.client_info!.trim() }),
       ...(body.recent_activities !== undefined && { recent_activities: body.recent_activities!.trim() }),
-      ...(body.buffer_code !== undefined && { buffer_code: body.buffer_code!.trim() }),
       ...(body.buffer_ig !== undefined && { buffer_ig: body.buffer_ig!.trim() }),
       ...(body.buffer_thread !== undefined && { buffer_thread: body.buffer_thread!.trim() }),
       ...(body.buffer_fb !== undefined && { buffer_fb: body.buffer_fb!.trim() }),
@@ -39,7 +38,6 @@ export async function POST(req: NextRequest) {
     persona: body.persona?.trim() ?? '',
     client_info: body.client_info?.trim() ?? '',
     recent_activities: body.recent_activities?.trim() ?? '',
-    buffer_code: body.buffer_code?.trim() ?? '',
     buffer_ig: body.buffer_ig?.trim() ?? '',
     buffer_thread: body.buffer_thread?.trim() ?? '',
     buffer_fb: body.buffer_fb?.trim() ?? '',
@@ -48,7 +46,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_code?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string };
+  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
@@ -58,7 +56,6 @@ export async function PUT(req: NextRequest) {
     ...(body.persona !== undefined && { persona: body.persona }),
     ...(body.client_info !== undefined && { client_info: body.client_info }),
     ...(body.recent_activities !== undefined && { recent_activities: body.recent_activities }),
-    ...(body.buffer_code !== undefined && { buffer_code: body.buffer_code }),
     ...(body.buffer_ig !== undefined && { buffer_ig: body.buffer_ig }),
     ...(body.buffer_thread !== undefined && { buffer_thread: body.buffer_thread }),
     ...(body.buffer_fb !== undefined && { buffer_fb: body.buffer_fb }),
