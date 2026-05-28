@@ -103,6 +103,9 @@ export default function AiEditorClientPage() {
 
         {editing ? (
           <div className="grid grid-cols-2 gap-3">
+            <FieldCard label="客戶名稱" className="col-span-2">
+              <AutoTextarea value={editName} onChange={e => setEditName(e.target.value)} placeholder="客戶名稱" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
             <FieldCard label="LINE UID">
               <AutoTextarea value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
