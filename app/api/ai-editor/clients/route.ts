@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string };
+  const body = await req.json() as { name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string; fb_group_url?: string };
   const lineUid = body.line_uid?.trim() ?? '';
   if (lineUid) {
     const { client, action } = upsertClientByLineUid(lineUid, {
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       ...(body.buffer_ig !== undefined && { buffer_ig: body.buffer_ig!.trim() }),
       ...(body.buffer_thread !== undefined && { buffer_thread: body.buffer_thread!.trim() }),
       ...(body.buffer_fb !== undefined && { buffer_fb: body.buffer_fb!.trim() }),
+      ...(body.fb_group_url !== undefined && { fb_group_url: body.fb_group_url!.trim() }),
     });
     return NextResponse.json({ ...client, action });
   }
@@ -41,12 +42,13 @@ export async function POST(req: NextRequest) {
     buffer_ig: body.buffer_ig?.trim() ?? '',
     buffer_thread: body.buffer_thread?.trim() ?? '',
     buffer_fb: body.buffer_fb?.trim() ?? '',
+    fb_group_url: body.fb_group_url?.trim() ?? '',
   });
   return NextResponse.json(client);
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string };
+  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; buffer_ig?: string; buffer_thread?: string; buffer_fb?: string; fb_group_url?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
@@ -59,6 +61,7 @@ export async function PUT(req: NextRequest) {
     ...(body.buffer_ig !== undefined && { buffer_ig: body.buffer_ig }),
     ...(body.buffer_thread !== undefined && { buffer_thread: body.buffer_thread }),
     ...(body.buffer_fb !== undefined && { buffer_fb: body.buffer_fb }),
+    ...(body.fb_group_url !== undefined && { fb_group_url: body.fb_group_url }),
   });
   return NextResponse.json({ ok: true });
 }

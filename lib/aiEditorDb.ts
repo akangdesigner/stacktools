@@ -45,6 +45,9 @@ function getDb() {
   if (!cols.includes('buffer_fb')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN buffer_fb TEXT NOT NULL DEFAULT ''`);
   }
+  if (!cols.includes('fb_group_url')) {
+    _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN fb_group_url TEXT NOT NULL DEFAULT ''`);
+  }
 
   return _db;
 }
@@ -61,6 +64,7 @@ export interface AiEditorClient {
   buffer_ig: string;
   buffer_thread: string;
   buffer_fb: string;
+  fb_group_url: string;
 }
 
 export function listAiEditorClients(): AiEditorClient[] {
@@ -74,8 +78,8 @@ export function getAiEditorClient(id: number): AiEditorClient | null {
 export function createAiEditorClient(data: Omit<AiEditorClient, 'id'>): AiEditorClient {
   const db = getDb();
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_ig, buffer_thread, buffer_fb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_ig, buffer_thread, buffer_fb, fb_group_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '', data.fb_group_url ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 
@@ -103,7 +107,7 @@ export function upsertClientByLineUid(
     return { client: getAiEditorClient(existing.id)!, action: 'updated' };
   }
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_ig, buffer_thread, buffer_fb) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, buffer_ig, buffer_thread, buffer_fb, fb_group_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.buffer_ig ?? '', data.buffer_thread ?? '', data.buffer_fb ?? '', data.fb_group_url ?? '');
   return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
 }

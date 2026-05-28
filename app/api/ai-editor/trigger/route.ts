@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
           buffer_ig: client.buffer_ig,
           buffer_thread: client.buffer_thread,
           buffer_fb: client.buffer_fb,
+          fb_group_url: client.fb_group_url,
         },
       }),
       signal: controller.signal,
