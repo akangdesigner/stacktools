@@ -24,6 +24,9 @@ function getDb() {
   if (cols.includes('site_url')) {
     _db.exec(`ALTER TABLE ai_editor_clients DROP COLUMN site_url`);
   }
+  if (cols.includes('buffer_code')) {
+    _db.exec(`ALTER TABLE ai_editor_clients DROP COLUMN buffer_code`);
+  }
   if (!cols.includes('keywords')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN keywords TEXT NOT NULL DEFAULT ''`);
   }
