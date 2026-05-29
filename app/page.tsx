@@ -78,6 +78,15 @@ const internalTools = [
     inDev: false,
     hrOnly: true,
   },
+  {
+    href: "/subscription",
+    title: "訂閱費用監控",
+    description: "集中管理所有付費 AI 工具與雜支訂閱，追蹤續約日期、費用換算，掌握每月與每年支出總覽。",
+    icon: "🔔",
+    color: "bg-indigo-50 border-indigo-200 hover:border-indigo-400",
+    iconBg: "bg-indigo-100",
+    inDev: false,
+  },
 ];
 
 const externalTools = [
