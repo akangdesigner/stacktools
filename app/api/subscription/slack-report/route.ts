@@ -107,9 +107,16 @@ export async function POST(req: NextRequest) {
     text: { type: 'mrkdwn', text: '*📋 完整有效訂閱清單*' },
   } as never);
 
-  const lines = sorted.map(s =>
-    `• ${CATEGORY_LABEL[s.category]}｜*${s.name}*　${s.amount.toLocaleString()} ${s.currency}／${CYCLE_LABEL[s.cycle]}　≈ NT$${toMonthlyTWD(s.amount, s.currency, s.cycle).toLocaleString()}/月`
-  );
+  const lines = sorted.map(s => {
+    const days = daysUntil(s.next_billing_date);
+    const renewLabel =
+      s.cycle === 'onetime' ? '一次性'
+      : days === null ? '未設定續費日'
+      : days === 0 ? '今天續費'
+      : days < 0 ? `已逾期 ${Math.abs(days)} 天`
+      : `${days} 天後續費`;
+    return `• ${CATEGORY_LABEL[s.category]}｜*${s.name}*　${s.amount.toLocaleString()} ${s.currency}　${renewLabel}　≈ NT$${toMonthlyTWD(s.amount, s.currency, s.cycle).toLocaleString()}/月`;
+  });
   blocks.push({
     type: 'section',
     text: { type: 'mrkdwn', text: lines.join('\n') || '（目前無有效訂閱）' },
