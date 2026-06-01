@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClient } from '@/lib/blogGenDb';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('clientId');
   if (!id) return NextResponse.json({ error: '缺少 clientId' }, { status: 400 });
