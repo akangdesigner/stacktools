@@ -171,7 +171,7 @@ export default function SetupGuidePage() {
 
         <Step number={5} title="取得 FB Page ID（粉絲專頁 ID）">
           <p>把下方的 URL 中 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">{'{YOUR_TOKEN}'}</code> 換成剛才複製的 token，在瀏覽器開啟或用 curl 執行：</p>
-          <Code>https://graph.facebook.com/v25.0/me/accounts?access_token={'{YOUR_TOKEN}'}</Code>
+          <Code>{`https://graph.facebook.com/v25.0/me/accounts?access_token={YOUR_TOKEN}`}</Code>
           <p>回傳的 JSON 中，<code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">data</code> 陣列每個物件代表一個粉絲專頁，其中的 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">id</code> 就是 <strong>FB Page ID</strong>，<code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">name</code> 是粉專名稱方便確認。</p>
           <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
             <p className="text-xs text-gray-500 mb-1.5">回傳範例：</p>
@@ -191,7 +191,7 @@ export default function SetupGuidePage() {
 
         <Step number={6} title="取得 IG User ID（Instagram 商業帳號 ID）">
           <p>把 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">{'{FB_PAGE_ID}'}</code> 換成上一步取得的 FB Page ID，<code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">{'{YOUR_TOKEN}'}</code> 換成 token：</p>
-          <Code>https://graph.facebook.com/v25.0/{'{FB_PAGE_ID}'}?fields=instagram_business_account&access_token={'{YOUR_TOKEN}'}</Code>
+          <Code>{`https://graph.facebook.com/v25.0/{FB_PAGE_ID}?fields=instagram_business_account&access_token={YOUR_TOKEN}`}</Code>
           <p>回傳中的 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">instagram_business_account.id</code> 就是 <strong>IG User ID</strong>（17~18 位數字）。</p>
           <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
             <p className="text-xs text-gray-500 mb-1.5">回傳範例：</p>
