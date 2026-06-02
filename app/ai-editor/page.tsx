@@ -57,13 +57,20 @@ export default function AiEditorListPage() {
       <div>
         <div className="flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-bold text-gray-900">AI 小編</h1>
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">開發中</span>
-          <button
-            onClick={() => setShowForm(v => !v)}
-            className="ml-auto px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
-          >
-            + 新增客戶
-          </button>
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={() => router.push('/ai-editor/setup-guide')}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              授權設定教學
+            </button>
+            <button
+              onClick={() => setShowForm(v => !v)}
+              className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+            >
+              + 新增客戶
+            </button>
+          </div>
         </div>
         <p className="text-sm text-gray-500">自動偵測官網新文章，產生 AI 圖文草稿，透過 LINE 審核後自動上架社群。</p>
       </div>
