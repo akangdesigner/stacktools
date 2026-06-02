@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/gscAuth';
 import { listClients } from '@/lib/gscDb';
 
+export const dynamic = 'force-dynamic';
+
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 function colLetter(index: number): string {
