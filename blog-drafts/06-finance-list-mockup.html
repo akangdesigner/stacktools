@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>財務發票管理</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #f9fafb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      color: #111827;
+    }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 220px;
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      padding: 20px 0;
+      flex-shrink: 0;
+    }
+    .sidebar-logo {
+      padding: 0 20px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #111;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .sidebar-logo span { color: #6b7280; font-weight: 400; font-size: 12px; }
+    .nav-group { padding: 12px 0 4px; }
+    .nav-label { padding: 0 20px 6px; font-size: 10px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.6px; }
+    .nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 20px; font-size: 13px; color: #6b7280; }
+    .nav-item.active { color: #111; font-weight: 600; border-left: 2px solid #111; background: #f9fafb; }
+
+    .main { flex: 1; padding: 28px 36px; max-width: 900px; }
+
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .page-title { font-size: 22px; font-weight: 700; }
+    .page-sub { font-size: 13px; color: #6b7280; margin-top: 3px; }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-outline { padding: 7px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; font-size: 13px; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .btn-primary { padding: 7px 14px; border-radius: 8px; border: none; background: #111; color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+    /* Stats cards */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px; }
+    .stat-label { font-size: 11px; color: #6b7280; margin-bottom: 6px; }
+    .stat-num { font-size: 28px; font-weight: 700; line-height: 1; }
+    .stat-num.yellow { color: #d97706; }
+    .stat-num.red { color: #dc2626; }
+    .stat-num.green { color: #16a34a; }
+    .stat-sub { font-size: 11px; color: #9ca3af; margin-top: 5px; }
+
+    /* Table */
+    .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; padding: 11px 16px; font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+    thead th:nth-child(3) { text-align: right; }
+    tbody td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+    tbody td:nth-child(3) { text-align: right; font-weight: 600; }
+    tbody td:last-child { text-align: right; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fafafa; }
+
+    .client-name { font-weight: 600; color: #111; }
+    .client-taxid { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .inv-num { font-family: monospace; font-size: 12px; color: #374151; }
+    .status-badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-paid { background: #d1fae5; color: #065f46; }
+    .status-overdue { background: #fee2e2; color: #991b1b; }
+    .status-draft { background: #f3f4f6; color: #6b7280; }
+    .due-date { color: #374151; font-size: 13px; }
+    .paid-note { font-size: 11px; color: #16a34a; margin-top: 2px; }
+    .action-btn { font-size: 12px; font-weight: 500; cursor: pointer; background: none; border: none; padding: 0; margin-left: 10px; }
+    .action-issue { color: #2563eb; }
+    .action-pay { color: #16a34a; }
+    .action-void { color: #dc2626; }
+    .action-edit { color: #6b7280; }
+    .action-del { color: #f87171; }
+
+    .blur-sm { filter: blur(4px); user-select: none; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-logo">Stack Tools <span>v2</span></div>
+      <div class="nav-group">
+        <div class="nav-label">工具</div>
+        <div class="nav-item">📝 文章上架</div>
+        <div class="nav-item">📊 IG 監控</div>
+        <div class="nav-item">✍️ 推薦文</div>
+        <div class="nav-item">🔍 GSC 排名</div>
+        <div class="nav-item active">🧾 財務發票</div>
+        <div class="nav-item">📚 知識庫</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="page-header">
+        <div>
+          <div class="page-title">財務發票管理</div>
+          <div class="page-sub">開立發票、追蹤付款狀態</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-outline">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            客戶管理
+          </button>
+          <button class="btn-primary">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            新增發票
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-label">待付款</div>
+          <div class="stat-num yellow">3</div>
+          <div class="stat-sub">NT$ 78,540</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">逾期未付</div>
+          <div class="stat-num red">1</div>
+          <div class="stat-sub">NT$ 21,000</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本月已收款</div>
+          <div class="stat-num green">5</div>
+          <div class="stat-sub">NT$ 143,850</div>
+        </div>
+      </div>
+
+      <!-- Invoice table -->
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>客戶</th>
+              <th>發票號碼</th>
+              <th>含稅金額</th>
+              <th>到期日</th>
+              <th>狀態</th>
+              <th style="text-align:right;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Overdue -->
+            <tr>
+              <td>
+                <div class="client-name blur-sm">診所名稱 A</div>
+                <div class="client-taxid blur-sm">12345678</div>
+              </td>
+              <td><span class="inv-num">AB-12345678</span></td>
+              <td>NT$ 21,000</td>
+              <td><div class="due-date">2026-05-10</div></td>
+              <td><span class="status-badge status-overdue">逾期未付</span></td>
+              <td>
+                <button class="action-btn action-pay">確認收款</button>
+                <button class="action-btn action-void">作廢</button>
+              </td>
+            </tr>
+            <!-- Pending 1 -->
+            <tr>
+              <td>
+                <div class="client-name blur-sm">診所名稱 B</div>
+                <div class="client-taxid blur-sm">23456789</div>
+              </td>
+              <td><span class="inv-num">AB-12345699</span></td>
+              <td>NT$ 31,500</td>
+              <td><div class="due-date">2026-06-05</div></td>
+              <td><span class="status-badge status-pending">待付款</span></td>
+              <td>
+                <button class="action-btn action-pay">確認收款</button>
+                <button class="action-btn action-void">作廢</button>
+              </td>
+            </tr>
+            <!-- Pending 2 -->
+            <tr>
+              <td>
+                <div class="client-name blur-sm">診所名稱 C</div>
+                <div class="client-taxid blur-sm">34567890</div>
+              </td>
+              <td><span class="inv-num">AB-12345701</span></td>
+              <td>NT$ 26,040</td>
+              <td><div class="due-date">2026-06-10</div></td>
+              <td><span class="status-badge status-pending">待付款</span></td>
+              <td>
+                <button class="action-btn action-pay">確認收款</button>
+                <button class="action-btn action-void">作廢</button>
+              </td>
+            </tr>
+            <!-- Draft -->
+            <tr>
+              <td>
+                <div class="client-name blur-sm">診所名稱 D</div>
+                <div class="client-taxid blur-sm">45678901</div>
+              </td>
+              <td style="color:#d1d5db;">—</td>
+              <td>NT$ 21,000</td>
+              <td><div class="due-date">2026-06-15</div></td>
+              <td><span class="status-badge status-draft">草稿</span></td>
+              <td>
+                <button class="action-btn action-issue">開立發票</button>
+                <button class="action-btn action-edit">編輯</button>
+                <button class="action-btn action-del">刪除</button>
+              </td>
+            </tr>
+            <!-- Paid 1 -->
+            <tr>
+              <td>
+                <div class="client-name blur-sm">診所名稱 E</div>
+                <div class="client-taxid blur-sm">56789012</div>
+              </td>
+              <td><span class="inv-num">AB-12345680</span></td>
+              <td>NT$ 31,500</td>
+              <td>
+                <div class="due-date">2026-05-20</div>
+                <div class="paid-note">已於 2026-05-18 收款</div>
+              </td>
+              <td><span class="status-badge status-paid">已付款</span></td>
+              <td></td>
+            </tr>
+            <!-- Paid 2 -->
+            <tr>
+              <td>
+                <div class="client-name blur-sm">診所名稱 F</div>
+                <div class="client-taxid blur-sm">67890123</div>
+              </td>
+              <td><span class="inv-num">AB-12345675</span></td>
+              <td>NT$ 26,040</td>
+              <td>
+                <div class="due-date">2026-05-15</div>
+                <div class="paid-note">已於 2026-05-14 收款</div>
+              </td>
+              <td><span class="status-badge status-paid">已付款</span></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

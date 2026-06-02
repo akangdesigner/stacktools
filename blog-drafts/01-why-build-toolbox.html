@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>為什麼工程師要自己做工具箱？Next.js 內部工具開發實錄</title>
+  <meta name="description" content="當 SaaS 訂閱費愈來愈貴、功能又不符需求，自己用 Next.js 打造內部工具箱會是更好的選擇嗎？這篇文章記錄了我從零開始開發行銷工程工具箱的動機、技術選型與實際心得。">
+</head>
+<body>
+
+<h1>為什麼工程師要自己做工具箱？Next.js 內部工具開發實錄</h1>
+
+<h2>前言</h2>
+
+<p>這篇文章是「開發工具箱系列」的第一篇，記錄我為什麼決定從零用 <strong>Next.js</strong> 打造一個專屬的行銷工程內部工具箱，以及技術選型背後的思考。如果你也曾想過「乾脆自己刻一個」，這篇或許能給你一些參考。</p>
+
+<p>有一天下午，我收到同事的訊息，附件是一份從 <strong>WordPress</strong> 後台複製出來、滿是殘留 <code>class</code> 和 <code>inline style</code> 的 HTML。她已經花了將近半小時手動清格式，但還是沒清乾淨。</p>
+
+<p>這件事，我聽過不止一次。</p>
+
+<p>我們的行銷團隊每天都在做幾件高度重複的事：把文章從草稿站搬到上架站、手動核對各社群帳號的數據、用 Excel 追蹤客戶發票有沒有付款。<span style="color:#c0392b;">這些事情不難，但每次都要花時間，而且很容易出錯。</span></p>
+
+<p>我盤算了一下：如果花幾週把這些流程工具化，之後每個月能省下多少小時？答案讓我開始動手。</p>
+
+<h2>問題：手工作業吃掉了多少時間？</h2>
+
+<p>在開始動手之前，我先把團隊的重複性工作列了一張清單：</p>
+
+<ul>
+  <li>每篇文章上架前，要手動清理從 <strong>Elementor</strong> 複製出來的 HTML 格式——<span style="color:#c0392b;">平均每篇花 30 分鐘</span></li>
+  <li>每週要手動到各帳號查看愛心數、留言數、觀看數，填到試算表</li>
+  <li>客戶發票開立後，要在 Excel 追蹤付款狀態，容易漏催款</li>
+  <li>推薦文需要先搜尋競品、整理關鍵字，再動手寫，人工作業耗時</li>
+</ul>
+
+<p><span style="color:#c0392b;">這些加起來，一週輕易就有 5 到 8 小時消耗在可以自動化的重複工作上。</span></p>
+
+<h2>評估過 SaaS，為什麼最後還是自己做？</h2>
+
+<p>市面上有很多工具宣稱能解決這些問題，我確實評估過幾個方向。</p>
+
+<h3>HTML 清洗工具</h3>
+
+<p>有些線上工具可以移除 HTML 標籤，但無法根據不同客戶套用不同的樣式規則，更無法自動生成目錄、處理 <strong>FAQ</strong> 區塊、保留 emoji 圖示。<span style="color:#c0392b;">這些細節對我們來說很重要，一個都不能少。</span></p>
+
+<h3>社群監控平台</h3>
+
+<p>市面上的社群監控 <strong>SaaS</strong> 動輒每月數千元，功能遠超我們需要的範圍。我們只需要追蹤固定幾個帳號的基本數據，不需要輿情分析、競品比較等進階功能。</p>
+
+<h3>發票管理系統</h3>
+
+<p>現有的財務 <strong>SaaS</strong> 介面複雜，台灣電子發票的串接方式每家也不太一樣，用現成工具反而要花更多時間客製化。</p>
+
+<p>最後的決定很簡單：<strong>自己做一個，完全符合工作流程，資料也留在自己手上。</strong></p>
+
+<h2>技術選型：每個決定背後的理由</h2>
+
+<p>我希望這個工具箱能長期維護，所以在開始之前認真想清楚了技術架構。</p>
+
+<h3>Next.js 16 App Router</h3>
+
+<p>選 <strong>Next.js</strong> 的原因很直接：<strong>前後端放在同一個專案裡</strong>。<strong>API Route</strong> 讓我不需要另外建一個 Express 或 Python 伺服器。HTML 清洗、Webhook 觸發、AI 生成等後端邏輯，全部寫在同個 repo，部署時只要一個服務，維護負擔大幅降低。</p>
+
+<p><strong>App Router</strong> 的 Server Component 讓部分資料處理可以直接在伺服器端完成，不用繞到客戶端再發 API，架構更簡潔。</p>
+
+<h3>TypeScript</h3>
+
+<p>純粹是長期維護的考量。這個工具箱預計會持續增加功能，如果全程用 JavaScript，幾個月後回來修改，函式的輸入輸出全憑記憶。<span style="color:#c0392b;"><strong>TypeScript</strong> 的型別定義等於是免費的文件，省去大量反查程式碼的時間。</span></p>
+
+<h3>Tailwind CSS v4</h3>
+
+<p>快速刻 UI 的首選。不需要另外維護一份 CSS 檔，設計一致性也比較容易掌控。<strong>Tailwind CSS v4</strong> 改用 CSS-native 的設定方式，少了一個設定檔，整體更乾淨。</p>
+
+<h3>Zeabur（而非 Vercel）</h3>
+
+<p>這個選擇可能比較少人想到，但對我來說是關鍵決定。</p>
+
+<p><strong>Vercel</strong> 雖然是部署 <strong>Next.js</strong> 的主流選擇，但它的免費方案是 Serverless 架構——<span style="color:#c0392b;">每次請求是獨立的，沒有持久化的磁碟空間，意味著 SQLite 資料庫完全無法使用。</span></p>
+
+<p><strong>Zeabur</strong> 支援 Volume 掛載，可以把 <strong>SQLite</strong> 檔案存在持久化磁碟上。加上設定非常簡單，幾乎是把 Vercel 的使用體驗搬到支援真實後端的環境裡。</p>
+
+<h2>工具箱現在有哪些功能？</h2>
+
+<p>經過幾個月的迭代，工具箱目前包含以下九個功能模組：</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>模組名稱</th>
+      <th>功能說明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>文章上架工具</strong></td><td>四步驟精靈，把草稿 HTML 清洗成符合客戶樣式的上架版本</td></tr>
+    <tr><td><strong>IG 監控報告</strong></td><td>自動同步追蹤帳號的貼文數據，支援篩選、排序</td></tr>
+    <tr><td><strong>推薦文生成器</strong></td><td>填入關鍵字與品牌資訊，讓 AI 自動產出推薦文章草稿</td></tr>
+    <tr><td><strong>精選知識文章</strong></td><td>整理 AI 趨勢與 SEO 新知，方便團隊查閱</td></tr>
+    <tr><td><strong>部落格文章生成器</strong></td><td>自動抓取站內連結、生成文章初稿</td></tr>
+    <tr><td><strong>財務發票管理</strong></td><td>建立、開立、追蹤台灣電子發票</td></tr>
+    <tr><td><strong>GSC 排名查詢</strong></td><td>串接 Google Search Console，直接在工具箱看關鍵字排名</td></tr>
+    <tr><td><strong>社群貼文追蹤</strong></td><td>追蹤社群貼文的發布與成效</td></tr>
+    <tr><td><strong>AI 聊天機器人</strong></td><td>浮動聊天視窗，隨時回答工具箱相關問題</td></tr>
+  </tbody>
+</table>
+
+<img src="" alt="開發工具箱首頁，展示九個功能模組的卡片網格介面">
+
+<h2>架構設計的三個原則</h2>
+
+<p>整個工具箱在架構上遵守幾個核心原則，讓它在快速迭代的同時保持可維護性。</p>
+
+<h3>一、一個功能，一個路由</h3>
+
+<p>每個工具有自己的路由，彼此獨立。壞了一個功能，不影響其他工具的正常運作。這樣的設計讓我可以隨時下架或暫停某個功能，不用動到整個應用。</p>
+
+<h3>二、資料盡量留在自己手上</h3>
+
+<p>除了少數必須串接外部 API 的功能（電子發票、社群數據），其他資料都存在自己的資料庫或 <strong>localStorage</strong>。<span style="color:#c0392b;">不把核心業務資料交給第三方平台，是這個工具箱的基本原則。</span></p>
+
+<h3>三、不過度設計</h3>
+
+<p>這是內部工具，不是 <strong>SaaS</strong> 產品。能用簡單方式解決的，就不引入複雜的架構。<strong>等真的需要再優化，不為假設中的未來需求過度設計。</strong></p>
+
+<h2>開發過程的實際心得</h2>
+
+<p>做工具箱和做產品最大的差異，是<strong>使用者就在你旁邊</strong>。</p>
+
+<p>每次新功能上線，隔天就有人在用，立刻有真實的使用回饋。「這個步驟可以跳過嗎？」「圖片替換能不能一次全部填？」這些回饋比任何 user research 都直接。<span style="color:#c0392b;">這種緊密的回饋循環，讓每次迭代都很有動力。</span></p>
+
+<p>另一個心得是：<strong>完美是進度的敵人</strong>。工具箱一開始只有文章上架工具一個功能，設計也很陽春。但因為它解決了一個真實的痛點，大家開始用，才有後來不斷加功能的動力。先做出能用的，再慢慢變好。</p>
+
+<h2>常見問題 FAQ</h2>
+
+<h3>Q1：Next.js 適合用來做內部工具嗎？</h3>
+
+<p><strong>非常適合</strong>。<strong>Next.js</strong> 的 <strong>API Route</strong> 讓前後端整合在同一個專案，不用另外維護一個後端服務。對於中小型的內部工具來說，這種架構的開發和維護成本都很低。如果你已經熟悉 React，上手 <strong>Next.js</strong> 的內部工具開發幾乎沒有學習曲線。</p>
+
+<h3>Q2：為什麼不用 Python + Flask 做後端？</h3>
+
+<p>如果團隊成員以 Python 為主，Flask 或 FastAPI 確實是好選擇。我選 <strong>Next.js</strong> 的原因是：前端 UI 也需要快速迭代，用同一套語言（<strong>TypeScript</strong>）處理前後端，可以減少切換語境的摩擦。這是個團隊技術棧的選擇，沒有絕對的對錯。</p>
+
+<h3>Q3：Zeabur 和 Vercel 部署 Next.js 有什麼實際差異？</h3>
+
+<p>最關鍵的差異是<span style="color:#c0392b;">資料持久化能力</span>。<strong>Vercel</strong> 的 Serverless 架構沒有持久磁碟，每次請求結束後檔案系統狀態就消失，無法使用 <strong>SQLite</strong>。<strong>Zeabur</strong> 支援 Volume 掛載，可以讓 <strong>SQLite</strong> 資料庫正常運作。如果你的工具需要本機資料庫，Zeabur 是更適合的選擇。</p>
+
+<h3>Q4：自己做內部工具需要多久才能上線？</h3>
+
+<p><strong>第一個功能大約花了一週</strong>做出可用版本。從有想法到第一個同事開始用，差不多是五個工作天。之後的每個新功能，快的三天、慢的一週。<span style="color:#c0392b;">關鍵是先做出能解決痛點的最小版本，而不是一次把所有功能都做完。</span></p>
+
+<h3>Q5：這個工具箱只適合工程師嗎？需要會寫程式才能用嗎？</h3>
+
+<p>使用工具箱<strong>完全不需要寫程式</strong>。工具箱的設計目標就是讓行銷人員、編輯、業務等非技術職能的同事直接上手使用。唯一需要技術背景的部分，是<span style="color:#c0392b;">最初的建置與部署</span>，以及日後新增功能的開發。一旦建好之後，日常操作就跟使用一般網頁工具一樣直覺。</p>
+
+<h2>總結</h2>
+
+<p>自己做工具箱，不是每個團隊都需要走的路。但如果你遇到以下幾個條件同時成立，這條路非常值得考慮：</p>
+
+<ul>
+  <li>團隊有高度重複的手工作業流程</li>
+  <li>現有 <strong>SaaS</strong> 工具要嘛太貴、要嘛功能不符需求</li>
+  <li>團隊裡有人能寫程式，或願意學</li>
+  <li>對資料掌控度有要求</li>
+</ul>
+
+<p><span style="color:#c0392b;">用 <strong>Next.js</strong> + <strong>TypeScript</strong> + <strong>Zeabur</strong> 這套組合，從想法到第一個功能上線，一週內可以完成。</span>之後隨著使用回饋持續迭代，工具箱會愈來愈符合你們自己的工作流程。</p>
+
+<p>這個系列接下來幾篇，我會分別深入每個功能模組的技術細節。下一篇是<strong>文章上架工具</strong>——HTML 清洗精靈是怎麼做的，敬請期待。</p>
+
+
+<hr>
+<h2>本系列文章</h2>
+<ul>
+  <li><strong>第 1 篇：為什麼工程師要自己做工具箱？Next.js 內部工具開發實錄</strong>（本篇）</li>
+  <li><a href="">第 2 篇：文章上架再也不怕格式爆掉：我如何用 Next.js 做 HTML 清洗精靈</a></li>
+  <li><a href="">第 3 篇：用 Google Sheets + n8n 做 IG 貼文監控報告：不花錢的社群數據追蹤方案</a></li>
+  <li><a href="">第 4 篇：讓 Claude AI 幫你寫推薦文：Webhook 非同步任務實作全記錄</a></li>
+  <li><a href="">第 5 篇：從聊天機器人到財務發票：工具箱裡的兩個彩蛋功能</a></li>
+  <li><a href="">第 6 篇：部署到 Zeabur：Next.js 全端 App 上線與多環境管理心得</a></li>
+</ul>
+
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每週一自動跑、查完自動填 Sheet：用 n8n + Google Search Console 做 SEO 排名追蹤工具</title>
+  <meta name="description" content="手動查 GSC 排名、複製數字填 Sheet，每週重複 100 次？這篇說的是我怎麼用 Claude Code 做操作介面、n8n 只用 2 個節點設好排程，讓這件事從此不需要人工介入。">
+</head>
+<body>
+
+<h1>每週一自動跑、查完自動填 Sheet：用 n8n + Google Search Console 做 SEO 排名追蹤工具</h1>
+
+<h2>前言</h2>
+
+<p>這是「開發工具箱系列」第 5 篇。前幾篇分別介紹了文章上架、社群監控、推薦文生成——這篇要說的是另一個每週都會出現的重複動作：SEO 關鍵字排名查詢。</p>
+
+<p>這篇除了介紹功能，也會說清楚這個工具是怎麼做出來的：<strong>Claude Code</strong> 負責所有操作介面，<strong>n8n</strong> 只用 2 個節點就處理了排程觸發，<strong>Google Search Console</strong> 提供真實排名資料。如果你正在學 n8n 或 Claude Code，這個工具的架構特別值得參考——它是我做過最簡潔的一個，卻解決了真實的每週痛點。</p>
+
+<h2>每週查排名，是一件多無聊的事</h2>
+
+<p>一個客戶追蹤 20 個關鍵字，每週查一次。打開 Google Search Console，切換到正確站台，搜尋關鍵字，記下排名，再打開 Google Sheets，找到對應欄位貼進去。20 個關鍵字就要重複 20 次。同時管 5 個客戶，就是 100 次。</p>
+
+<p><span style="color:#c0392b;">這件事沒有難度，但每週都要做。更大的問題是，因為太無聊，很容易出錯：貼錯欄位、忘記更新某個客戶、上下週數字搞混。出錯的代價不高，但要修正就要重查，時間又多花一輪。</span></p>
+
+<p>這個工具要做的事很明確：設好追蹤清單之後，資料自動抓、自動比較、自動填回 Sheet，不需要人。</p>
+
+<h2>整體架構：Claude Code 做介面，n8n 只需要 2 個節點</h2>
+
+<p>這個工具是我做過架構最輕的一個。三個部分串起來，每個只做它最適合的事——如果你也在學這些工具，這個組合的複雜度剛好適合入門。</p>
+
+<p><strong>Claude Code</strong> 負責整個操作介面：多客戶管理列表、每個客戶的關鍵字設定頁面、Google 帳號授權流程、排名查詢畫面、上下週比較表，還有一鍵回填 Google Sheets 的按鈕。</p>
+
+<p>實際的做法是這樣：我把整個功能拆成幾個階段，一次跟 Claude Code 說一段。第一階段先建多客戶管理頁面，提示詞大概是「做一個 GSC 關鍵字排名工具，首頁是多客戶列表，每個客戶卡片顯示客戶名稱、站台網址、追蹤關鍵字數量，右上角有新增客戶按鈕」——先把畫面說清楚，不說技術細節。畫面做出來之後，再進第二階段說查詢邏輯：「查詢時要同時拉本週和上週的 90 天平均排名，結果用表格顯示，排名上升的變化用綠色、下降用紅色」。每次 Claude Code 產出一段，我在畫面上測試，有問題就直接貼截圖或描述給它，讓它接著修。<span style="color:#c0392b;">這個過程不是一次說完，而是來回幾輪——把功能拆小、說清楚每一步要什麼，比一次丟完整需求更容易做出你要的東西。</span></p>
+
+<!-- 截圖：Claude Code 對話框 -->
+<figure style="margin: 24px 0;">
+  <img src="screenshot-cc-conversation.png" alt="Claude Code 對話框畫面：輸入提示詞，右側即時生成頁面" style="width:100%; border-radius: 8px; border: 1px solid #e5e7eb; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+  <figcaption style="font-size:13px; color:#888; text-align:center; margin-top:8px;">Claude Code 對話框：輸入需求後，它自動建立頁面與 API 路由</figcaption>
+</figure>
+
+<p><strong>n8n</strong> 在這個工具裡只做一件事：<span style="color:#c0392b;">每週一早上 10 點自動觸發更新。整個工作流程只有 2 個節點——一個 Schedule Trigger 設定時間，一個 HTTP Request 送出更新請求，就這樣。</span>如果你剛開始學 n8n，這個流程是非常好的第一個練習：不需要條件判斷、不需要資料轉換，只要在 Schedule Trigger 設好「每週一 10 點」，在 HTTP Request 填入工具的更新網址，連起來就完成了。</p>
+
+<!-- 截圖：n8n 工作流程 placeholder（需手動截圖） -->
+<div style="border: 2px dashed #f59e0b; background: #fffbeb; padding: 32px 24px; text-align: center; margin: 24px 0; color: #b45309; border-radius: 8px; font-size: 13px;">
+  📸 <strong>待補截圖</strong>：n8n 工作流程畫布 ── 只有兩個節點：Schedule Trigger（每週一 10:00）→ HTTP Request（觸發更新）
+</div>
+
+<p><strong>Google Search Console</strong> 是資料來源。透過 Google 官方的 OAuth 授權來讀取，不是爬蟲也不是估算，是真實的搜尋排名。排名取的是 90 天平均值，同時查「本週」和「上週」兩個區間——單日排名波動太大，沒什麼參考意義；90 天平均的週比較，才是值得追蹤的數字。</p>
+
+<p>其實最初我想省掉 n8n，讓工具本身直接跑排程就好。想了一下才決定不這樣做——如果排程靜靜地在背景失敗了，我要怎麼知道？n8n 的好處是每次觸發都有執行記錄，成功或失敗都看得見。把排程這件事交出去，不是因為懶，是因為我不想負責一個我看不到狀態的東西。</p>
+
+<!-- 截圖：GSC 多客戶列表頁 -->
+<figure style="margin: 24px 0;">
+  <img src="screenshot-gsc-list.png" alt="GSC 關鍵字排名首頁：多客戶列表，顯示追蹤關鍵字數量、文章數量、自動更新狀態" style="width:100%; border-radius: 8px; border: 1px solid #e5e7eb; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+  <figcaption style="font-size:13px; color:#888; text-align:center; margin-top:8px;">首頁：每個客戶一張卡片，追蹤關鍵字數、文章數一目瞭然</figcaption>
+</figure>
+
+<h2>用起來長什麼樣</h2>
+
+<p>初次使用先連結 Google 帳號。工具頁面頂端顯示授權狀態，點「連結 Google 帳號」走完授權，之後查詢就不需要再手動登入。授權完成後點右上角「新增客戶」，填入客戶名稱和 GSC 站台網址，建立基本設定。</p>
+
+<p>進入客戶頁面，介面分左右兩側，對應兩種不同的追蹤需求。</p>
+
+<h3>左側：追蹤關鍵字排名</h3>
+
+<p>管的是「這些關鍵字在 Google 排第幾」。貼入關鍵字清單，每行一個，可以在每個關鍵字前後加備註標籤方便分類——比如把美容相關的都標「美容」，查詢結果會按標籤群組顯示。選一個抓取日期，按「查詢排名」，工具同時拉本週和上週的 90 天平均排名，結果回傳到表格：關鍵字、標籤、上週排名、本週排名、排名變化（上升綠色、下降紅色）、點擊數、曝光數。查完按「寫入 Sheet」，直接回填到設定好的 Google Sheet，不用手動複製。</p>
+
+<h3>右側：追蹤特定文章排名</h3>
+
+<p>管的是「這篇文章現在排第幾」。從 Sheet 複製「文章標題、文章網址」兩欄貼過來，按「查詢文章排名」，工具用每篇 URL 去 GSC 查對應的排名位置，查完同樣可以一鍵回填。這邊有個常見問題：如果 Sheet 裡的網址欄是超連結格式，複製出來的是文字，不是真正的 URL。工具裡有說明區塊提供一個小函式，可以在 Sheet 裡把超連結文字自動轉成純網址，再貼進工具就能正確查詢。</p>
+
+<!-- 截圖：客戶詳細頁排名表格 -->
+<figure style="margin: 24px 0;">
+  <img src="screenshot-gsc-detail.png" alt="客戶詳細頁：左側關鍵字排名表（上週、本週、變化趨勢），右側文章排名清單" style="width:100%; border-radius: 8px; border: 1px solid #e5e7eb; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+  <figcaption style="font-size:13px; color:#888; text-align:center; margin-top:8px;">左側關鍵字排名比較（綠色↓ = 排名進步）、右側文章排名清單</figcaption>
+</figure>
+
+<h2>有一刻我才搞清楚 GSC 怎麼看網址</h2>
+
+<p>文章排名功能剛上線，我測試了一批網址，有幾篇排名一直顯示「-」。其他文章都正常，偏偏這幾篇查不到。</p>
+
+<p>第一個反應是資料還沒進來，但其他文章同一批查詢都有結果，不是時間問題。我進 Search Console 確認那幾篇文章，排名確實存在，問題不在資料端。</p>
+
+<p>停在那裡想了一下，然後想到一個可能：網址末尾有沒有斜線。</p>
+
+<p>打開 Search Console，把那幾篇文章的網址複製出來，跟工具裡的版本逐字比對。果然——GSC 裡存的是 <code>https://example.com/article/</code>，我貼的是 <code>https://example.com/article</code>，差了一個斜線。在 GSC 的邏輯裡，這是兩個不同的頁面。</p>
+
+<p>這件事讓我真正想通了一個本來以為知道、但其實沒想清楚的東西：<span style="color:#c0392b;">「網址正確」不是「看起來一樣」，而是「字元完全相同」。</span><code>http</code> vs <code>https</code>、<code>www</code> 有沒有，都是這個邏輯。後來我在工具裡加了提示：當所有文章排名都顯示空白時，會提醒「請確認 URL 格式與 GSC 一致」。這個提示不是給別人看的，是給下一個忘記這件事的自己留的。</p>
+
+<h2>常見問題 FAQ</h2>
+
+<h3>Q1：我也想做類似的工具，n8n 要會到什麼程度才能開始？</h3>
+
+<p>這個工具的 n8n 部分只有 2 個節點：排程觸發 + 送出一個請求。這是 n8n 入門最簡單的組合之一，只要你知道怎麼加節點、設定排程時間、填入一個網址，就能做到一樣的效果。真正複雜的部分都在 Claude Code 那邊——操作介面、資料查詢邏輯、回填 Sheet 的計算，這些都是我用 Claude Code 的對話框說需求讓它做的。<span style="color:#c0392b;">n8n 負責「什麼時候跑」，Claude Code 負責「跑什麼」，兩者切開之後，每個部分都不難。</span></p>
+
+<h3>Q2：不會寫程式，能不能自己用 Claude Code 做出這個？</h3>
+
+<p>可以，但需要一些耐心。Claude Code 不是輸入需求就全自動產出，過程中你還是需要描述清楚你要什麼、看到結果不對時知道怎麼說明問題在哪。這個工具我從有想法到可以用，大概花了 3 到 4 天，不是一次說清楚就好。比較現實的期待是：你不需要懂每一行程式，但你需要能把「我要的功能」說得夠具體——「查詢結果要顯示上週和本週的差異，差異要用顏色標示」比「做一個排名追蹤工具」更容易讓 Claude Code 做出你要的東西。</p>
+
+<h3>Q3：Google Search Console 的資料有延遲嗎？</h3>
+
+<p>通常 2 到 3 天。工具預設的抓取日期是今天往前推 2 天，不是今天。如果選今天或昨天，資料可能還沒進來，查出來會是空的。結果很少或完全空白時，先確認選的日期是否在 2 天以前，通常就能解決。</p>
+
+<h3>Q4：為什麼取 90 天平均，不直接看當天數字？</h3>
+
+<p>這個決定是在第一次看到單日數字的時候想通的。一篇文章今天第 3 名、明天第 7 名、後天第 4 名，那只是正常的日常波動，不代表任何事。90 天平均把這些雜訊平滑掉，讓比較有意義。<span style="color:#c0392b;">上週 vs 本週的平均差了幾名，才是值得往下追原因的訊號。</span></p>
+
+<h3>Q5：這和直接看 Search Console 後台有什麼差？</h3>
+
+<p>Search Console 後台一次只能看一個站台，沒有上下週比較視圖，看完要自己把數字複製到 Sheet。同時管 5 個客戶、每個追蹤 20 個關鍵字，這些動作每週加起來不少時間。這個工具把它壓縮成：選日期、查詢、寫入 Sheet——再配上每週自動觸發，完全不需要人工介入。</p>
+
+<h2>總結</h2>
+
+<p>做工具時我常問自己一個問題：這個工具上線之後，我還需要主動去記得它幾次？如果答案是「每次都要記得去用」，那它只是換了個介面的手動流程。GSC 排名追蹤現在的答案是後者：它每週一在背景自動跑，我偶爾進去瞄一眼數字，大多時候甚至想不起來它的存在。</p>
+
+<p>這個工具的 n8n 部分只有 2 個節點，但就是這 2 個節點讓整件事從「每週記得手動跑」變成「完全不需要記得」。<span style="color:#c0392b;">自動化不需要從複雜的流程開始——有時候一個排程加一個請求，就夠了。這個工具從介面到邏輯，靠的是 Claude Code 把需求變成程式；排程這件事，則是用 n8n 的兩個節點接走的。我的工作是把問題說清楚，然後讓系統去跑。</span></p>
+
+<p>下一篇會介紹工具箱裡的另外兩個模組：財務發票管理和 AI 聊天機器人，一個幫行銷團隊追蹤客戶付款狀態，一個讓任何人都能隨時問工具箱怎麼用。</p>
+
+<p>想了解更多 AI 工具與 n8n 實務應用結合，歡迎參考官方網站：<a href="https://aiqkangber.com/" target="_blank">https://aiqkangber.com/</a></p>
+
+</body>
+</html>

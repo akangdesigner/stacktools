@@ -45,7 +45,6 @@ for (const [col, def] of [['faq_q_color', "'#000000'"], ['faq_q_size', "'16px'"]
     db.exec(`ALTER TABLE blog_gen_clients ADD COLUMN ${col} TEXT NOT NULL DEFAULT ${def}`);
   }
 }
-
 export interface BlogGenClient {
   id: number;
   name: string;

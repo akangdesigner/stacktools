@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useClients } from "@/hooks/useClients";
 import { ClientManagerModal } from "@/components/client-manager/ClientManagerModal";
+import type { ClientProfile } from "@/types";
 
 interface Step3SelectClientProps {
   selectedClientId: string | null;
@@ -13,10 +14,22 @@ interface Step3SelectClientProps {
 }
 
 export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onArticleSlugChange, error }: Step3SelectClientProps) {
-  const { clients, isLoaded, refetch } = useClients();
+  const { clients, isLoaded, refetch, upsertClient } = useClients();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
 
   const selected = clients.find((c) => c.id === selectedClientId);
+
+  function openNotes(client: ClientProfile) {
+    setNotesValue(client.notes ?? "");
+    setEditingNotes(true);
+  }
+
+  function saveNotes(client: ClientProfile) {
+    upsertClient({ ...client, notes: notesValue, updatedAt: new Date().toISOString() });
+    setEditingNotes(false);
+  }
 
   return (
     <div className="space-y-4">
@@ -67,6 +80,46 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
                 <span>段落：{selected.paragraphFontSize} / <span style={{ color: selected.paragraphColor }} className="font-medium">{selected.paragraphColor}</span></span>
                 <span>連結：<span style={{ color: selected.linkColor }} className="font-medium">{selected.linkColor}</span></span>
                 <span>按鈕：{selected.stripButtonStyle ? "拔除格式" : <span style={{ background: selected.buttonBgColor, color: selected.buttonTextColor, padding: "1px 6px", borderRadius: 3 }}>{selected.buttonBgColor}</span>}</span>
+              </div>
+
+              {/* 備註 */}
+              <div className="pt-1 border-t border-gray-200">
+                {editingNotes ? (
+                  <div className="space-y-1.5">
+                    <textarea
+                      autoFocus
+                      value={notesValue}
+                      onChange={(e) => setNotesValue(e.target.value)}
+                      rows={2}
+                      placeholder="輸入備註…"
+                      className="w-full px-3 py-2 text-xs border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveNotes(selected)}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        儲存
+                      </button>
+                      <button
+                        onClick={() => setEditingNotes(false)}
+                        className="px-3 py-1 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openNotes(selected)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-600 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    {selected.notes ? selected.notes : "新增備註"}
+                  </button>
+                )}
               </div>
             </div>
           )}

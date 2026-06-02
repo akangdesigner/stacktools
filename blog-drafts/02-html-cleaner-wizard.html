@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文章上架再也不怕格式爆掉：我如何用 Next.js 做 HTML 清洗精靈</title>
+  <meta name="description" content="從 Elementor 草稿複製文章，格式總是一團亂？這篇文章介紹如何用 Next.js 打造四步驟 HTML 清洗精靈，自動套用客戶樣式、生成目錄、處理 FAQ 區塊，讓文章上架時間從 30 分鐘縮短到 5 分鐘。">
+</head>
+<body>
+
+<h1>文章上架再也不怕格式爆掉：我如何用 Next.js 做 HTML 清洗精靈</h1>
+
+<h2>前言</h2>
+
+<p>這是「開發工具箱系列」的第二篇，專門介紹 <strong>文章上架工具</strong> 的技術設計。如果你或你的團隊常常需要把文章從 <strong>WordPress</strong> 或 <strong>Elementor</strong> 搬到另一個平台上架，這篇或許能給你一些靈感。</p>
+
+<p>從 <strong>Elementor</strong> 複製出來的文章 HTML，從來就沒有乾淨過。</p>
+
+<p>每次把文章貼到客戶後台，都得面對一堆 <code>elementor-element-xxxxx</code>、殘留的 <code>inline style</code>、沒有意義的 <code>data-*</code> 屬性，還有標題顏色完全跑掉的問題。直接上架，版面保證炸裂。</p>
+
+<p><span style="color:#c0392b;">一篇文章的格式處理，平均要花 30 分鐘。每週上架三四篇，光清格式就吃掉將近兩小時。</span></p>
+
+<p>這個工具想解決的問題很明確：<strong>讓文章從草稿到上架的格式處理，從 30 分鐘縮短到 5 分鐘以內，且結果一致、不依賴人工判斷。</strong></p>
+
+<h2>問題：Elementor 文章搬站的格式地獄</h2>
+
+<p>在動手做之前，我整理了一下每次上架需要手動處理的事項：</p>
+
+<ul>
+  <li>刪掉所有 <strong>Elementor</strong> 的 <code>class</code>（<code>elementor-widget</code>、<code>elementor-element</code>……）</li>
+  <li>把 H2、H3 標題顏色改成客戶指定的色碼</li>
+  <li>手動建文章目錄，把錨點連結一個個複製貼上</li>
+  <li>圖片網址從草稿站換成正式站的路徑</li>
+  <li><strong>FAQ</strong> 區塊的 H3 要特別換成不同的樣式</li>
+  <li>emoji 圖示不能和一般內容圖片套用同樣的樣式，否則會放大變形</li>
+</ul>
+
+<p><span style="color:#c0392b;">每一條都是重複勞動，而且每位編輯的處理方式不完全一致，導致不同文章的上架品質參差不齊。</span></p>
+
+<img src="" alt="從 Elementor 複製出來的原始 HTML，充滿 elementor-element class 和殘留 inline style（清洗前）">
+
+<h2>解法架構：四步驟精靈</h2>
+
+<p>整個工具設計成四步驟精靈，核心邏輯分三個階段：</p>
+
+<ol>
+  <li><strong>選擇客戶設定</strong>：選擇這篇文章要套用哪個客戶的樣式規則</li>
+  <li><strong>取得草稿 HTML</strong>：在草稿站的瀏覽器執行一段 Console 程式碼，自動擷取文章 DOM</li>
+  <li><strong>圖片 URL 替換</strong>：把草稿站的圖片網址批量換成正式站的路徑</li>
+  <li><strong>複製清洗後的 HTML</strong>：一鍵複製，貼到客戶後台上架</li>
+</ol>
+
+<p>使用者不需要懂任何程式，整個流程就是：<strong>「打開工具 → 選客戶 → 貼程式碼到瀏覽器 → 替換圖片 → 複製結果」</strong>。</p>
+
+<h2>階段一：Console 片段產生器</h2>
+
+<p>最有趣的設計在第二步。</p>
+
+<p>使用者不可能每次都手動複製 HTML——因為 <strong>Elementor</strong> 編輯器裡的 DOM 結構很深，手動複製很容易夾到不必要的外層容器，或漏掉某些元素。</p>
+
+<p>我的解法是讓工具<strong>產生一段 JavaScript 程式碼</strong>，使用者把這段程式碼貼到瀏覽器開發者工具的 Console 執行，它會自動找到文章內容並複製到剪貼簿。</p>
+
+<h3>三層 Selector 自動適配主題</h3>
+
+<p>不同的 <strong>WordPress</strong> 主題，文章內容放在不同的 DOM 位置。為了讓同一段程式碼在各種環境都能正確取到內容，設計了三層 fallback：</p>
+
+<ul>
+  <li>第一層：<strong>Elementor</strong> 的專屬 class（<code>.elementor-widget-theme-post-content</code>）</li>
+  <li>第二層：標準 HTML5 的 <code>&lt;article&gt;</code> 語意標籤</li>
+  <li>第三層：退回整個 <code>&lt;body&gt;</code> 作為最後備案</li>
+</ul>
+
+<p><span style="color:#c0392b;">這個設計讓同一段 Console 程式碼可以在 Elementor 頁面、標準 WordPress 主題、自定義主題上都能正常運作，不需要為每個客戶維護不同版本。</span></p>
+
+<h3>圖片自動觸發下載</h3>
+
+<p>草稿站的圖片通常是草稿站的網址，直接帶到正式站會是無效連結。Console 程式碼同時會找出文章裡所有的圖片，<strong>自動觸發下載</strong>，讓使用者可以重新上傳到客戶後台。</p>
+
+<p>為了避免一次下載太多圖片把瀏覽器塞爆，下載之間加了 <strong>400ms 的間隔</strong>，逐張下載而不是同時湧入。</p>
+
+<h2>階段二：9 步驟 HTML 清洗器</h2>
+
+<p>這是整個工具最核心的部分，跑在 <strong>Next.js</strong> 的 API Route 裡，使用 <strong><code>node-html-parser</code></strong> 解析 DOM。9 個步驟按順序執行，每一步針對一個具體的格式問題。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>步驟</th>
+      <th>處理對象</th>
+      <th>說明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>步驟 0</td><td>移除 <code>&lt;h1&gt;</code></td><td>避免頁面出現重複標題，影響 SEO</td></tr>
+    <tr><td>步驟 1–2</td><td>H2 / H3 樣式</td><td>套用客戶色碼、字體大小，自動編號錨點 ID</td></tr>
+    <tr><td>步驟 3</td><td>段落 span 顏色</td><td>統一文字顏色，智慧跳過連結內的 span</td></tr>
+    <tr><td>步驟 4</td><td>清單項目</td><td>套用客戶指定的列表文字顏色</td></tr>
+    <tr><td>步驟 5</td><td>連結 vs 按鈕辨別</td><td>偵測 background/padding，保留按鈕樣式</td></tr>
+    <tr><td>步驟 6</td><td><code>&lt;em&gt;</code> 處理</td><td>依客戶設定轉為粗體或紅色強調</td></tr>
+    <tr><td>步驟 7</td><td>圖片處理</td><td>emoji 圖示固定 1em，內容圖片加邊框圓角</td></tr>
+    <tr><td>步驟 8</td><td>清單去重</td><td>移除 Elementor 複製出現的重複 li 項目</td></tr>
+    <tr><td>步驟 9</td><td>目錄生成</td><td>根據 H2 錨點自動組合目錄，插入文章頂部</td></tr>
+  </tbody>
+</table>
+
+<h3>步驟 0：移除重複 H1</h3>
+
+<p>文章標題通常由客戶後台的頁面 <code>&lt;h1&gt;</code> 顯示，HTML 內容裡如果還有一個 <code>&lt;h1&gt;</code>，<span style="color:#c0392b;">會造成頁面出現兩個 H1，對 SEO 有直接的負面影響。</span>這個步驟直接移除 HTML 內容裡的第一個 H1。</p>
+
+<h3>步驟 1–2：標題樣式與 FAQ 模式</h3>
+
+<p>每個客戶的標題樣式都不一樣——有的 H2 是藍色粗體、有的是橘色加底線。清洗器會按文件順序走訪所有標題，套上客戶指定的顏色和字體大小，同時為每個 H2 自動分配錨點 ID，供後面目錄生成使用。</p>
+
+<p><strong>FAQ 模式的自動切換</strong>是這個步驟的設計亮點。很多 SEO 文章下方會有 FAQ 區塊，標題格式和正文不同，通常是 Q1、Q2 編號樣式。清洗器會偵測標題文字裡是否含有「FAQ」關鍵字，<span style="color:#c0392b;">一旦偵測到，後續所有 H3 就自動切換成 FAQ 樣式，不需要使用者手動標記。</span></p>
+
+<h3>步驟 3–5：段落、清單與連結辨別</h3>
+
+<p>段落裡的 <code>&lt;span&gt;</code> 元素是 <strong>Elementor</strong> 留下的格式殘跡，帶著各種 <code>inline style</code>。清洗器統一把段落的文字顏色換成客戶指定的顏色，但有一個細節：<strong><code>&lt;a&gt;</code> 標籤裡的 <code>&lt;span&gt;</code> 不處理</strong>，因為連結有自己的顏色，不能被段落顏色覆蓋。</p>
+
+<p>連結 vs 按鈕的辨別，透過檢查 <code>background</code> 和 <code>padding</code> 屬性判斷：有背景色和內距的是按鈕，保留樣式；純文字連結則清除多餘格式。</p>
+
+<h3>步驟 6–7：強調文字與圖片處理</h3>
+
+<p>斜體 <code>&lt;em&gt;</code> 在 <strong>Elementor</strong> 裡可能有不同語意——有的是真的強調語氣，有的其實是要顯示紅色提示文字。根據客戶設定，<code>&lt;em&gt;</code> 可以轉換成粗體，也可以轉換成指定顏色的 <code>&lt;span&gt;</code>。</p>
+
+<p>圖片處理有一個細節需要特別照顧：<strong>emoji 圖示</strong>。很多文章裡會插入 emoji 的 SVG 圖示，這些在 <strong>Elementor</strong> 裡通常是 <code>&lt;img&gt;</code> 標籤，尺寸很小（1em）。<span style="color:#c0392b;">如果套用一般內容圖片的樣式（加邊框、設定最大寬度），emoji 圖示會放大變形，整個版面就亂掉了。</span></p>
+
+<p>清洗器透過偵測圖片的 <code>width</code>/<code>height</code> 屬性是否為 <code>1em</code>，把 emoji 圖示和內容圖片分開處理，各自套用對應的樣式。</p>
+
+<h3>步驟 8–9：清單去重與目錄生成</h3>
+
+<p>從 <strong>Elementor</strong> 複製出來的 HTML，清單項目有時會重複出現，這是 Elementor widget DOM 結構的副作用。這個步驟用 <code>Set</code> 追蹤已出現的 <code>&lt;li&gt;</code> 文字內容，重複的直接移除。</p>
+
+<p>最後一步是自動生成文章目錄。清洗器讀取前面步驟建立的所有 H2 錨點，組合成目錄 HTML 區塊，插入在第一個 H2 的前方。目錄的背景色支援透明度設定，內建 Hex 轉 RGBA 的轉換邏輯，讓客戶指定的色碼可以直接套用到帶透明度的目錄背景。</p>
+
+<h2>多客戶設定管理</h2>
+
+<p>不同客戶的樣式需求完全不同：H2 顏色、H3 字體大小、<strong>FAQ 模式</strong>開關、目錄背景色……每個都不一樣。</p>
+
+<p>工具裡的客戶設定功能讓使用者可以新增、編輯、刪除客戶，每個客戶對應一組完整的樣式設定。設定存在 <strong><code>localStorage</code></strong>，不需要後端資料庫，開啟工具即可直接選擇客戶套用。</p>
+
+<p>這個設計的取捨是：<strong>localStorage 的資料存在瀏覽器本機，換電腦需要重新設定</strong>。對於固定的工作環境來說，這個限制完全可以接受；如果有多裝置同步的需求，之後可以改存到後端資料庫。</p>
+
+<h2>實際效果：前後對比</h2>
+
+<p>以一篇 3,000 字的 <strong>Elementor</strong> 文章為例，清洗前後的變化非常明顯：</p>
+
+<ul>
+  <li><strong>清洗前</strong>：HTML 大約 15,000 字元，充滿 <code>data-id</code>、<code>elementor-element-xxxxx</code>、各種殘留 inline style</li>
+  <li><strong>清洗後</strong>：HTML 大約 5,000 字元，乾淨的語意標籤，標題帶客戶樣式，目錄自動生成</li>
+  <li><strong>後端處理時間</strong>：API 回應通常在 300ms 以內</li>
+  <li><strong>人工節省時間</strong>：從原本的 <span style="color:#c0392b;">30 分鐘</span>，縮短到 <span style="color:#c0392b;">5 分鐘以內</span></li>
+</ul>
+
+<img src="" alt="HTML 清洗精靈的操作介面，顯示四個步驟與清洗後輸出的乾淨 HTML">
+
+<h2>踩坑紀錄：Shopline 的錨點問題</h2>
+
+<p>目錄裡的錨點連結格式本來是相對路徑的錨點（例如 <code>#h2-1</code>）。</p>
+
+<p>但某個客戶用的是 Shopline 平台，<span style="color:#c0392b;">相對路徑的錨點點下去會跳回首頁，而不是捲動到對應位置。</span>這是 Shopline 的平台行為，無法從 HTML 層面直接修改。</p>
+
+<p>解法是在清洗 API 裡加一個可選參數：如果有傳入文章的完整 URL，目錄連結就改成完整路徑（例如 <code>https://example.com/blog/article-slug#h2-1</code>），這樣在 Shopline 上就能正常捲動到對應位置。</p>
+
+<p>這個需求是上線後才被使用者回報的，修改大約花了 10 分鐘。<strong>做內部工具最爽的地方就是這個——需求清楚、修改快速、立刻驗證。</strong></p>
+
+<h2>常見問題 FAQ</h2>
+
+<h3>Q1：Console 片段在瀏覽器執行安全嗎？</h3>
+
+<p>這段程式碼只做兩件事：<strong>讀取頁面上的 DOM 內容</strong>、<strong>觸發圖片下載</strong>。它不會傳送任何資料到外部伺服器，也不會修改頁面內容。<span style="color:#c0392b;">唯一需要注意的是：請確認你是在自己的草稿站執行，而不是在不明來源的網站上貼入不認識的程式碼。</span></p>
+
+<h3>Q2：這個工具支援哪些 WordPress 主題？</h3>
+
+<p>凡是有 <strong>Elementor</strong> 的頁面，或是標準的 <code>&lt;article&gt;</code> HTML5 語意標籤的主題，都可以正常使用。<strong>大多數現代的 WordPress 主題都符合這個條件。</strong>如果主題結構比較特殊，可以手動修改 Console 程式碼裡的 Selector，指向正確的文章容器。</p>
+
+<h3>Q3：客戶設定存在 localStorage，換電腦會消失嗎？</h3>
+
+<p>是的，<strong><code>localStorage</code></strong> 的資料存在瀏覽器本機，換電腦或清除瀏覽器資料後需要重新設定。如果你有多台電腦使用的需求，可以考慮把客戶設定改存到後端資料庫，或是提供匯出／匯入 JSON 的功能。對於固定工作環境來說，現行設計已經夠用。</p>
+
+<h3>Q4：HTML 清洗後還需要手動調整嗎？</h3>
+
+<p>絕大多數情況下<strong>不需要</strong>。清洗後的 HTML 已經套用好客戶樣式、生成目錄、處理 FAQ 區塊。<span style="color:#c0392b;">唯一需要手動確認的是圖片是否已重新上傳到正式站的媒體庫，並確認圖片 URL 替換正確。</span>這個步驟工具本身也有引導流程，不容易遺漏。</p>
+
+<h3>Q5：這套工具可以用在 Shopify、Shopline 等非 WordPress 平台嗎？</h3>
+
+<p>可以。只要目標平台的後台支援直接貼入 HTML 原始碼，清洗後的結果就可以直接使用。<strong>Shopify 和 Shopline 都有 HTML 編輯模式，貼入清洗後的結果完全沒有問題。</strong>唯一需要注意的是錨點連結格式——如上面踩坑紀錄提到的，某些平台需要使用完整路徑的錨點，工具裡已有對應的設定選項可以處理。</p>
+
+<h2>總結</h2>
+
+<p>這個 <strong>HTML 清洗精靈</strong>從上線到現在，已經是團隊每天都在用的工具。幾個值得記錄的技術重點：</p>
+
+<ul>
+  <li><strong>Console snippet 取代手動操作</strong>：讓不懂技術的使用者也能完成 DOM 擷取，降低使用門檻</li>
+  <li><strong>三層 Selector fallback</strong>：一份程式碼相容多種 <strong>WordPress</strong> 主題結構</li>
+  <li><strong>FAQ 模式自動偵測</strong>：偵測關鍵字後自動切換 H3 樣式，不需要使用者手動標記</li>
+  <li><strong>emoji img 的特殊識別</strong>：細節處理讓輸出結果不需要再手動調整</li>
+  <li><strong>Shopline 錨點的完整路徑方案</strong>：來自真實使用回饋的改善</li>
+</ul>
+
+<p><span style="color:#c0392b;">最重要的心得是：先做出能解決問題的最小版本，再根據真實使用回饋迭代。</span>這個工具一開始只有最基本的 HTML 清洗，Shopline 錨點、FAQ 模式、emoji 識別，全都是上線後根據使用者回饋加進去的。</p>
+
+<p>下一篇會介紹 <strong>IG 監控報告</strong>——如何用 Google Sheets 當輕量資料庫，搭配 <strong>n8n</strong> 自動化同步貼文數據。</p>
+
+
+<hr>
+<h2>本系列文章</h2>
+<ul>
+  <li><a href="">第 1 篇：為什麼工程師要自己做工具箱？Next.js 內部工具開發實錄</a></li>
+  <li><strong>第 2 篇：文章上架再也不怕格式爆掉：我如何用 Next.js 做 HTML 清洗精靈</strong>（本篇）</li>
+  <li><a href="">第 3 篇：用 Google Sheets + n8n 做 IG 貼文監控報告：不花錢的社群數據追蹤方案</a></li>
+  <li><a href="">第 4 篇：讓 Claude AI 幫你寫推薦文：Webhook 非同步任務實作全記錄</a></li>
+  <li><a href="">第 5 篇：從聊天機器人到財務發票：工具箱裡的兩個彩蛋功能</a></li>
+  <li><a href="">第 6 篇：部署到 Zeabur：Next.js 全端 App 上線與多環境管理心得</a></li>
+</ul>
+
+</body>
+</html>
