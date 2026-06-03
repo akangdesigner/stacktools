@@ -5,6 +5,15 @@ import Link from "next/link";
 
 const internalTools = [
   {
+    href: "/writer",
+    title: "寫手流程工具",
+    description: "查看每日排程、客戶帳密與進度登記，直接從 Google Sheets 讀取資料，協助寫手掌握今日任務。",
+    icon: "✏️",
+    color: "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
+    iconBg: "bg-yellow-100",
+    inDev: false,
+  },
+  {
     href: "/article",
     title: "文章上架工具",
     description: "四步驟精靈，自動清洗並格式化文章 HTML，依客戶樣式設定套用標題、段落、連結、圖片樣式。",

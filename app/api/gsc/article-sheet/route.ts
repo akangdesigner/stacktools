@@ -6,6 +6,46 @@ export const dynamic = 'force-dynamic';
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+export async function GET(req: NextRequest) {
+  const clientId = Number(req.nextUrl.searchParams.get('clientId'));
+  if (!clientId) return NextResponse.json({ error: '缺少 clientId' }, { status: 400 });
+
+  const clients = listClients();
+  const client = clients.find(c => c.id === clientId);
+  if (!client) return NextResponse.json({ error: '找不到客戶' }, { status: 404 });
+  if (!client.article_sheet_id) {
+    return NextResponse.json({ error: '此客戶尚未設定文章 Sheet，請至 GSC 客戶設定頁面填入。' }, { status: 400 });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken();
+  } catch (err) {
+    return NextResponse.json({ error: String(err), needsAuth: true }, { status: 401 });
+  }
+
+  const range = client.article_sheet_tab ? encodeURIComponent(client.article_sheet_tab) : '';
+  const url = range
+    ? `${SHEETS_BASE}/${client.article_sheet_id}/values/${range}`
+    : `${SHEETS_BASE}/${client.article_sheet_id}/values/A1:ZZZ`;
+
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const err = await res.json() as { error?: { message: string } };
+    return NextResponse.json({ error: `讀取 Sheet 失敗：${err.error?.message ?? res.status}` }, { status: 502 });
+  }
+
+  const sheet = await res.json() as { values?: string[][] };
+  const allRows = sheet.values ?? [];
+  if (allRows.length === 0) {
+    return NextResponse.json({ headers: [], rows: [], tabName: client.article_sheet_tab, rowOffset: 2 });
+  }
+
+  const headers = allRows[0];
+  const rows = allRows.slice(1);
+  return NextResponse.json({ headers, rows, tabName: client.article_sheet_tab, rowOffset: 2 });
+}
+
 function colLetter(index: number): string {
   let result = '';
   let n = index + 1;

@@ -19,6 +19,15 @@ const homeItem = {
 
 const liveItems: { href: string; label: string; inDev?: boolean; suspended?: boolean; hrOnly?: boolean; icon: React.ReactNode }[] = [
   {
+    href: '/writer',
+    label: '寫手流程工具',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </svg>
+    ),
+  },
+  {
     href: '/article',
     label: '文章上架工具',
     icon: (
