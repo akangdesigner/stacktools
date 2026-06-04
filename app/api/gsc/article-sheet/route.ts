@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   const headers = allRows[0];
   const rows = allRows.slice(1);
-  return NextResponse.json({ headers, rows, tabName: client.article_sheet_tab, rowOffset: 2 });
+  return NextResponse.json({ headers, rows, tabName: client.article_sheet_tab, rowOffset: 2, sheetId: client.article_sheet_id });
 }
 
 function colLetter(index: number): string {

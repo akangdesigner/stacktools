@@ -120,21 +120,27 @@ export default function SetupGuidePage() {
         <hr className="border-gray-100" />
 
         <Step number={3} title="指派資產給 System User">
-          <p>點剛建立的 System User → 點「指派資產」，分三次指派：</p>
+          <p>新版 Meta Business Manager 的指派方式是<strong>從各資產頁面反向指派</strong>，不是在 System User 頁面操作。請依序完成以下三項：</p>
           <div className="space-y-3">
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-1.5">
               <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">① 指派 Instagram 帳號</p>
-              <p>資產類型選「Instagram 帳號」→ 選客戶的 IG 帳號 → 權限開啟<strong>完整控制</strong>→ 儲存</p>
+              <p>左側選單 → <strong>帳號 → Instagram 帳號</strong> → 選客戶的 IG 帳號 → 右側點「在資產中指派」或找到「指派合作夥伴/系統使用者」→ 選剛建立的 System User → 權限選<strong>完整控制</strong>→ 儲存</p>
             </div>
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-1.5">
               <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">② 指派 Facebook 粉絲專頁</p>
-              <p>資產類型選「粉絲專頁」→ 選客戶的 FB 粉專 → 權限開啟<strong>完整控制</strong>→ 儲存</p>
+              <p>左側選單 → <strong>帳號 → 粉絲專頁</strong> → 選客戶的 FB 粉專 → 同上，指派給 System User → 權限選<strong>完整控制</strong>→ 儲存</p>
             </div>
             <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-1.5">
-              <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">③ 指派 App</p>
-              <p>資產類型選「Apps」→ 選你的 Meta App → 權限開啟<strong>完整控制</strong>→ 儲存</p>
+              <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">③ 指派 App（若尚未指派）</p>
+              <p>左側選單 → <strong>帳號 → 應用程式</strong> → 選你的 Meta App → 指派給 System User → 權限選<strong>完整控制</strong>→ 儲存</p>
             </div>
           </div>
+          <InfoBox>
+            指派完成後，回到「系統工作人員」頁面，點 System User 進入詳細頁，切換到「已指派的資產」分頁確認三項資產都出現在清單中，才算完成。
+          </InfoBox>
+          <Note>
+            如果左側選單找不到「Instagram 帳號」或「粉絲專頁」，代表該資產尚未加入此 Business Manager。請先至對應資產頁面點「新增」→「聲明資產所有權」或「要求存取權」，把客戶資產加入後再指派。
+          </Note>
         </Step>
 
         <hr className="border-gray-100" />

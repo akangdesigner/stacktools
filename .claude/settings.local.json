@@ -109,7 +109,10 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "mcp__n8n-mcp__n8n_executions",
-      "WebFetch(domain:graph.facebook.com)"
+      "WebFetch(domain:graph.facebook.com)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3001/api/writer/sheets?sheet=schedule\" -UseBasicParsing | Select-Object -ExpandProperty Content)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3001/api/writer/sheets?sheet=schedule\" -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json | Select-Object -ExpandProperty headers)"
     ]
   }
 }

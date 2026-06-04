@@ -73,12 +73,13 @@ export default function AiEditorClientPage() {
 
   async function handleDelete() {
     if (!client || !confirm('確定刪除此客戶？')) return;
-    await fetch('/api/ai-editor/clients', {
+    const res = await fetch('/api/ai-editor/clients', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: client.id }),
     });
-    router.push('/ai-editor');
+    if (!res.ok) { alert('刪除失敗，請再試一次'); return; }
+    window.location.href = '/ai-editor';
   }
 
   if (!client) return <div className="p-8 text-sm text-gray-400">載入中…</div>;

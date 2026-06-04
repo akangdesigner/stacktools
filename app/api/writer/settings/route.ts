@@ -9,7 +9,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json() as Partial<WriterSettings>;
-  const allowed: (keyof WriterSettings)[] = ['schedule_sheet_id', 'schedule_sheet_tab', 'clients_sheet_id', 'clients_sheet_tab', 'progress_tracking_sheet_id'];
+  const allowed: (keyof WriterSettings)[] = ['schedule_sheet_id', 'schedule_sheet_tab', 'clients_sheet_id', 'clients_sheet_tab', 'progress_tracking_sheet_id', 'openrouter_model'];
   for (const key of allowed) {
     if (key in body) setSetting(key, body[key] ?? '');
   }

@@ -39,6 +39,7 @@ export type WriterSettings = {
   clients_sheet_id: string;
   clients_sheet_tab: string;
   progress_tracking_sheet_id: string;
+  openrouter_model: string;
 };
 
 const SETTING_DEFAULTS: WriterSettings = {
@@ -47,6 +48,7 @@ const SETTING_DEFAULTS: WriterSettings = {
   clients_sheet_id: '',
   clients_sheet_tab: '',
   progress_tracking_sheet_id: '',
+  openrouter_model: 'openai/gpt-4o-mini',
 };
 
 export function getSettings(): WriterSettings {

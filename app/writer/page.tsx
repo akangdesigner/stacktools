@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 
-type SheetData = { headers: string[]; rows: string[][]; tabName?: string; rowOffset?: number };
+type SheetData = { headers: string[]; rows: string[][]; tabName?: string; rowOffset?: number; sheetId?: string };
 type Tab = 'schedule' | 'progress' | 'personal';
 
 type WriterClient = {
@@ -18,6 +18,7 @@ type WriterSettings = {
   clients_sheet_id: string;
   clients_sheet_tab: string;
   progress_tracking_sheet_id: string;
+  openrouter_model: string;
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -187,13 +188,25 @@ function ScheduleView({ data, person, sheetId }: { data: SheetData; person: stri
                   <tr key={i} className="hover:bg-gray-50/60 transition-colors">
                     {COLS.map(c => (
                       <td key={c.ci} className="px-2 py-1.5">
-                        <PPCell
-                          value={dv(idx, c.ci)}
-                          isDirty={`${idx}_${c.ci}` in pendingChanges}
-                          onChange={v => handleChange(idx, c.ci, v)}
-                          statusOptions={[]}
-                          isStatus={false}
-                        />
+                        {c.ci === kwIdx && dv(idx, c.ci) ? (
+                          <div className="flex items-center gap-1.5 px-1 py-0.5">
+                            <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">{dv(idx, c.ci)}</span>
+                            <a
+                              href={`/writer/compose?keyword=${encodeURIComponent(dv(idx, c.ci))}&vendor=${encodeURIComponent(dv(idx, vendorIdx))}`}
+                              className="flex-shrink-0 text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors whitespace-nowrap"
+                            >
+                              寫文
+                            </a>
+                          </div>
+                        ) : (
+                          <PPCell
+                            value={dv(idx, c.ci)}
+                            isDirty={`${idx}_${c.ci}` in pendingChanges}
+                            onChange={v => handleChange(idx, c.ci, v)}
+                            statusOptions={[]}
+                            isStatus={false}
+                          />
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -545,6 +558,155 @@ function PersonalProgressTable({ data, sheetId, person, onRefresh }: {
   );
 }
 
+// ── ProgressTable ─────────────────────────────────────────────────────
+
+const HIDDEN_PROGRESS_COLS = new Set(['網站名稱', '網站類型', '類型', '進度登記', '排名']);
+
+function ProgressTable({ data }: { data: SheetData }) {
+  const [localChecks, setLocalChecks] = useState<Record<number, boolean>>({});
+  const [checkSaving, setCheckSaving] = useState<Set<number>>(new Set());
+  const [pending, setPending] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<{ rowIdx: number; ci: number } | null>(null);
+  const [editVal, setEditVal] = useState('');
+
+  useEffect(() => { setLocalChecks({}); setPending({}); setEditing(null); }, [data]);
+
+  const h = data.headers;
+  const tabName = data.tabName ?? '';
+  const rowOffset = data.rowOffset ?? 2;
+  const sheetId = data.sheetId ?? '';
+
+  const uploadColIdx = h.findIndex(col => col.trim() === '上架');
+  const titleIdx = h.findIndex(col => col.includes('文章標題'));
+
+  const visibleCols = h
+    .map((header, ci) => ({ header, ci }))
+    .filter(({ header }) => !HIDDEN_PROGRESS_COLS.has(header.trim()));
+
+  const rows = data.rows
+    .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => titleIdx < 0 || row[titleIdx]?.trim());
+
+  async function toggleCheck(rowIdx: number, current: boolean) {
+    if (!sheetId || uploadColIdx < 0) return;
+    setLocalChecks(prev => ({ ...prev, [rowIdx]: !current }));
+    setCheckSaving(prev => new Set(prev).add(rowIdx));
+    try {
+      await fetch('/api/writer/sheets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetId, tabName, sheetRow: rowIdx + rowOffset, colIdx: uploadColIdx, value: current ? '' : 'V' }),
+      });
+    } catch {
+      setLocalChecks(prev => ({ ...prev, [rowIdx]: current }));
+    } finally {
+      setCheckSaving(prev => { const next = new Set(prev); next.delete(rowIdx); return next; });
+    }
+  }
+
+  function startEdit(rowIdx: number, ci: number, current: string) {
+    setEditing({ rowIdx, ci });
+    setEditVal(current);
+  }
+
+  async function commitEdit(rowIdx: number, ci: number, newVal: string) {
+    setEditing(null);
+    const key = `${rowIdx}_${ci}`;
+    const original = data.rows[rowIdx]?.[ci] ?? '';
+    if (newVal === original) return;
+    setPending(prev => ({ ...prev, [key]: newVal }));
+    try {
+      await fetch('/api/writer/sheets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetId, tabName, sheetRow: rowIdx + rowOffset, colIdx: ci, value: newVal }),
+      });
+    } catch {
+      setPending(prev => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  }
+
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400 py-8 text-center">此 Sheet 無資料</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            {visibleCols.map(({ header, ci }) => (
+              <th key={ci} className={`px-4 py-3 text-left font-semibold text-gray-700 whitespace-nowrap ${header.trim() === '上架' ? 'w-16 text-center' : ''}`}>
+                {header || `欄 ${ci + 1}`}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ row, idx }, ri) => (
+            <tr key={ri} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+              {visibleCols.map(({ header, ci }) => {
+                if (header.trim() === '上架' && uploadColIdx >= 0) {
+                  const rawVal = row[ci]?.trim() ?? '';
+                  const isChecked = idx in localChecks ? localChecks[idx] : (rawVal !== '' && rawVal !== '0');
+                  const isSaving = checkSaving.has(idx);
+                  return (
+                    <td key={ci} className="px-4 py-2.5 text-center">
+                      <button
+                        onClick={() => toggleCheck(idx, isChecked)}
+                        disabled={isSaving || !sheetId}
+                        className={`w-5 h-5 rounded border-2 inline-flex items-center justify-center transition-all ${isChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 bg-white hover:border-gray-400'} ${isSaving ? 'opacity-50 cursor-wait' : ''}`}
+                      >
+                        {isChecked && (
+                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                    </td>
+                  );
+                }
+
+                const key = `${idx}_${ci}`;
+                const cellVal = key in pending ? pending[key] : (row[ci] ?? '');
+                const isEditing = editing?.rowIdx === idx && editing?.ci === ci;
+                const isDirty = key in pending;
+
+                return (
+                  <td key={ci} className="px-2 py-1.5 max-w-xs">
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        className="w-full text-sm border border-blue-400 rounded-lg px-2 py-1 focus:outline-none bg-white shadow-sm min-w-[8rem]"
+                        value={editVal}
+                        onChange={e => setEditVal(e.target.value)}
+                        onBlur={() => commitEdit(idx, ci, editVal)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') commitEdit(idx, ci, editVal);
+                          if (e.key === 'Escape') setEditing(null);
+                        }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => startEdit(idx, ci, cellVal)}
+                        className={`group w-full text-left rounded-lg px-2 py-1 text-sm transition-colors hover:bg-gray-100 truncate ${isDirty ? 'bg-amber-50' : ''}`}
+                      >
+                        <span className={cellVal ? 'text-gray-800' : 'text-gray-300 group-hover:text-gray-400'}>
+                          {cellVal || '點擊編輯'}
+                        </span>
+                      </button>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── SheetTable ────────────────────────────────────────────────────────
 
 function SheetTable({ data }: { data: SheetData }) {
@@ -692,6 +854,25 @@ function SettingsModal({ initial, onClose, onSave }: {
           <p className="text-xs text-gray-400">選擇人員後自動對應同名分頁（分頁名稱須與聯絡人員欄位相同）。</p>
         </fieldset>
 
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-semibold text-gray-700">寫文 AI 模型</legend>
+          <select className={inputCls} value={form.openrouter_model} onChange={e => set('openrouter_model', e.target.value)}>
+            <optgroup label="✦ GPT（OpenAI）— 通用能力強，格式穩定">
+              <option value="openai/gpt-4o-mini">GPT-4o mini — 性價比高，速度快｜費用低 ✓ 推薦</option>
+              <option value="openai/gpt-4o">GPT-4o — 旗艦，能力全面｜費用中高</option>
+            </optgroup>
+            <optgroup label="✦ Gemini（Google）— 速度極快，適合大量產出">
+              <option value="google/gemini-1.5-flash">Gemini 1.5 Flash — 超快速，大量產出｜費用極低</option>
+              <option value="google/gemini-1.5-pro">Gemini 1.5 Pro — 長文理解強｜費用中等</option>
+            </optgroup>
+            <optgroup label="✦ Claude（Anthropic）— 中文最自然（需在 OpenRouter 另行開啟 Anthropic 存取）">
+              <option value="anthropic/claude-3.5-sonnet-20241022">Claude 3.5 Sonnet — 強力寫作，邏輯清晰｜費用中高</option>
+              <option value="anthropic/claude-3-haiku-20240307">Claude 3 Haiku — 速度快，適合草稿｜費用低</option>
+            </optgroup>
+          </select>
+          <p className="text-xs text-gray-400">不確定選哪個？選「GPT-4o mini」即可，速度快、費用低、品質穩定。Claude 系列需先至 openrouter.ai 帳號設定開啟 Anthropic。</p>
+        </fieldset>
+
         {err && <p className="text-sm text-red-600">{err}</p>}
         <div className="flex gap-2 justify-end pt-1">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">取消</button>
@@ -717,6 +898,7 @@ export default function WriterPage() {
     schedule_sheet_id: '', schedule_sheet_tab: '',
     clients_sheet_id: '', clients_sheet_tab: '',
     progress_tracking_sheet_id: '',
+    openrouter_model: '',
   });
   const [showSettings, setShowSettings] = useState(false);
 
@@ -901,7 +1083,7 @@ export default function WriterPage() {
           ) : !progressClient ? (
             <p className="text-sm text-gray-400 py-8 text-center">請選擇一個客戶</p>
           ) : loading || !progressData ? <SkeletonTable /> :
-          <SheetTable data={progressData} />
+          <ProgressTable data={progressData} />
         ) : activeTab === 'personal' ? (
           selectedPerson === '全部' ? (
             <p className="text-sm text-gray-400 py-8 text-center">請從上方人員選單選擇一位寫手</p>
