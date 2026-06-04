@@ -112,7 +112,8 @@
       "WebFetch(domain:graph.facebook.com)",
       "PowerShell(New-Item *)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3001/api/writer/sheets?sheet=schedule\" -UseBasicParsing | Select-Object -ExpandProperty Content)",
-      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3001/api/writer/sheets?sheet=schedule\" -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json | Select-Object -ExpandProperty headers)"
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3001/api/writer/sheets?sheet=schedule\" -UseBasicParsing | Select-Object -ExpandProperty Content | ConvertFrom-Json | Select-Object -ExpandProperty headers)",
+      "WebFetch(domain:graph.threads.net)"
     ]
   }
 }

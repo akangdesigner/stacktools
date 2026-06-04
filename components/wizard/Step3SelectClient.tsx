@@ -139,7 +139,7 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
             <input
               type="text"
               value={articleSlug}
-              onChange={(e) => onArticleSlugChange(e.target.value)}
+              onChange={(e) => onArticleSlugChange(e.target.value.toLowerCase().replace(/ /g, "-"))}
               placeholder="分泌物顏色怎麼看"
               className="flex-1 px-3 py-2 text-sm focus:outline-none bg-white placeholder-gray-400"
             />
