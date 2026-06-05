@@ -221,7 +221,7 @@ export default function SetupGuidePage() {
             {[
               { field: 'FB Page ID', desc: '粉絲專頁數字 ID', source: 'Step 2' },
               { field: 'Meta Access Token（永久）', desc: '用於 FB 發文 + IG 發文，右側表單自動換成永久 Token', source: 'Step 2–3' },
-              { field: 'Threads Access Token', desc: 'Threads 測試用戶 Token（60 天），獨立申請', source: 'Step 4' },
+              { field: 'Threads Access Token', desc: 'Threads 測試用戶 Token，60 天有效但可 refresh 無限延長', source: 'Step 4' },
             ].map(({ field, desc, source }) => (
               <div key={field} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                 <span className="text-xs font-semibold text-gray-400 mt-0.5 w-14 shrink-0">{source}</span>
@@ -238,10 +238,20 @@ export default function SetupGuidePage() {
 
             <Step number={1} title="確認 Meta App 已建立並設定權限">
               <p>前往 <Link href="https://developers.facebook.com/apps/">Meta for Developers</Link>，確認已建立 App 並加入以下權限：</p>
+              <p className="text-xs font-semibold text-gray-500 mt-1">Facebook（FB 發文）</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {['pages_manage_posts', 'pages_read_engagement', 'pages_manage_metadata', 'pages_show_list', 'business_management'].map(p => (
                   <div key={p} className="flex items-center gap-1.5 bg-gray-100 rounded px-2.5 py-1.5">
                     <span className="text-green-500 text-xs font-bold">✓</span>
+                    <code className="text-xs font-mono text-gray-700">{p}</code>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs font-semibold text-gray-500 mt-2">Instagram（IG 發文）</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {['instagram_basic', 'instagram_content_publish'].map(p => (
+                  <div key={p} className="flex items-center gap-1.5 bg-purple-50 rounded px-2.5 py-1.5">
+                    <span className="text-purple-500 text-xs font-bold">✓</span>
                     <code className="text-xs font-mono text-gray-700">{p}</code>
                   </div>
                 ))}
@@ -279,14 +289,18 @@ export default function SetupGuidePage() {
             <hr className="border-gray-100" />
 
             <Step number={4} title="取得 Threads Access Token（測試用戶）">
-              <p>Threads 使用獨立 Token，與 Meta Page Token 無關。</p>
+              <p>Threads 使用獨立 Token，與 Meta Page Token 無關。Token 原本 60 天有效，但可在到期前呼叫 refresh endpoint 延長，實際上可無限循環。</p>
+              <p className="font-semibold mt-1">首次取得：</p>
               <ol className="list-decimal list-inside space-y-1.5 ml-1">
                 <li>前往 Meta App → 左側「Threads API」→「設定」</li>
                 <li>在「測試用戶」找到目標 Threads 帳號</li>
                 <li>點「產生 Token」→ 勾選 <code className="bg-gray-100 px-1 rounded text-xs">threads_basic</code> 和 <code className="bg-gray-100 px-1 rounded text-xs">threads_content_publish</code></li>
                 <li>點「換取長效 Token」，得到 <code className="bg-gray-100 px-1 rounded text-xs">THAA</code> 開頭的 60 天 Token</li>
               </ol>
-              <InfoBox>Threads Token 約 60 天到期，到期時需重新產生並更新客戶資料。</InfoBox>
+              <p className="font-semibold mt-2">快到期時 Refresh（重置為 60 天）：</p>
+              <Code>{`GET https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token={現有Token}`}</Code>
+              <p>回傳新的 <code className="bg-gray-100 px-1 rounded text-xs">access_token</code>，把它填回右側表單重新登記即可。</p>
+              <InfoBox>建議每 50 天 refresh 一次，或直接設定 n8n 排程自動 refresh。</InfoBox>
             </Step>
 
           </div>
@@ -300,6 +314,7 @@ export default function SetupGuidePage() {
                 { q: '顯示「找不到粉專」？', a: 'FB Page ID 需是 /me/accounts 回傳的純數字 id。' },
                 { q: 'FB 發文顯示「permission denied」？', a: '產生 Token 時確認有勾選 pages_read_engagement 和 pages_manage_posts 兩個權限。' },
                 { q: 'Meta Token 多久需重換？', a: '透過此表單登記的是永久 Token，無需定期更換。改密碼或撤銷 App 授權時才需重新登記。' },
+                { q: 'Threads Token 多久需更新？', a: '60 天有效，但可用 refresh endpoint 延長（重置為 60 天），建議每 50 天呼叫一次或設定 n8n 排程自動 refresh。' },
               ].map(({ q, a }) => (
                 <div key={q}>
                   <p className="font-semibold text-gray-800 mb-1">{q}</p>
