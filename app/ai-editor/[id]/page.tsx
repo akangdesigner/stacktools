@@ -13,9 +13,6 @@ interface AiEditorClient {
   persona: string;
   client_info: string;
   recent_activities: string;
-  buffer_ig: string;
-  buffer_thread: string;
-  buffer_fb: string;
   fb_group_url: string;
   fb_page_id: string;
   meta_access_token: string;
@@ -35,9 +32,6 @@ export default function AiEditorClientPage() {
   const [editPersona, setEditPersona] = useState('');
   const [editClientInfo, setEditClientInfo] = useState('');
   const [editRecentActivities, setEditRecentActivities] = useState('');
-  const [editBufferIg, setEditBufferIg] = useState('');
-  const [editBufferThread, setEditBufferThread] = useState('');
-  const [editBufferFb, setEditBufferFb] = useState('');
   const [editFbGroupUrl, setEditFbGroupUrl] = useState('');
   const [editFbPageId, setEditFbPageId] = useState('');
   const [editMetaAccessToken, setEditMetaAccessToken] = useState('');
@@ -62,7 +56,7 @@ export default function AiEditorClientPage() {
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_ig: editBufferIg, buffer_thread: editBufferThread, buffer_fb: editBufferFb, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken }),
+      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken }),
     });
     setSaving(false);
     setEditing(false);
@@ -100,7 +94,7 @@ export default function AiEditorClientPage() {
           {!editing && (
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferIg(client.buffer_ig ?? ''); setEditBufferThread(client.buffer_thread ?? ''); setEditBufferFb(client.buffer_fb ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditing(true); }}
+                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditing(true); }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">刪除</button>
@@ -130,15 +124,6 @@ export default function AiEditorClientPage() {
             </FieldCard>
             <FieldCard label="近期活動" className="col-span-2">
               <AutoTextarea value={editRecentActivities} onChange={e => setEditRecentActivities(e.target.value)} placeholder={`5/10 母親節 8 折優惠\n5/20 院長健康講座（免費報名）`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
-            <FieldCard label="Buffer IG" className="col-span-2">
-              <AutoTextarea value={editBufferIg} onChange={e => setEditBufferIg(e.target.value)} placeholder="IG Buffer channel ID 或代碼" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
-            <FieldCard label="Buffer Thread" className="col-span-2">
-              <AutoTextarea value={editBufferThread} onChange={e => setEditBufferThread(e.target.value)} placeholder="Thread Buffer channel ID 或代碼" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
-            <FieldCard label="Buffer FB" className="col-span-2">
-              <AutoTextarea value={editBufferFb} onChange={e => setEditBufferFb(e.target.value)} placeholder="FB Buffer channel ID 或代碼" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <FieldCard label="FB 公開社團網址" className="col-span-2">
               <AutoTextarea value={editFbGroupUrl} onChange={e => setEditFbGroupUrl(e.target.value)} placeholder="https://www.facebook.com/groups/xxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
@@ -180,21 +165,6 @@ export default function AiEditorClientPage() {
             </FieldCard>
             <FieldCard label="近期活動" className="col-span-2">
               <p className="text-xs text-gray-700 whitespace-pre-line">{client.recent_activities || '—'}</p>
-            </FieldCard>
-            <FieldCard label="Buffer IG" className="col-span-2">
-              {client.buffer_ig
-                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.buffer_ig}</span>
-                : <span className="text-xs text-gray-300 italic">尚未設定</span>}
-            </FieldCard>
-            <FieldCard label="Buffer Thread" className="col-span-2">
-              {client.buffer_thread
-                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.buffer_thread}</span>
-                : <span className="text-xs text-gray-300 italic">尚未設定</span>}
-            </FieldCard>
-            <FieldCard label="Buffer FB" className="col-span-2">
-              {client.buffer_fb
-                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.buffer_fb}</span>
-                : <span className="text-xs text-gray-300 italic">尚未設定</span>}
             </FieldCard>
             <FieldCard label="FB 公開社團網址" className="col-span-2">
               {client.fb_group_url
