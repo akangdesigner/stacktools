@@ -49,7 +49,7 @@ function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string
 2. 競品觀察：常見架構、內容形式、競品缺口。
 3. 品牌服務確認：哪些可安全描述、哪些不能貿然宣稱。
 4. 文章策略：建議切入角度、需要加強的內容、應避免的寫法。
-5. 標題提案：提供 5 個 SEO 標題，並簡短說明各自適合的搜尋意圖。
+5. 標題提案：提供 5 個 SEO 標題，只列標題本身，不需要說明或大綱。
 
 品牌內容必須保守，不得捏造服務、成果、案例、數據或保證。
 
@@ -86,7 +86,7 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   }
 
   if (style === 'faq') {
-    return `${header}這個段落以 Q&A 格式呈現常見問題與解答。
+    return `${header}這個段落以 Q&A 格式呈現常見問題與解答，預設列出 5 組問答。
 
 寫法要求：每一題先用粗體寫出問題，問題語句要貼近讀者真正會搜尋的方式說話，然後用一到三句自然語句直接回答，不要再拆子條列。問題之間用空行分隔。不重複前面段落說過的內容。繁體中文，語氣直接親切。${footer}`;
   }
