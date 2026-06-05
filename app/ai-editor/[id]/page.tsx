@@ -17,10 +17,9 @@ interface AiEditorClient {
   buffer_thread: string;
   buffer_fb: string;
   fb_group_url: string;
-  ig_user_id: string;
   fb_page_id: string;
-  threads_user_id: string;
   meta_access_token: string;
+  threads_access_token: string;
 }
 
 export default function AiEditorClientPage() {
@@ -40,10 +39,9 @@ export default function AiEditorClientPage() {
   const [editBufferThread, setEditBufferThread] = useState('');
   const [editBufferFb, setEditBufferFb] = useState('');
   const [editFbGroupUrl, setEditFbGroupUrl] = useState('');
-  const [editIgUserId, setEditIgUserId] = useState('');
   const [editFbPageId, setEditFbPageId] = useState('');
-  const [editThreadsUserId, setEditThreadsUserId] = useState('');
   const [editMetaAccessToken, setEditMetaAccessToken] = useState('');
+  const [editThreadsAccessToken, setEditThreadsAccessToken] = useState('');
   const [saving, setSaving] = useState(false);
 
   function loadClient() {
@@ -64,7 +62,7 @@ export default function AiEditorClientPage() {
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_ig: editBufferIg, buffer_thread: editBufferThread, buffer_fb: editBufferFb, fb_group_url: editFbGroupUrl, ig_user_id: editIgUserId, fb_page_id: editFbPageId, threads_user_id: editThreadsUserId, meta_access_token: editMetaAccessToken }),
+      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, buffer_ig: editBufferIg, buffer_thread: editBufferThread, buffer_fb: editBufferFb, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken }),
     });
     setSaving(false);
     setEditing(false);
@@ -102,7 +100,7 @@ export default function AiEditorClientPage() {
           {!editing && (
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferIg(client.buffer_ig ?? ''); setEditBufferThread(client.buffer_thread ?? ''); setEditBufferFb(client.buffer_fb ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditIgUserId(client.ig_user_id ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditThreadsUserId(client.threads_user_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditing(true); }}
+                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditBufferIg(client.buffer_ig ?? ''); setEditBufferThread(client.buffer_thread ?? ''); setEditBufferFb(client.buffer_fb ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditing(true); }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">刪除</button>
@@ -145,17 +143,14 @@ export default function AiEditorClientPage() {
             <FieldCard label="FB 公開社團網址" className="col-span-2">
               <AutoTextarea value={editFbGroupUrl} onChange={e => setEditFbGroupUrl(e.target.value)} placeholder="https://www.facebook.com/groups/xxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
-            <FieldCard label="IG User ID">
-              <AutoTextarea value={editIgUserId} onChange={e => setEditIgUserId(e.target.value)} placeholder="17841451402248785" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
             <FieldCard label="FB Page ID">
               <AutoTextarea value={editFbPageId} onChange={e => setEditFbPageId(e.target.value)} placeholder="123456789012345" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
-            <FieldCard label="Threads User ID">
-              <AutoTextarea value={editThreadsUserId} onChange={e => setEditThreadsUserId(e.target.value)} placeholder="通常與 IG User ID 相同" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
-            </FieldCard>
-            <FieldCard label="Meta Access Token" className="col-span-2">
+            <FieldCard label="Meta Access Token（永久）" className="col-span-2">
               <AutoTextarea value={editMetaAccessToken} onChange={e => setEditMetaAccessToken(e.target.value)} placeholder="EAAbe..." className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            </FieldCard>
+            <FieldCard label="Threads Access Token" className="col-span-2">
+              <AutoTextarea value={editThreadsAccessToken} onChange={e => setEditThreadsAccessToken(e.target.value)} placeholder="THAA..." className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
             <div className="col-span-2 flex gap-2">
               <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
@@ -206,24 +201,19 @@ export default function AiEditorClientPage() {
                 ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.fb_group_url}</span>
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
             </FieldCard>
-            <FieldCard label="IG User ID">
-              {client.ig_user_id
-                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.ig_user_id}</span>
-                : <span className="text-xs text-gray-300 italic">尚未設定</span>}
-            </FieldCard>
             <FieldCard label="FB Page ID">
               {client.fb_page_id
                 ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.fb_page_id}</span>
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
             </FieldCard>
-            <FieldCard label="Threads User ID">
-              {client.threads_user_id
-                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.threads_user_id}</span>
-                : <span className="text-xs text-gray-300 italic">尚未設定</span>}
-            </FieldCard>
-            <FieldCard label="Meta Access Token" className="col-span-2">
+            <FieldCard label="Meta Access Token（永久）" className="col-span-2">
               {client.meta_access_token
                 ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded truncate block max-w-full">{client.meta_access_token.slice(0, 20)}…</span>
+                : <span className="text-xs text-gray-300 italic">尚未設定</span>}
+            </FieldCard>
+            <FieldCard label="Threads Access Token" className="col-span-2">
+              {client.threads_access_token
+                ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded truncate block max-w-full">{client.threads_access_token.slice(0, 20)}…</span>
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
             </FieldCard>
           </div>

@@ -48,6 +48,19 @@ function InfoBox({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SuccessBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800">
+      <span className="shrink-0 font-bold">✓</span>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function FieldTag({ children }: { children: string }) {
+  return <code className="bg-gray-100 border border-gray-200 text-gray-700 text-xs font-mono px-2 py-0.5 rounded">{children}</code>;
+}
+
 function Link({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline underline-offset-2 hover:text-blue-800 transition-colors">
@@ -70,203 +83,117 @@ export default function SetupGuidePage() {
 
       {/* 標題 */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Facebook 粉專授權設定教學</h1>
-        <p className="text-sm text-gray-500">透過 Meta Graph API 取得 Access Token，讓 AI 小編能自動發文到 Facebook 粉絲專頁。</p>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">社群授權欄位設定教學</h1>
+        <p className="text-sm text-gray-500">說明如何取得客戶資料中三個授權欄位的值。</p>
       </div>
 
-      {/* 前置條件 */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-3">
-        <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wide">開始前請確認</h2>
-        <ul className="space-y-1.5 text-sm text-gray-700 list-none">
+      {/* 欄位總覽 */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
+        <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wide">需要填入的三個欄位</h2>
+        <div className="space-y-3">
           {[
-            '已建立 Meta App',
-            'App 已加入 Facebook Pages API 相關使用案例',
-            '使用者對粉絲專頁具有完整管理權限',
-          ].map((item, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-green-500 font-bold shrink-0">✓</span>
-              <span>{item}</span>
-            </li>
+            { field: 'FB Page ID', desc: 'Facebook 粉絲專頁的數字 ID', source: 'Step 2' },
+            { field: 'Meta Access Token（永久）', desc: '用於 FB 發文 + IG 發文，透過 LINE 機器人自動換成永久 Token', source: 'Step 3' },
+            { field: 'Threads Access Token', desc: 'Threads 測試用戶專屬 Token，獨立申請', source: 'Step 4' },
+          ].map(({ field, desc, source }) => (
+            <div key={field} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+              <span className="text-xs font-semibold text-gray-400 mt-0.5 w-12 shrink-0">{source}</span>
+              <div className="flex-1">
+                <code className="text-xs font-mono font-semibold text-gray-800">{field}</code>
+                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+              </div>
+            </div>
           ))}
-        </ul>
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-2">需要的權限：</p>
+        </div>
+      </div>
+
+      {/* 步驟 */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-8">
+
+        <Step number={1} title="確認 Meta App 已建立並設定權限">
+          <p>前往 <Link href="https://developers.facebook.com/apps/">Meta for Developers</Link>，確認已有一個 App 並加入以下使用案例與權限：</p>
           <div className="grid grid-cols-2 gap-1.5">
-            {[
-              'pages_manage_posts',
-              'pages_read_engagement',
-              'pages_manage_metadata',
-              'pages_show_list',
-              'business_management',
-            ].map(p => (
+            {['pages_manage_posts', 'pages_read_engagement', 'pages_manage_metadata', 'pages_show_list', 'business_management'].map(p => (
               <div key={p} className="flex items-center gap-1.5 bg-gray-100 rounded px-2.5 py-1.5">
                 <span className="text-green-500 text-xs font-bold">✓</span>
                 <code className="text-xs font-mono text-gray-700">{p}</code>
               </div>
             ))}
           </div>
-        </div>
-        <InfoBox>
-          還沒有 Meta App？前往 <Link href="https://developers.facebook.com/apps/creation/">developers.facebook.com → 建立 App</Link>，加入 Facebook Login 與 Pages API 相關使用案例。
-        </InfoBox>
-      </div>
-
-      {/* 步驟 */}
-      <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-8">
-
-        <Step number={1} title="建立 Meta App">
-          <p>前往 <Link href="https://developers.facebook.com/apps/creation/">Meta for Developers</Link> 建立 App。</p>
-          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700 ml-1">
-            <li>點「建立應用程式」</li>
-            <li>選擇使用案例：加入 <strong>Facebook Login</strong> 與 <strong>Pages API</strong> 相關使用案例</li>
-            <li>完成建立後記下 <strong>App ID</strong> 與 <strong>App Secret</strong></li>
-          </ol>
           <InfoBox>已有 Meta App 可直接跳到 Step 2。</InfoBox>
         </Step>
 
         <hr className="border-gray-100" />
 
-        <Step number={2} title="取得 Access Token">
-          <p>前往 <Link href="https://developers.facebook.com/tools/explorer/">Graph API Explorer</Link>：</p>
-          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-700 ml-1">
-            <li>右上角「Meta App」選擇你的 App</li>
-            <li>勾選以下所有權限：
-              <div className="grid grid-cols-2 gap-1.5 mt-2">
-                {[
-                  'pages_manage_posts',
-                  'pages_read_engagement',
-                  'pages_manage_metadata',
-                  'pages_show_list',
-                  'business_management',
-                ].map(p => (
-                  <div key={p} className="flex items-center gap-1.5 bg-gray-100 rounded px-2.5 py-1.5">
-                    <span className="text-green-500 text-xs font-bold">✓</span>
-                    <code className="text-xs font-mono text-gray-700">{p}</code>
-                  </div>
-                ))}
-              </div>
-            </li>
-            <li className="mt-2">點「Generate Access Token」</li>
-            <li>Facebook 會要求你登入並授權，完成後即可取得 token</li>
-          </ol>
-          <Note>這個 token 是短效的用戶 token（約 1 小時），後續步驟可換成長效 token（60 天）。如需永久 token 請聯絡管理員改用 System User 流程。</Note>
-        </Step>
+        <Step number={2} title="取得 FB Page ID 與短效 User Token">
+          <p><strong>Step 2-1：取得短效 User Token</strong></p>
+          <p>前往 <Link href="https://developers.facebook.com/tools/explorer/">Graph API Explorer</Link>，選擇你的 App，勾選上方所有權限後點「Generate Access Token」。</p>
+          <Note>這個 token 約 1 小時失效，只用來查詢粉專 ID，不需要存入系統。</Note>
 
-        <hr className="border-gray-100" />
-
-        <Step number={3} title="確認粉專權限">
-          <p>在 Graph API Explorer 或瀏覽器中執行以下查詢，把 <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">{'{YOUR_TOKEN}'}</code> 換成剛取得的 token：</p>
-          <Code>{`GET /me/accounts?access_token={YOUR_TOKEN}`}</Code>
-          <p>成功後應取得類似以下的回傳：</p>
+          <p className="mt-2"><strong>Step 2-2：查詢 FB Page ID</strong></p>
+          <p>在 Graph API Explorer 的查詢欄輸入：</p>
+          <Code>{`GET /me/accounts?access_token={剛才取得的短效Token}`}</Code>
+          <p>回傳結果範例：</p>
           <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
             <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">{`{
   "data": [
     {
       "name": "粉專名稱",
-      "id": "粉專ID",           ← 這就是 FB Page ID
-      "access_token": "TOKEN"   ← 這是粉專專屬 token
+      "id": "365872423285385",   ← 這就是 FB Page ID
+      "access_token": "EAA..."
     }
   ]
 }`}</pre>
           </div>
-          <p>確認回傳資料中包含：</p>
-          <ul className="space-y-1 ml-1">
-            {[
-              '粉專名稱（name）',
-              '粉專 ID（id）— 記下來，後面會用到',
-              'access_token — 這個 token 可用來對粉專發文',
-              'tasks 包含 CREATE_CONTENT 與 MANAGE',
-            ].map((item, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-green-500 font-bold shrink-0">✓</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-          <Note>如果 data 是空陣列，代表這個帳號沒有管理任何粉絲專頁，或權限不足。請確認帳號對粉專有完整管理權限。</Note>
+          <SuccessBox>
+            記下 <FieldTag>id</FieldTag> 的值（純數字），這就是 <FieldTag>FB Page ID</FieldTag>，填入客戶資料。
+          </SuccessBox>
         </Step>
 
         <hr className="border-gray-100" />
 
-        <Step number={4} title="n8n 發文測試（驗證用）">
-          <p>在 n8n 新增 <strong>HTTP Request</strong> 節點，設定如下：</p>
-          <div className="rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 text-gray-500 font-semibold">
-                <tr>
-                  <th className="text-left px-4 py-2.5 w-40">欄位</th>
-                  <th className="text-left px-4 py-2.5">設定值</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700">
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">Method</td>
-                  <td className="px-4 py-2.5">POST</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">URL</td>
-                  <td className="px-4 py-2.5 font-mono text-gray-600">{'https://graph.facebook.com/v23.0/{PAGE_ID}/feed'}</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">Send Body</td>
-                  <td className="px-4 py-2.5">ON</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">Body Content Type</td>
-                  <td className="px-4 py-2.5">Form Urlencoded</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">Body Parameters</td>
-                  <td className="px-4 py-2.5 font-mono">message=測試發文成功<br />access_token={'TOKEN'}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p>成功回傳如下，代表貼文已建立：</p>
-          <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-            <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap">{`{
-  "id": "{PAGE_ID}_{POST_ID}"
-}`}</pre>
-          </div>
-          <InfoBox>測試完成後記得到 Facebook 粉專確認測試貼文有出現，並手動刪除測試貼文。</InfoBox>
+        <Step number={3} title="透過 LINE 機器人自動換成永久 Meta Access Token">
+          <p>不需要手動換 Token，直接傳一則 LINE 訊息給 AI 小編機器人，系統會自動：</p>
+          <ol className="list-decimal list-inside space-y-1 ml-1">
+            <li>把短效 User Token 換成長效 Token</li>
+            <li>再換成<strong>永久 Page Access Token</strong></li>
+            <li>自動寫入對應客戶的 <FieldTag>Meta Access Token（永久）</FieldTag> 欄位</li>
+          </ol>
+
+          <p className="mt-2"><strong>LINE 訊息格式（直接複製貼上修改）：</strong></p>
+          <Code>{`登記Token
+客戶：客戶名稱（需與系統中完全一致）
+粉專ID：365872423285385
+FB短Token：EAAxxxxx（Step 2-1 取得的短效Token）
+Threads：THAAxxxxx（Step 4 取得的Threads Token）`}</Code>
+
+          <SuccessBox>
+            機器人回傳「✅ Token 登記完成」後，<FieldTag>Meta Access Token（永久）</FieldTag> 即自動更新。此 Token 永久有效，不需定期重換。
+          </SuccessBox>
+          <Note>客戶名稱需與系統中完全一致（大小寫、空格都要相同），否則會找不到客戶。</Note>
         </Step>
 
         <hr className="border-gray-100" />
 
-        <Step number={5} title="填入 AI 小編客戶資料">
-          <p>前往 <button onClick={() => router.push('/ai-editor')} className="text-blue-600 underline underline-offset-2 hover:text-blue-800 transition-colors">AI 小編列表</button>，進入對應客戶的編輯頁，點「編輯」，填入以下欄位：</p>
-          <div className="rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 text-gray-500 font-semibold">
-                <tr>
-                  <th className="text-left px-4 py-2.5 w-44">欄位名稱</th>
-                  <th className="text-left px-4 py-2.5">填入內容</th>
-                  <th className="text-left px-4 py-2.5">來源</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-gray-700">
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">fb_id</td>
-                  <td className="px-4 py-2.5">粉絲專頁 ID</td>
-                  <td className="px-4 py-2.5 text-gray-500">Step 3 回傳的 <code className="bg-gray-100 px-1 rounded">id</code></td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">access_token</td>
-                  <td className="px-4 py-2.5">粉專專屬 Token</td>
-                  <td className="px-4 py-2.5 text-gray-500">Step 3 回傳的 <code className="bg-gray-100 px-1 rounded">access_token</code></td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-mono font-semibold">threads_access_token</td>
-                  <td className="px-4 py-2.5 text-gray-400">Threads 專屬 Token（待補）</td>
-                  <td className="px-4 py-2.5 text-gray-400">IG/Threads 流程補充後說明</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p>儲存後，n8n workflow 就會用這組資料自動發文到 Facebook 粉絲專頁。</p>
+        <Step number={4} title="取得 Threads Access Token（測試用戶）">
+          <p>Threads 發文使用獨立的測試用戶 Token，與 FB/IG 的 Page Token 無關。</p>
+
+          <p><strong>取得步驟：</strong></p>
+          <ol className="list-decimal list-inside space-y-1.5 ml-1">
+            <li>前往 <Link href="https://developers.facebook.com/apps/">Meta for Developers</Link>，進入你的 App</li>
+            <li>左側選單找「Threads API」→「設定」</li>
+            <li>在「測試用戶」區塊，找到要發文的 Threads 帳號</li>
+            <li>點「產生 Token」→ 選擇 <code className="bg-gray-100 px-1 rounded text-xs">threads_basic</code> 和 <code className="bg-gray-100 px-1 rounded text-xs">threads_content_publish</code> 權限</li>
+            <li>點「換取長效 Token」，得到一個以 <code className="bg-gray-100 px-1 rounded text-xs">THAA</code> 開頭的 60 天 Token</li>
+          </ol>
+
           <InfoBox>
-            AI 自動發文流程：AI Agent 產生貼文內容 → n8n HTTP Request POST 到 {'/{PAGE_ID}/feed'} → 發布至粉絲專頁。
+            Threads 長效 Token 有效期約 60 天。到期前可在 Meta Developer 相同位置重新產生並更新。
           </InfoBox>
+
+          <SuccessBox>
+            把這個 Token 填入客戶資料的 <FieldTag>Threads Access Token</FieldTag> 欄位，或在 Step 3 的 LINE 訊息 <code className="bg-gray-100 px-1 rounded text-xs">Threads：</code> 欄位一起帶入。
+          </SuccessBox>
         </Step>
 
       </div>
@@ -276,20 +203,20 @@ export default function SetupGuidePage() {
         <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wide">常見問題</h2>
         <div className="space-y-4 text-sm">
           <div>
-            <p className="font-semibold text-gray-800 mb-1">Token 顯示「Invalid OAuth access token」？</p>
-            <p className="text-gray-600">通常是 token 格式錯誤（複製時多了空格）。請重新到 Graph API Explorer 產生 token，確認只複製完整的 token 字串。</p>
+            <p className="font-semibold text-gray-800 mb-1">LINE 機器人回傳「找不到客戶」？</p>
+            <p className="text-gray-600">訊息中的「客戶：」名稱需與系統完全一致，請到 AI 小編列表確認客戶名稱後再試。</p>
           </div>
           <div>
-            <p className="font-semibold text-gray-800 mb-1">/me/accounts 回傳空的 data 陣列？</p>
-            <p className="text-gray-600">代表這個 Facebook 帳號沒有管理任何粉絲專頁，或 <code className="bg-gray-100 px-1 rounded text-xs">pages_show_list</code> 權限未正確授權。請重新在 Graph API Explorer 確認勾選所有必要權限。</p>
+            <p className="font-semibold text-gray-800 mb-1">LINE 機器人回傳「找不到粉專」？</p>
+            <p className="text-gray-600">「粉專ID：」需與 Step 2 查到的 id 完全一致（純數字）。</p>
           </div>
           <div>
-            <p className="font-semibold text-gray-800 mb-1">發文時顯示「permission denied」？</p>
-            <p className="text-gray-600">確認使用的是 <strong>粉專專屬 token</strong>（從 /me/accounts 回傳的 access_token），而不是用戶 token。粉專 token 才有 <code className="bg-gray-100 px-1 rounded text-xs">pages_manage_posts</code> 的實際操作權。</p>
+            <p className="font-semibold text-gray-800 mb-1">FB 發文顯示「permission denied」？</p>
+            <p className="text-gray-600">請確認 Step 2-1 產生 Token 時有勾選 <code className="bg-gray-100 px-1 rounded text-xs">pages_read_engagement</code> 和 <code className="bg-gray-100 px-1 rounded text-xs">pages_manage_posts</code> 兩個權限。</p>
           </div>
           <div>
-            <p className="font-semibold text-gray-800 mb-1">Token 多久後失效？</p>
-            <p className="text-gray-600">Graph API Explorer 產生的用戶 token 約 1 小時失效，從 /me/accounts 取得的粉專 token 約 60 天。如需永久 token，請改用 Business Manager 的 System User 流程。</p>
+            <p className="font-semibold text-gray-800 mb-1">Meta Access Token 多久需要更換一次？</p>
+            <p className="text-gray-600">透過 LINE 機器人登記的 Token 是<strong>永久有效</strong>的，不需定期更換。只有當帳號改密碼或撤銷 App 授權時才需重新登記。</p>
           </div>
         </div>
       </div>
@@ -299,10 +226,10 @@ export default function SetupGuidePage() {
         <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wide">相關工具連結</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
           {[
-            { label: 'Meta for Developers', href: 'https://developers.facebook.com/' },
             { label: 'Graph API Explorer', href: 'https://developers.facebook.com/tools/explorer/' },
+            { label: 'Meta for Developers', href: 'https://developers.facebook.com/' },
+            { label: 'Meta App 管理', href: 'https://developers.facebook.com/apps/' },
             { label: 'Facebook Pages API 文件', href: 'https://developers.facebook.com/docs/pages-api' },
-            { label: 'Meta App 建立', href: 'https://developers.facebook.com/apps/creation/' },
           ].map(({ label, href }) => (
             <a
               key={href}
