@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import RichEditor from '@/components/writer/RichEditor';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -20,6 +21,8 @@ const STYLE_LABELS: Record<PromptStyle, string> = {
   cta:   '行動呼籲',
 };
 
+type RelatedLink = { text: string; url: string };
+
 type Section = {
   id: string;
   h2: string;
@@ -30,6 +33,9 @@ type Section = {
   promptStyle: PromptStyle;
   customPrompt: string;
   showPrompt: boolean;
+  generateTable: boolean;
+  relatedLinks: RelatedLink[];
+  showRelatedLinks: boolean;
 };
 
 // ── Prompts ───────────────────────────────────────────────────────────
@@ -65,11 +71,16 @@ function buildOutlinePrompt(title: string) {
 
 請根據這個標題建立 SEO 文章架構，目錄只列到 H3，不列 H4。
 
-標準：
+必須包含的固定段落（依序）：
+1. 前言（第一個 H2，作為文章導言，簡述內容與讀者收益）
+2. 主要內容 H2 段落（依搜尋意圖與決策流程排列）
+3. FAQ（常見問題，列 4–5 個 H3 問題）
+4. 總結
+
+其他標準：
 - H2 / H3 必須是資訊整理型 SEO 標題，不要過度口語化或故事化。
-- 段落順序需符合搜尋意圖與讀者決策流程。
-- 保留 FAQ、文章總結與品牌介紹段落（若品牌資訊不足則刪除品牌段落）。
-- 次要主題可下放為 H3，不要全部拆成 H2。
+- 次要主題下放為 H3，不要全部拆成 H2。
+- 若有提供品牌資訊，可在總結前加入品牌介紹段落。
 
 只輸出架構，格式為 ## H2 和 ### H3，不要加其他說明文字。`;
 }
@@ -106,7 +117,7 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   // 預設 info 風格
   return `${header}這個段落要提供清楚、實用的資訊，讓讀者讀完真的有收穫。
 
-寫法要求：以散文段落寫作為主，不要大量使用條列符號。把重點融入句子裡，讓文字自然流暢。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。只有在真正需要比較多個選項時才考慮用表格，其他情況一律用段落。繁體中文，風格清楚自然。${footer}`;
+寫法要求：以散文段落寫作為主。若需要條列，格式必須是「**粗體名稱**：一句說明」，不要用普通的 - 條列符號。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。繁體中文，風格清楚自然。${footer}`;
 }
 
 function buildProofreadPrompt(article: string) {
@@ -169,6 +180,9 @@ function parseOutline(text: string): Section[] {
         promptStyle: detectStyle(h2text, idx),
         customPrompt: '',
         showPrompt: false,
+        generateTable: /比較|差異|優缺點|選購指南|推薦/.test(h2text),
+        relatedLinks: [],
+        showRelatedLinks: false,
       };
     } else if (h3 && cur) {
       cur.h3s.push(h3[1].trim());
@@ -556,7 +570,14 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   const [showPreview, setShowPreview] = useState(false);
 
   const outlineText = sections.map(s => `## ${s.h2}` + (s.h3s.length ? '\n' + s.h3s.map(h => `### ${h}`).join('\n') : '')).join('\n\n');
-  const fullArticle = sections.filter(s => s.content.trim()).map(s => s.content.trim()).join('\n\n');
+  const fullArticle = sections.filter(s => s.content.trim()).map(s => {
+    let text = s.content.trim();
+    const links = s.relatedLinks.filter(l => l.text.trim() || l.url.trim());
+    if (links.length > 0) {
+      text += '\n\n延伸閱讀：\n' + links.map(l => `- [${l.text}](${l.url})`).join('\n');
+    }
+    return text;
+  }).join('\n\n');
   const doneCount = sections.filter(s => s.content.trim()).length;
   const anyGenerating = sections.some(s => s.generating);
 
@@ -566,9 +587,12 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '', editing: false } : s));
     setErrors(prev => ({ ...prev, [id]: '' }));
     try {
-      const finalPrompt = sec.customPrompt.trim()
+      const basePrompt = sec.customPrompt.trim()
         ? sec.customPrompt
         : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle);
+      const finalPrompt = sec.generateTable
+        ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
+        : basePrompt;
       await streamAPI([
         { role: 'user', content: analyzeMsg },
         { role: 'assistant', content: analysisResult },
@@ -660,6 +684,23 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                       <option key={k} value={k}>{STYLE_LABELS[k]}</option>
                     ))}
                   </select>
+                  {/* 插入表格 */}
+                  <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={sec.generateTable}
+                      onChange={e => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, generateTable: e.target.checked } : s))}
+                      className="rounded"
+                    />
+                    表格
+                  </label>
+                  {/* 延伸閱讀 */}
+                  <button
+                    onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, showRelatedLinks: !s.showRelatedLinks } : s))}
+                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded-lg transition-colors ${sec.showRelatedLinks ? 'bg-blue-50 border-blue-300 text-blue-700' : sec.relatedLinks.length > 0 ? 'border-blue-200 text-blue-600' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
+                  >
+                    延伸閱讀{sec.relatedLinks.length > 0 ? ` (${sec.relatedLinks.length})` : ' +'}
+                  </button>
                   {/* 提示詞預覽按鈕 */}
                   <button
                     onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, showPrompt: !s.showPrompt } : s))}
@@ -708,16 +749,56 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                 </div>
               )}
 
+              {/* 延伸閱讀編輯器 */}
+              {sec.showRelatedLinks && (
+                <div className="px-5 py-4 border-t border-blue-100 bg-blue-50/30">
+                  <p className="text-xs font-medium text-blue-800 mb-2">延伸閱讀連結</p>
+                  <div className="space-y-2">
+                    {sec.relatedLinks.map((link, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          value={link.text}
+                          onChange={e => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: s.relatedLinks.map((l, j) => j === i ? { ...l, text: e.target.value } : l) } : s))}
+                          placeholder="文章標題"
+                          className="flex-1 px-2.5 py-1.5 border border-blue-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
+                        />
+                        <input
+                          value={link.url}
+                          onChange={e => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: s.relatedLinks.map((l, j) => j === i ? { ...l, url: e.target.value } : l) } : s))}
+                          placeholder="https://..."
+                          className="flex-1 px-2.5 py-1.5 border border-blue-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
+                        />
+                        <button
+                          onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: s.relatedLinks.filter((_, j) => j !== i) } : s))}
+                          className="text-gray-400 hover:text-red-500 text-xs px-1.5"
+                        >✕</button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: [...s.relatedLinks, { text: '', url: '' }] } : s))}
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >+ 新增連結</button>
+                  </div>
+                </div>
+              )}
+
               {errors[sec.id] && <div className="px-5 py-3"><Err msg={errors[sec.id]} /></div>}
 
               {(sec.content.trim() || sec.generating) && (
                 <div className="px-5 py-4">
-                  {sec.generating || sec.editing
+                  {sec.generating
                     ? <AutoTA value={sec.content}
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
                         placeholder="撰寫中…"
                         className="px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono bg-white min-h-[140px] focus:outline-none focus:ring-2 focus:ring-gray-300" />
-                    : <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={sec.content} /></div>
+                    : sec.editing
+                      ? <RichEditor
+                          value={sec.content}
+                          onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
+                          placeholder="開始編輯…"
+                          minHeight="140px"
+                        />
+                      : <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={sec.content} /></div>
                   }
                 </div>
               )}
