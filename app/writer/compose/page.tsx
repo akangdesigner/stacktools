@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import RichEditor from '@/components/writer/RichEditor';
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -249,7 +250,7 @@ function EditIcon() {
 function MdView({ content }: { content: string }) {
   return (
     <div className="text-sm text-gray-800 leading-relaxed">
-      <ReactMarkdown components={{
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
         h1: ({ children }) => <h1 className="text-lg font-bold text-gray-900 mt-3 mb-1">{children}</h1>,
         h2: ({ children }) => <h2 className="text-base font-bold text-gray-900 mt-4 mb-1 pb-1 border-b border-gray-200">{children}</h2>,
         h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-800 mt-3 mb-0.5">{children}</h3>,

@@ -3,6 +3,10 @@
 import { useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 import { Markdown } from 'tiptap-markdown';
 
 type Props = {
@@ -34,6 +38,10 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableCell,
+      TableHeader,
       Markdown.configure({ transformPastedText: true }),
     ],
     content: value,
