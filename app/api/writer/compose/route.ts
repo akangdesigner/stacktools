@@ -31,11 +31,11 @@ export async function POST(req: NextRequest) {
   });
 
   if (!upstream.ok) {
-    const err = await upstream.json() as { error?: { message?: string } };
-    return NextResponse.json(
-      { error: `OpenRouter 錯誤：${err.error?.message ?? upstream.status}` },
-      { status: upstream.status }
-    );
+    const raw = await upstream.text();
+    let msg: string;
+    try { msg = (JSON.parse(raw) as { error?: { message?: string } }).error?.message ?? raw; }
+    catch { msg = raw || String(upstream.status); }
+    return NextResponse.json({ error: `OpenRouter 錯誤：${msg}` }, { status: upstream.status });
   }
 
   return new Response(upstream.body, {

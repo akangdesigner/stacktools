@@ -10,6 +10,16 @@ type Message = { role: 'user' | 'assistant'; content: string };
 type SearchResult = { title: string; url: string; content: string };
 type Stage = 'analyze' | 'outline' | 'write';
 
+type PromptStyle = 'info' | 'scene' | 'faq' | 'brand' | 'cta';
+
+const STYLE_LABELS: Record<PromptStyle, string> = {
+  info:  '資訊型',
+  scene: '情境／開場',
+  faq:   'FAQ 型',
+  brand: '品牌介紹',
+  cta:   '行動呼籲',
+};
+
 type Section = {
   id: string;
   h2: string;
@@ -17,6 +27,9 @@ type Section = {
   content: string;
   generating: boolean;
   editing: boolean;
+  promptStyle: PromptStyle;
+  customPrompt: string;
+  showPrompt: boolean;
 };
 
 // ── Prompts ───────────────────────────────────────────────────────────
@@ -61,18 +74,39 @@ function buildOutlinePrompt(title: string) {
 只輸出架構，格式為 ## H2 和 ### H3，不要加其他說明文字。`;
 }
 
-function buildWriteSectionPrompt(sec: Section, outlineText: string) {
+function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle): string {
   const h3s = sec.h3s.length > 0 ? `（包含其下 H3：${sec.h3s.join('、')}）` : '';
-  return `完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落${h3s}的正文內容。
+  const header = `完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落${h3s}的正文內容。\n\n`;
+  const footer = `\n\n從 ## 標題開始輸出，只輸出該段落正文，不要加任何說明或備註。`;
 
-撰寫規則：
-- 內容必須可直接複製上稿，不要附分析說明或額外註解。
-- 每一句都必須提供新資訊、判斷或實用建議，刪除沒有資訊量的句子。
-- 若有適合加入文獻、法規、研究的地方，請自然融入並附來源連結。
-- 版面自行判斷：概念用段落；優缺點用項目符號；步驟用編號；比較用表格。
-- 使用台灣繁體中文，風格清楚、實用、可掃讀。
+  if (style === 'scene') {
+    return `${header}這個段落要用情境感帶入讀者，讓人一讀就有畫面、有共鳴。
 
-從 ## 標題開始輸出，只輸出該段落正文。`;
+寫法要求：以散文段落寫作，不要用條列符號。句子短、節奏輕快，用「你」直接和讀者說話。從一個具體的生活場景或感受切入，不說廢話，直接讓讀者感覺「這就是我」。語氣溫暖自然，不過度推銷，讓需求從情境裡自然浮現。繁體中文，台灣口語。${footer}`;
+  }
+
+  if (style === 'faq') {
+    return `${header}這個段落以 Q&A 格式呈現常見問題與解答。
+
+寫法要求：每一題先用粗體寫出問題，問題語句要貼近讀者真正會搜尋的方式說話，然後用一到三句自然語句直接回答，不要再拆子條列。問題之間用空行分隔。不重複前面段落說過的內容。繁體中文，語氣直接親切。${footer}`;
+  }
+
+  if (style === 'brand') {
+    return `${header}這個段落介紹品牌或服務，語氣要穩重誠實。
+
+寫法要求：以散文段落寫作，只描述可被客觀確認的服務範圍或特色。絕對不捏造數據、案例、得獎記錄或任何保證效果的說法。可以自然帶出諮詢或了解更多的方向，但不強迫推銷。繁體中文，語氣專業但不冷漠。${footer}`;
+  }
+
+  if (style === 'cta') {
+    return `${header}這個段落的任務是讓讀者願意採取下一步行動。
+
+寫法要求：以散文段落寫作，不要用條列符號。先說清楚「現在行動的理由」，點出讀者的時機感或痛點，再自然帶出行動方向（如：了解更多、前往官網、立即諮詢）。語氣積極但不強迫，給讀者選擇感，不要讓人覺得被推銷。繁體中文，語氣真誠有溫度。${footer}`;
+  }
+
+  // 預設 info 風格
+  return `${header}這個段落要提供清楚、實用的資訊，讓讀者讀完真的有收穫。
+
+寫法要求：以散文段落寫作為主，不要大量使用條列符號。把重點融入句子裡，讓文字自然流暢。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。只有在真正需要比較多個選項時才考慮用表格，其他情況一律用段落。繁體中文，風格清楚自然。${footer}`;
 }
 
 function buildProofreadPrompt(article: string) {
@@ -90,14 +124,29 @@ function parseTitles(text: string): string[] {
     if (/標題提案|標題建議/.test(t)) { inSection = true; continue; }
     if (inSection && /^#{1,3}\s/.test(t) && !/標題/.test(t)) break;
     if (inSection) {
-      const m = t.match(/^\d+[.、)]\s*(.+)/);
+      // 支援：「1. 標題」「1、標題」「1) 標題」「- 標題」「* 標題」「• 標題」「標題 1：xxx」「**1. 標題**」
+      const m = t.match(/^(?:標題\s*\d+\s*[：:]\s*|\d+[.、)]\s*|[-*•]\s+|\*\*\d+[.、)]\s*)(.+)/);
       if (m) {
-        const title = m[1].replace(/\*\*/g, '').replace(/\s*[—–]\s*.+$/, '').trim();
+        const title = m[1]
+          .replace(/\*\*/g, '')                   // 移除 bold 符號
+          .replace(/\s*[—–]\s*.+$/, '')            // 移除 em/en dash 後的說明
+          .replace(/\s+-\s+.+$/, '')               // 移除「空格-空格」後的說明
+          .replace(/\s*[（(][^）)]*[）)]\s*$/, '')  // 移除結尾括號說明
+          .replace(/搜尋意圖[：:].+$/, '')           // 移除「搜尋意圖：...」尾綴
+          .trim();
         if (title.length > 3) titles.push(title);
       }
     }
   }
   return titles;
+}
+
+function detectStyle(h2: string, index: number): PromptStyle {
+  if (/FAQ|常見問題|Q&A/i.test(h2)) return 'faq';
+  if (/品牌|關於|服務介紹|公司簡介/.test(h2)) return 'brand';
+  if (/立即|馬上|如何選購|立刻|推薦|購買|選擇指南/.test(h2)) return 'cta';
+  if (index === 0) return 'scene';
+  return 'info';
 }
 
 function parseOutline(text: string): Section[] {
@@ -108,7 +157,19 @@ function parseOutline(text: string): Section[] {
     const h3 = line.match(/^###\s+(.+)/);
     if (h2) {
       if (cur) sections.push(cur);
-      cur = { id: Math.random().toString(36).slice(2), h2: h2[1].trim(), h3s: [], content: '', generating: false, editing: false };
+      const h2text = h2[1].trim();
+      const idx = sections.length;
+      cur = {
+        id: Math.random().toString(36).slice(2),
+        h2: h2text,
+        h3s: [],
+        content: '',
+        generating: false,
+        editing: false,
+        promptStyle: detectStyle(h2text, idx),
+        customPrompt: '',
+        showPrompt: false,
+      };
     } else if (h3 && cur) {
       cur.h3s.push(h3[1].trim());
     }
@@ -505,12 +566,15 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '', editing: false } : s));
     setErrors(prev => ({ ...prev, [id]: '' }));
     try {
+      const finalPrompt = sec.customPrompt.trim()
+        ? sec.customPrompt
+        : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle);
       await streamAPI([
         { role: 'user', content: analyzeMsg },
         { role: 'assistant', content: analysisResult },
         { role: 'user', content: outlineMsg },
         { role: 'assistant', content: outlineResult },
-        { role: 'user', content: buildWriteSectionPrompt(sec, outlineText) },
+        { role: 'user', content: finalPrompt },
       ], chunk => setSections(prev => prev.map(s => s.id === id ? { ...s, content: s.content + chunk } : s)));
     } catch (e) { setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '產生失敗' })); }
     finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false } : s)); }
@@ -579,7 +643,30 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                     <p className="text-xs text-gray-400 mt-0.5">{sec.h3s.map(h => `↳ ${h}`).join('   ')}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* 風格下拉 */}
+                  <select
+                    value={sec.promptStyle}
+                    onChange={e => {
+                      const newStyle = e.target.value as PromptStyle;
+                      setSections(prev => prev.map(s => s.id === sec.id
+                        ? { ...s, promptStyle: newStyle, customPrompt: '' }
+                        : s));
+                    }}
+                    disabled={sec.generating}
+                    className="text-xs px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-50"
+                  >
+                    {(Object.keys(STYLE_LABELS) as PromptStyle[]).map(k => (
+                      <option key={k} value={k}>{STYLE_LABELS[k]}</option>
+                    ))}
+                  </select>
+                  {/* 提示詞預覽按鈕 */}
+                  <button
+                    onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, showPrompt: !s.showPrompt } : s))}
+                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded-lg transition-colors ${sec.showPrompt ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
+                  >
+                    <EditIcon />{sec.customPrompt.trim() ? '自訂提示詞' : '提示詞'}
+                  </button>
                   {sec.content.trim() && !sec.generating && (
                     <button onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, editing: !s.editing } : s))}
                       className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-gray-300 rounded-lg hover:bg-white text-gray-600">
@@ -593,6 +680,33 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                   </button>
                 </div>
               </div>
+
+              {/* 提示詞編輯器 */}
+              {sec.showPrompt && (
+                <div className="px-5 py-4 border-t border-amber-100 bg-amber-50/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-amber-800">
+                      提示詞預覽
+                      {sec.customPrompt.trim() && <span className="ml-1.5 px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded text-xs">已自訂</span>}
+                    </p>
+                    {sec.customPrompt.trim() && (
+                      <button
+                        onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, customPrompt: '' } : s))}
+                        className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        重設為預設
+                      </button>
+                    )}
+                  </div>
+                  <AutoTA
+                    value={sec.customPrompt.trim() ? sec.customPrompt : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle)}
+                    onChange={v => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, customPrompt: v } : s))}
+                    placeholder="在此輸入自訂提示詞，或直接修改上方預覽內容…"
+                    className="px-3 py-2.5 border border-amber-200 rounded-xl text-xs font-mono bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-300 text-gray-700"
+                  />
+                  <p className="text-xs text-gray-400 mt-1.5">修改後即套用。切換風格下拉將清除自訂內容。</p>
+                </div>
+              )}
 
               {errors[sec.id] && <div className="px-5 py-3"><Err msg={errors[sec.id]} /></div>}
 
