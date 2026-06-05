@@ -69,10 +69,23 @@ function Link({ href, children }: { href: string; children: React.ReactNode }) {
 
 type FbPage = { id: string; name: string };
 
-function AdminPanel({ clients }: { clients: AiEditorClient[] }) {
+function ClientSelect({ clients, value, onChange }: { clients: AiEditorClient[]; value: string; onChange: (v: string) => void }) {
+  return clients.length > 0 ? (
+    <select value={value} onChange={e => onChange(e.target.value)} required
+      className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
+      <option value="">選擇客戶…</option>
+      {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+    </select>
+  ) : (
+    <input type="text" value={value} onChange={e => onChange(e.target.value)}
+      placeholder="輸入客戶名稱（需完全一致）" required
+      className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+  );
+}
+
+function FbTokenForm({ clients }: { clients: AiEditorClient[] }) {
   const [clientName, setClientName] = useState('');
   const [shortToken, setShortToken] = useState('');
-  const [threadsToken, setThreadsToken] = useState('');
   const [pages, setPages] = useState<FbPage[]>([]);
   const [selectedPageId, setSelectedPageId] = useState('');
   const [fetching, setFetching] = useState(false);
@@ -82,152 +95,146 @@ function AdminPanel({ clients }: { clients: AiEditorClient[] }) {
 
   async function fetchPages() {
     if (!shortToken.trim()) return;
-    setFetching(true);
-    setFetchErr('');
-    setPages([]);
-    setSelectedPageId('');
+    setFetching(true); setFetchErr(''); setPages([]); setSelectedPageId('');
     try {
       const res = await fetch(`/api/ai-editor/fb-pages?token=${encodeURIComponent(shortToken.trim())}`);
       const data = await res.json() as { pages?: FbPage[]; error?: string };
-      if (!res.ok || data.error) {
-        setFetchErr(data.error ?? '查詢失敗');
-      } else {
-        const list = data.pages ?? [];
-        setPages(list);
-        if (list.length === 1) setSelectedPageId(list[0].id);
-      }
-    } catch {
-      setFetchErr('連線失敗');
-    } finally {
-      setFetching(false);
-    }
+      if (!res.ok || data.error) { setFetchErr(data.error ?? '查詢失敗'); return; }
+      const list = data.pages ?? [];
+      setPages(list);
+      if (list.length === 1) setSelectedPageId(list[0].id);
+    } catch { setFetchErr('連線失敗'); }
+    finally { setFetching(false); }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!selectedPageId) return;
-    setLoading(true);
-    setResult(null);
+    setLoading(true); setResult(null);
     try {
       const res = await fetch('/api/ai-editor/register-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_name: clientName, fb_page_id: selectedPageId, short_token: shortToken, threads_access_token: threadsToken }),
+        body: JSON.stringify({ client_name: clientName, fb_page_id: selectedPageId, short_token: shortToken }),
       });
       const data = await res.json() as { ok?: boolean; error?: string; client_name?: string; page_name?: string; fb_page_id?: string };
       if (!res.ok || data.error) {
-        setResult({ ok: false, message: data.error ?? '登記失敗，請再試一次' });
+        setResult({ ok: false, message: data.error ?? '登記失敗' });
       } else {
-        setResult({ ok: true, message: `✅ Token 登記完成！\n客戶：${data.client_name}\n粉專：${data.page_name}\nPage ID：${data.fb_page_id}` });
-        setShortToken('');
-        setPages([]);
-        setSelectedPageId('');
+        setResult({ ok: true, message: `✅ 登記完成！\n客戶：${data.client_name}\n粉專：${data.page_name}\nPage ID：${data.fb_page_id}` });
+        setShortToken(''); setPages([]); setSelectedPageId('');
       }
-    } catch {
-      setResult({ ok: false, message: '連線失敗，請稍後再試' });
-    } finally {
-      setLoading(false);
-    }
+    } catch { setResult({ ok: false, message: '連線失敗' }); }
+    finally { setLoading(false); }
   }
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
       <div>
-        <h2 className="text-sm font-bold text-gray-900">快速登記 Token</h2>
-        <p className="text-xs text-gray-400 mt-0.5">貼入短效 Token，系統自動抓粉專清單，選擇後換成永久 Token</p>
+        <h2 className="text-sm font-bold text-gray-900">FB / Meta Token 登記</h2>
+        <p className="text-xs text-gray-400 mt-0.5">貼入短效 Token，自動抓粉專清單，選擇後存入永久 Page Token</p>
       </div>
-
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">客戶名稱</label>
-          {clients.length > 0 ? (
-            <select
-              value={clientName}
-              onChange={e => setClientName(e.target.value)}
-              required
-              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white"
-            >
-              <option value="">選擇客戶…</option>
-              {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={clientName}
-              onChange={e => setClientName(e.target.value)}
-              placeholder="輸入客戶名稱（需完全一致）"
-              required
-              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400"
-            />
-          )}
+          <ClientSelect clients={clients} value={clientName} onChange={setClientName} />
         </div>
-
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">FB 短效 User Token</label>
-          <textarea
-            value={shortToken}
+          <textarea value={shortToken}
             onChange={e => { setShortToken(e.target.value); setPages([]); setSelectedPageId(''); setFetchErr(''); }}
-            placeholder="EAAxxxxx（從 Graph API Explorer 產生）"
-            required
-            rows={3}
-            className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none"
-          />
-          <button
-            type="button"
-            onClick={fetchPages}
-            disabled={!shortToken.trim() || fetching}
-            className="mt-1.5 w-full py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
+            placeholder="EAAxxxxx（從 Graph API Explorer 產生）" required rows={3}
+            className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none" />
+          <button type="button" onClick={fetchPages} disabled={!shortToken.trim() || fetching}
+            className="mt-1.5 w-full py-1.5 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors">
             {fetching ? '查詢中…' : '查詢粉專清單'}
           </button>
           {fetchErr && <p className="mt-1 text-xs text-red-600">{fetchErr}</p>}
         </div>
-
         {pages.length > 0 && (
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">選擇粉專</label>
-            <select
-              value={selectedPageId}
-              onChange={e => setSelectedPageId(e.target.value)}
-              required
-              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white"
-            >
+            <select value={selectedPageId} onChange={e => setSelectedPageId(e.target.value)} required
+              className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white">
               <option value="">選擇…</option>
-              {pages.map(p => (
-                <option key={p.id} value={p.id}>{p.name}（{p.id}）</option>
-              ))}
+              {pages.map(p => <option key={p.id} value={p.id}>{p.name}（{p.id}）</option>)}
             </select>
           </div>
         )}
-
-        <div>
-          <label className="block text-xs font-semibold text-gray-500 mb-1">
-            Threads Access Token
-            <span className="text-gray-300 font-normal ml-1">（選填）</span>
-          </label>
-          <textarea
-            value={threadsToken}
-            onChange={e => setThreadsToken(e.target.value)}
-            placeholder="THAAxxxxx"
-            rows={2}
-            className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading || !selectedPageId}
-          className="w-full py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors"
-        >
-          {loading ? '登記中…' : '登記 Token'}
+        <button type="submit" disabled={loading || !selectedPageId}
+          className="w-full py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
+          {loading ? '登記中…' : '登記 FB Token'}
         </button>
       </form>
-
       {result && (
         <div className={`rounded-lg px-4 py-3 text-xs whitespace-pre-wrap ${result.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
           {result.message}
         </div>
       )}
+    </div>
+  );
+}
+
+function ThreadsTokenForm({ clients }: { clients: AiEditorClient[] }) {
+  const [clientName, setClientName] = useState('');
+  const [threadsToken, setThreadsToken] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const client = clients.find(c => c.name === clientName);
+    if (!client) { setResult({ ok: false, message: '找不到客戶' }); return; }
+    setLoading(true); setResult(null);
+    try {
+      const res = await fetch('/api/ai-editor/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: client.id, threads_access_token: threadsToken.trim() }),
+      });
+      if (!res.ok) { setResult({ ok: false, message: '登記失敗' }); return; }
+      setResult({ ok: true, message: `✅ Threads Token 登記完成！\n客戶：${client.name}` });
+      setThreadsToken('');
+    } catch { setResult({ ok: false, message: '連線失敗' }); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-bold text-gray-900">Threads Token 登記</h2>
+        <p className="text-xs text-gray-400 mt-0.5">60 天有效，可 refresh 無限延長</p>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">客戶名稱</label>
+          <ClientSelect clients={clients} value={clientName} onChange={setClientName} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Threads Access Token</label>
+          <textarea value={threadsToken} onChange={e => setThreadsToken(e.target.value)}
+            placeholder="THAAxxxxx" required rows={3}
+            className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none" />
+        </div>
+        <button type="submit" disabled={loading || !threadsToken.trim() || !clientName}
+          className="w-full py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
+          {loading ? '登記中…' : '登記 Threads Token'}
+        </button>
+      </form>
+      {result && (
+        <div className={`rounded-lg px-4 py-3 text-xs whitespace-pre-wrap ${result.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+          {result.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminPanel({ clients }: { clients: AiEditorClient[] }) {
+  return (
+    <div className="space-y-4">
+      <FbTokenForm clients={clients} />
+      <ThreadsTokenForm clients={clients} />
     </div>
   );
 }
