@@ -469,6 +469,72 @@ function Stage1({ keyword, vendor, onDone }: {
   );
 }
 
+// ── OutlineEditor ─────────────────────────────────────────────────────
+
+function OutlineEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  type Item = { h2: string; h3s: string[] };
+
+  function parse(text: string): Item[] {
+    const items: Item[] = [];
+    let cur: Item | null = null;
+    for (const line of text.split('\n')) {
+      const h2m = line.match(/^##\s+(.+)/);
+      const h3m = line.match(/^###\s+(.+)/);
+      if (h2m) { if (cur) items.push(cur); cur = { h2: h2m[1].trim(), h3s: [] }; }
+      else if (h3m && cur) { cur.h3s.push(h3m[1].trim()); }
+    }
+    if (cur) items.push(cur);
+    return items;
+  }
+
+  function serialize(items: Item[]): string {
+    return items.map(it => {
+      let t = `## ${it.h2}`;
+      if (it.h3s.length > 0) t += '\n' + it.h3s.map(h => `### ${h}`).join('\n');
+      return t;
+    }).join('\n\n');
+  }
+
+  const [items, setItems] = useState<Item[]>(() => parse(value));
+
+  function update(next: Item[]) { setItems(next); onChange(serialize(next)); }
+
+  const field = 'flex-1 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white';
+
+  return (
+    <div className="space-y-4 px-4 py-4 border border-blue-300 rounded-xl bg-white min-h-[180px]">
+      {items.map((item, i) => (
+        <div key={i} className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-400 shrink-0 w-8">段落</span>
+            <input
+              value={item.h2}
+              onChange={e => update(items.map((it, ii) => ii === i ? { ...it, h2: e.target.value } : it))}
+              placeholder="段落標題"
+              className={field}
+            />
+            <button onClick={() => update(items.filter((_, ii) => ii !== i))} className="text-gray-300 hover:text-red-400 px-1 shrink-0">✕</button>
+          </div>
+          {item.h3s.map((h, j) => (
+            <div key={j} className="flex items-center gap-2 pl-10">
+              <span className="text-xs font-medium text-gray-300 shrink-0 w-8">小節</span>
+              <input
+                value={h}
+                onChange={e => update(items.map((it, ii) => ii === i ? { ...it, h3s: it.h3s.map((hh, jj) => jj === j ? e.target.value : hh) } : it))}
+                placeholder="小節標題"
+                className={`${field} border-gray-100 text-gray-600`}
+              />
+              <button onClick={() => update(items.map((it, ii) => ii === i ? { ...it, h3s: it.h3s.filter((_, jj) => jj !== j) } : it))} className="text-gray-300 hover:text-red-400 px-1 shrink-0">✕</button>
+            </div>
+          ))}
+          <button onClick={() => update(items.map((it, ii) => ii === i ? { ...it, h3s: [...it.h3s, ''] } : it))} className="pl-10 text-xs text-blue-400 hover:text-blue-600">+ 新增小節</button>
+        </div>
+      ))}
+      <button onClick={() => update([...items, { h2: '', h3s: [] }])} className="text-xs text-gray-500 hover:text-gray-700">+ 新增段落</button>
+    </div>
+  );
+}
+
 // ── Stage 2 ───────────────────────────────────────────────────────────
 
 function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
@@ -533,7 +599,7 @@ function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
             )}
           </div>
           {editing
-            ? <AutoTA value={outline} onChange={setOutline} className="px-3 py-2 border border-blue-300 rounded-xl text-sm font-mono bg-white min-h-[180px] focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            ? <OutlineEditor value={outline} onChange={setOutline} />
             : outline
               ? <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={outline} /></div>
               : null
