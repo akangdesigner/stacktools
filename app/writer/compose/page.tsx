@@ -12,14 +12,15 @@ type Message = { role: 'user' | 'assistant'; content: string };
 type SearchResult = { title: string; url: string; content: string };
 type Stage = 'analyze' | 'outline' | 'write';
 
-type PromptStyle = 'info' | 'scene' | 'faq' | 'brand' | 'cta';
+type PromptStyle = 'info' | 'scene' | 'faq' | 'brand' | 'cta' | 'compare';
 
 const STYLE_LABELS: Record<PromptStyle, string> = {
-  info:  '資訊型',
-  scene: '情境／開場',
-  faq:   'FAQ 型',
-  brand: '品牌介紹',
-  cta:   '行動呼籲',
+  info:    '資訊型',
+  scene:   '情境／開場',
+  faq:     'FAQ 型',
+  brand:   '品牌介紹',
+  cta:     '行動呼籲',
+  compare: '品牌比較',
 };
 
 type RelatedLink = { text: string; url: string };
@@ -72,16 +73,16 @@ function buildOutlinePrompt(title: string) {
 
 請根據這個標題建立 SEO 文章架構，目錄只列到 H3，不列 H4。
 
-必須包含的固定段落（依序）：
+段落順序（固定，不可更動）：
 1. 前言（第一個 H2，作為文章導言，簡述內容與讀者收益）
 2. 主要內容 H2 段落（依搜尋意圖與決策流程排列）
-3. FAQ（常見問題，列 4–5 個 H3 問題）
-4. 總結
+3. 若有提供品牌資訊，在此插入品牌介紹段落
+4. FAQ（常見問題，列 4–5 個 H3 問題）
+5. 總結（必須是最後一個 H2，總結後面不可再有任何段落）
 
 其他標準：
 - H2 / H3 必須是資訊整理型 SEO 標題，不要過度口語化或故事化。
 - 次要主題下放為 H3，不要全部拆成 H2。
-- 若有提供品牌資訊，可在總結前加入品牌介紹段落。
 
 只輸出架構，格式為 ## H2 和 ### H3，不要加其他說明文字。`;
 }
@@ -92,9 +93,9 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   const footer = `\n\n從 ## 標題開始輸出，只輸出該段落正文，不要加任何說明或備註。`;
 
   if (style === 'scene') {
-    return `${header}這個段落要用情境感帶入讀者，讓人一讀就有畫面、有共鳴。
+    return `${header}這是文章的「前言」，需要快速破題、簡潔有力。
 
-寫法要求：以散文段落寫作，不要用條列符號。句子短、節奏輕快，用「你」直接和讀者說話。從一個具體的生活場景或感受切入，不說廢話，直接讓讀者感覺「這就是我」。語氣溫暖自然，不過度推銷，讓需求從情境裡自然浮現。繁體中文，台灣口語。${footer}`;
+寫法要求：長度控制在 3–5 句（約 100–150 字），不拖長。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。必須在前言中自然帶到文章所有主要關鍵字，關鍵字要融入語意脈絡，不要硬塞或重複堆砌。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。${footer}`;
   }
 
   if (style === 'faq') {
@@ -113,6 +114,22 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
     return `${header}這個段落的任務是讓讀者願意採取下一步行動。
 
 寫法要求：以散文段落寫作，不要用條列符號。先說清楚「現在行動的理由」，點出讀者的時機感或痛點，再自然帶出行動方向（如：了解更多、前往官網、立即諮詢）。語氣積極但不強迫，給讀者選擇感，不要讓人覺得被推銷。繁體中文，語氣真誠有溫度。${footer}`;
+  }
+
+  if (style === 'compare') {
+    return `${header}這個段落要並列比較多個品牌、產品、診所或方案，讓讀者可以快速對比。H3 小節即為各個比較項目。
+
+格式規定（每個項目都必須遵守）：
+- 每個項目以「**品牌名稱 產品／服務名稱**」粗體開頭，獨立一行，不要用 ## 或 ### 標題語法
+- 根據文章主題選定 3–4 個比較欄位，例如：
+  - 美妝保養類：產品特色、容量與價格、適用膚質
+  - 診所／服務類：服務特色、費用參考、適合族群
+  - 軟體／工具類：功能特色、方案與費用、適合對象
+- 每個欄位以「**欄位名稱**：說明內容」格式呈現
+- 所有項目的欄位名稱必須完全一致，方便讀者橫向對比
+- 項目之間空一行分隔
+
+內容客觀中立，只描述可被確認的資訊，不誇大也不貶低任何品牌。繁體中文，語氣清楚專業。${footer}`;
   }
 
   // 預設 info 風格
@@ -155,6 +172,7 @@ function parseTitles(text: string): string[] {
 
 function detectStyle(h2: string, index: number): PromptStyle {
   if (/FAQ|常見問題|Q&A/i.test(h2)) return 'faq';
+  if (/比較|評比|評測|推薦|排行|哪款|怎麼選|選購/.test(h2)) return 'compare';
   if (/品牌|關於|服務介紹|公司簡介/.test(h2)) return 'brand';
   if (/立即|馬上|如何選購|立刻|推薦|購買|選擇指南/.test(h2)) return 'cta';
   if (index === 0) return 'scene';
