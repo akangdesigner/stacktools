@@ -11,6 +11,26 @@ const products = [
   // },
   // ────────────────────────────────────────────────────────────
   {
+    name: 'IG 監控報告',
+    description: '查看追蹤帳號的近期貼文成效，包含文章內容、愛心數、精選留言與 AI 摘要分析。',
+    url: '/ig',
+    icon: '📸',
+    tag: '監控',
+    color: 'bg-purple-50 border-purple-200 hover:border-purple-400',
+    iconBg: 'bg-purple-100',
+    external: false,
+  },
+  {
+    name: '銀髮 LINE 機器人',
+    description: '專為銀髮族設計的 LINE 智慧助理，提供健康資訊、提醒服務與親情互動功能。',
+    url: '#',
+    icon: '🤖',
+    tag: '開發中',
+    color: 'bg-green-50 border-green-200 hover:border-green-400',
+    iconBg: 'bg-green-100',
+    external: false,
+  },
+  {
     name: '美妝競品監控台',
     description: '追蹤屈臣氏、康是美、寶雅各平台商品價格與庫存，支援降價警示與 LINE 通知。',
     url: 'https://productmonitor.zeabur.app',
@@ -18,6 +38,7 @@ const products = [
     tag: '監控',
     color: 'bg-pink-50 border-pink-200 hover:border-pink-400',
     iconBg: 'bg-pink-100',
+    external: true,
   },
 ];
 
@@ -34,8 +55,7 @@ export default function ProductsPage() {
           <a
             key={product.url}
             href={product.url}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...(product.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             className={`block p-5 rounded-xl border-2 transition-all ${product.color}`}
           >
             <div className="flex items-start justify-between mb-3">
@@ -50,7 +70,7 @@ export default function ProductsPage() {
             </div>
             <h2 className="font-semibold text-gray-900 mb-1">{product.name}</h2>
             <p className="text-sm text-gray-500 leading-relaxed">{product.description}</p>
-            <p className="mt-3 text-xs text-gray-400">前往 ↗</p>
+            <p className="mt-3 text-xs text-gray-400">{product.external ? '前往 ↗' : '查看 →'}</p>
           </a>
         ))}
       </div>
