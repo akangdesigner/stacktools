@@ -1,12 +1,15 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
-const DB_PATH = path.join(process.cwd(), 'writer.db');
+const DB_DIR = path.join(process.cwd(), 'data');
+const DB_PATH = path.join(DB_DIR, 'writer.db');
 
 let _db: ReturnType<typeof Database> | null = null;
 
 function db() {
   if (!_db) {
+    if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
     _db = new Database(DB_PATH);
     _db.exec(`
       CREATE TABLE IF NOT EXISTS writer_clients (
