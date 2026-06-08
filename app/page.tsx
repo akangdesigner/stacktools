@@ -3,7 +3,19 @@
 import { useState } from 'react';
 import Link from "next/link";
 
-const internalTools = [
+type Tool = {
+  href: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  iconBg: string;
+  inDev?: boolean;
+  suspended?: boolean;
+  hrOnly?: boolean;
+};
+
+const internalTools: Tool[] = [
   {
     href: "/writer",
     title: "寫手流程工具",
@@ -88,7 +100,7 @@ const internalTools = [
   },
 ];
 
-const externalTools = [
+const externalTools: Tool[] = [
   {
     href: "/ai-editor",
     title: "AI 小編生成文章",
