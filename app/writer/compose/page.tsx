@@ -37,57 +37,89 @@ type Section = {
   showRelatedLinks: boolean;
 };
 
+// ── Prompt Defaults（可被個人化覆蓋的靜態指令）────────────────────────
+
+export const PROMPT_DEFAULTS = {
+  analyze: `你的任務是根據我提供的關鍵字、品牌名稱、品牌網址或參考資料，協助我產出可直接上稿的繁體中文 SEO 文章。
+
+文章定位是「搜尋意圖導向的資訊整理型 SEO 文章」，不是部落格心得文、學術論文、品牌業配文或 AI 百科文。
+
+內容應以清楚、實用、可掃讀為優先；正文可以自然好讀，但 H2 / H3 目錄必須維持資訊整理型 SEO 標題，不要過度口語化、情緒化、故事化或論文化。
+
+請先調查並整理成 SEO 寫作控制表，內容包含：
+1. 搜尋意圖：搜尋者是誰、核心需求、決策階段、主要疑慮。
+2. 首頁競品觀察：首頁文章通常怎麼寫、常見架構、內容形式、競品缺口。
+3. 品牌服務確認：品牌實際提供哪些服務、哪些可安全描述、哪些不能貿然宣稱。
+4. 文章策略：建議切入角度、需要加強的內容、應避免的寫法。
+5. 標題提案：提供 5 個 SEO 標題，並簡短說明各自適合的搜尋意圖。
+
+品牌相關內容必須保守處理，不得捏造服務、成果、案例、數據、保證或品牌優勢。若品牌資訊不足，請明確標記「不可直接宣稱」，並改用中性描述或提醒讀者向品牌方確認。`,
+
+  outline: `請根據這個標題建立 SEO 文章架構，目錄只列到 H3，不列 H4。
+
+輸出規則（必須遵守）：
+- H2 是文章的各個主要段落名稱，不是文章標題本身。請直接從第一個 H2 段落開始輸出，不要把標題放進架構裡。
+- H3 是各 H2 段落底下的小節。
+- 每個 H2 底下應有 2–4 個 H3。
+- 架構通常有 5–8 個 H2 段落。
+- 只輸出 ## H2 和 ### H3，不要加其他說明文字、前言、序號或任何 Markdown 以外的文字。
+
+文章架構請符合以下標準：
+- 目錄需清楚呈現資料整理邏輯，並圍繞文章核心主題。
+- H2 / H3 必須是資訊整理型 SEO 標題，不要過度口語化、心得化、故事化或論文化。
+- 段落順序需符合搜尋意圖與讀者決策流程。
+- 保留 FAQ、文章總結與品牌介紹段落。
+- 品牌介紹段落原則上放在文章後段，通常在 FAQ 之前。
+- 若品牌資訊不足，就刪除品牌段落。
+- 若 H2 過多，請合併內容重疊、過度細分、與主題距離較遠的段落。
+- 次要主題可下放為 H3，不要全部拆成 H2。
+
+輸出後請自行從一般讀者角度檢查：
+- 讀者是否能快速找到答案？
+- 是否缺少比較、流程、注意事項、FAQ 或具體判斷建議？
+- 是否在維持 SEO 專業的同時，也保留閱讀順序與理解體驗？
+
+若有需要調整，請直接輸出校正後的最終架構，不要另外寫一大段分析。`,
+
+  section: `內容品質要求：
+- 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
+- 禁用先否定再肯定句型（「不是 A 而是 B」類）。
+- 格式依內容性質：說明型→段落；條件/注意→項目符號；步驟→編號；比較→表格。`,
+};
+
 // ── Prompts ───────────────────────────────────────────────────────────
 
-function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string, refs: SearchResult[]) {
+function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string, refs: SearchResult[], brandDescription = '', writingGuide = '', override = '') {
   const refBlock = refs.length > 0
     ? `以下是搜尋「${keyword}」取得的競品參考資料，請在分析時參考這些頁面：\n\n${refs.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.content.slice(0, 300)}`).join('\n\n')}\n\n---\n\n`
     : '';
-  return `${refBlock}你的任務是根據我提供的關鍵字、品牌名稱、品牌網址或參考資料，協助我產出可直接上稿的繁體中文 SEO 文章。
-
-文章定位是「搜尋意圖導向的資訊整理型 SEO 文章」，不是部落格心得文、學術論文或品牌業配文。
-
-內容應以清楚、實用、可掃讀為優先；H2 / H3 目錄必須維持資訊整理型 SEO 標題。
-
-請整理成 SEO 寫作控制表，內容包含：
-1. 搜尋意圖：搜尋者是誰、核心需求、決策階段、主要疑慮。
-2. 競品觀察：常見架構、內容形式、競品缺口。
-3. 品牌服務確認：哪些可安全描述、哪些不能貿然宣稱。
-4. 文章策略：建議切入角度、需要加強的內容、應避免的寫法。
-5. 標題提案：提供 5 個 SEO 標題，只列標題本身，不需要說明或大綱。
-
-品牌內容必須保守，不得捏造服務、成果、案例、數據或保證。
+  const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（必須遵守）：\n${writingGuide.trim()}` : '';
+  const body = override.trim() || PROMPT_DEFAULTS.analyze;
+  return `${refBlock}${body}
 
 關鍵字：${keyword}
 品牌名稱：${brandName.trim() || '（未提供）'}
-品牌網址：${brandUrl.trim() || '（未提供）'}
+品牌網址：${brandUrl.trim() || '（未提供）'}${brandDescription.trim() ? `\n品牌描述：${brandDescription.trim()}` : ''}${guideBlock}
 
-請進行 SEO 寫作控制表與標題提案。`;
+請進行 SEO 寫作控制表與標題提案。輸出完畢後請立即停止，不要自行產生文章架構、前言、段落或任何正文內容，等待下一步指令。`;
 }
 
-function buildOutlinePrompt(title: string) {
+function buildOutlinePrompt(title: string, writingGuide = '', override = '') {
+  const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（架構必須符合）：\n${writingGuide.trim()}` : '';
+  const body = override.trim() || PROMPT_DEFAULTS.outline;
   return `我選擇：${title}
 
-請根據這個標題建立 SEO 文章架構，目錄只列到 H3，不列 H4。
+${body}${guideBlock}
 
-段落順序（固定，不可更動）：
-1. 前言（第一個 H2，作為文章導言，簡述內容與讀者收益）
-2. 主要內容 H2 段落（依搜尋意圖與決策流程排列）
-3. 若有提供品牌資訊，在此插入品牌介紹段落
-4. FAQ（常見問題，列 4–5 個 H3 問題）
-5. 總結（必須是最後一個 H2，總結後面不可再有任何段落）
-
-其他標準：
-- H2 / H3 必須是資訊整理型 SEO 標題，不要過度口語化或故事化。
-- 次要主題下放為 H3，不要全部拆成 H2。
-
-只輸出架構，格式為 ## H2 和 ### H3，不要加其他說明文字。`;
+請直接輸出架構，格式為 ## H2 和 ### H3，第一行從 ## 開始，不要有任何前言或說明。`;
 }
 
-function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle): string {
+function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, writingGuide = '', sectionOverride = ''): string {
   const h3s = sec.h3s.length > 0 ? `（包含其下 H3：${sec.h3s.join('、')}）` : '';
+  const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（段落必須符合）：\n${writingGuide.trim()}` : '';
   const header = `完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落${h3s}的正文內容。\n\n`;
-  const footer = `\n\n從 ## 標題開始輸出，只輸出該段落正文，不要加任何說明或備註。`;
+  const writingRules = `\n\n${sectionOverride.trim() || PROMPT_DEFAULTS.section}`;
+  const footer = `${guideBlock}${writingRules}\n\n從 ## 標題開始輸出，只輸出該段落正文，不要加任何說明或備註。`;
 
   if (style === 'scene') {
     return `${header}這是文章的「前言」，需要快速破題、簡潔有力。
@@ -272,6 +304,71 @@ function AutoTA({ value, onChange, placeholder, className }: {
   return <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={4} className={`resize-none overflow-hidden w-full ${className ?? ''}`} />;
 }
 
+// ── PromptEditModal ───────────────────────────────────────────────────
+
+function PromptEditModal({ defaultText, currentOverride, readonlyNote, onSave, onClose }: {
+  defaultText: string;
+  currentOverride: string;
+  readonlyNote?: string;
+  onSave: (text: string | null) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(currentOverride.trim() || defaultText);
+  const isCustom = currentOverride.trim() !== '';
+
+  function handleSave() {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === defaultText.trim()) {
+      onSave(null);
+    } else {
+      onSave(trimmed);
+    }
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">提示詞設定</p>
+            <p className="text-xs text-gray-400 mt-0.5">修改後按「儲存個人版」，重新產生時會自動套用。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isCustom && <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">已個人化</span>}
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 text-lg leading-none">×</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {readonlyNote?.trim() && (
+            <div className="px-3 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <p className="text-xs font-semibold text-emerald-700 mb-1.5">客戶寫作規則（自動套用，唯讀）</p>
+              <p className="text-xs text-emerald-800 whitespace-pre-wrap leading-relaxed">{readonlyNote.trim()}</p>
+            </div>
+          )}
+          <AutoTA
+            value={draft}
+            onChange={setDraft}
+            className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm font-mono bg-white min-h-[220px] focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
+          />
+        </div>
+        <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          <button
+            onClick={() => setDraft(defaultText)}
+            className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+          >
+            重置為預設
+          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors text-gray-600">取消</button>
+            <button onClick={handleSave} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">儲存個人版</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Stepper
 function Stepper({ stage }: { stage: Stage }) {
   const steps: { key: Stage; label: string }[] = [
@@ -338,14 +435,23 @@ function TitleSelector({ titles, value, onChange }: { titles: string[]; value: s
   );
 }
 
+type GscClientOption = { id: number; name: string };
+type BrandProfileOption = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string };
+
 // ── Stage 1 ───────────────────────────────────────────────────────────
 
-function Stage1({ keyword, vendor, onDone }: {
-  keyword: string; vendor: string;
-  onDone: (analyzeMsg: string, analysisResult: string, title: string) => void;
+function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeOverride, onDone }: {
+  keyword: string; vendor: string; writingGuide: string;
+  analyzeOverride: string;
+  onSaveAnalyzeOverride: (text: string | null) => void;
+  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string) => void;
 }) {
   const [brandName, setBrandName] = useState(vendor);
   const [brandUrl, setBrandUrl] = useState('');
+  const [brandDescription, setBrandDescription] = useState('');
+  const [clientWritingRules, setClientWritingRules] = useState('');
+  const [gscClients, setGscClients] = useState<GscClientOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -353,7 +459,31 @@ function Stage1({ keyword, vendor, onDone }: {
   const [error, setError] = useState('');
   const [titles, setTitles] = useState<string[]>([]);
   const [selectedTitle, setSelectedTitle] = useState('');
+  const [showPromptModal, setShowPromptModal] = useState(false);
   const analyzeMsg = useRef('');
+
+  useEffect(() => {
+    fetch('/api/gsc/clients').then(r => r.json()).then((list: GscClientOption[]) => {
+      setGscClients(list.filter(c => c.name));
+    }).catch(() => {});
+  }, []);
+
+  function handleClientChange(id: number | null) {
+    setSelectedClientId(id);
+    if (id === null) { setBrandName(vendor); setBrandUrl(''); setBrandDescription(''); setClientWritingRules(''); return; }
+    const c = gscClients.find(x => x.id === id);
+    if (c) {
+      setBrandName(c.name);
+      fetch(`/api/writer/brand-profile?clientId=${id}`)
+        .then(r => r.json())
+        .then((p: BrandProfileOption) => {
+          setBrandUrl(p.brand_url ?? '');
+          setBrandDescription(p.brand_description ?? '');
+          setClientWritingRules(p.writing_rules ?? '');
+        })
+        .catch(() => {});
+    }
+  }
 
   async function run() {
     setResult(''); setError(''); setTitles([]); setSelectedTitle('');
@@ -366,7 +496,8 @@ function Stage1({ keyword, vendor, onDone }: {
       if (r.ok) { refs = ((await r.json()) as { results?: SearchResult[] }).results ?? []; setSearchResults(refs); }
     } catch { /* 不阻斷 */ } finally { setSearching(false); }
 
-    const msg = buildAnalyzePrompt(keyword, brandName, brandUrl, refs);
+    const combinedGuide = [writingGuide, clientWritingRules].filter(Boolean).join('\n\n');
+    const msg = buildAnalyzePrompt(keyword, brandName, brandUrl, refs, brandDescription, combinedGuide, analyzeOverride);
     analyzeMsg.current = msg;
     setAnalyzing(true);
     try {
@@ -381,6 +512,18 @@ function Stage1({ keyword, vendor, onDone }: {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
+      {gscClients.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">選擇客戶</label>
+          <select className={inputCls} value={selectedClientId ?? ''} onChange={e => handleClientChange(e.target.value === '' ? null : Number(e.target.value))}>
+            <option value="">── 不選擇（手動輸入）──</option>
+            {gscClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {selectedClientId && !brandDescription && (
+            <p className="mt-1 text-xs text-gray-400">此客戶尚未填寫品牌描述，可至 <a href="/writer#clients" className="underline text-blue-500">客戶設定</a> 新增。</p>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">關鍵字</label>
@@ -395,11 +538,29 @@ function Stage1({ keyword, vendor, onDone }: {
         <label className="block text-xs font-medium text-gray-600 mb-1">品牌網址</label>
         <input className={inputCls} value={brandUrl} onChange={e => setBrandUrl(e.target.value)} placeholder="https://（可留空）" />
       </div>
-      <button onClick={run} disabled={searching || analyzing || !keyword.trim()}
-        className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-50">
-        {(searching || analyzing) && <Spinner />}
-        {searching ? '搜尋競品資料中…' : analyzing ? '分析中…' : '開始 SEO 分析'}
-      </button>
+      <div className="flex items-center gap-2">
+        <button onClick={run} disabled={searching || analyzing || !keyword.trim()}
+          className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm rounded-xl hover:bg-gray-700 transition-colors disabled:opacity-50">
+          {(searching || analyzing) && <Spinner />}
+          {searching ? '搜尋競品資料中…' : analyzing ? '分析中…' : '開始 SEO 分析'}
+        </button>
+        <button
+          onClick={() => setShowPromptModal(true)}
+          title="查看／修改提示詞"
+          className={`flex items-center gap-1 px-3 py-2.5 text-sm border rounded-xl transition-colors ${analyzeOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+        >
+          <EditIcon />提示詞
+        </button>
+      </div>
+
+      {showPromptModal && (
+        <PromptEditModal
+          defaultText={PROMPT_DEFAULTS.analyze}
+          currentOverride={analyzeOverride}
+          onSave={onSaveAnalyzeOverride}
+          onClose={() => setShowPromptModal(false)}
+        />
+      )}
 
       {error && <Err msg={error} />}
 
@@ -428,9 +589,34 @@ function Stage1({ keyword, vendor, onDone }: {
       {(result || analyzing) && (
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-gray-600">分析結果</label>
-          {analyzing && !result
-            ? <div className="flex items-center gap-2 text-sm text-gray-400 py-4"><Spinner /> 分析中…</div>
-            : <RichEditor value={result} onChange={setResult} minHeight="200px" />
+          {analyzing
+            ? (
+              <div className="rounded-xl border border-gray-200 bg-white px-5 py-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Spinner />
+                    <span>AI 分析中，正在整理 SEO 寫作控制表…</span>
+                  </div>
+                  {result && <span className="text-xs text-gray-400">{result.length} 字</span>}
+                </div>
+                <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full transition-all duration-500"
+                    style={{ width: result ? `${Math.min(90, Math.round(result.length / 9))}%` : '8%' }}
+                  />
+                </div>
+                <div className="space-y-2.5">
+                  {['搜尋意圖', '競品觀察', '品牌服務確認', '文章策略', '標題提案'].map((label, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-400 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                      <span className="text-xs text-gray-400 w-20 shrink-0">{label}</span>
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+            : <AnalysisEditor value={result} onChange={setResult} />
           }
         </div>
       )}
@@ -440,7 +626,7 @@ function Stage1({ keyword, vendor, onDone }: {
           <label className="block text-sm font-semibold text-gray-800">選擇 SEO 標題</label>
           <TitleSelector titles={titles} value={selectedTitle} onChange={setSelectedTitle} />
           {selectedTitle && (
-            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle)}
+            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules)}
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 transition-colors">
               確認標題，進入架構規劃 →
             </button>
@@ -448,6 +634,124 @@ function Stage1({ keyword, vendor, onDone }: {
         </div>
       )}
     </div>
+  );
+}
+
+// ── AnalysisEditor ────────────────────────────────────────────────────
+
+type ASection = { id: string; label: string; content: string };
+
+function parseAnalysis(text: string): ASection[] {
+  const result: ASection[] = [];
+  let cur: ASection | null = null;
+  for (const line of text.split('\n')) {
+    const t = line.trimEnd();
+    const hm = t.match(/^(#{1,4})\s+(?:\d+[.、)]\s*)?(.+)/);
+    const nm = !hm && t.match(/^(\d+)[.、)]\s+(.+)/);
+    const bm = !hm && !nm && t.match(/^\*\*([^*]{2,30})\*\*\s*[:：]?\s*$/);
+    const rawLabel = hm ? hm[2] : nm ? nm[2] : bm ? bm[1] : null;
+    const label = rawLabel?.replace(/[:：]\s*$/, '').trim() ?? null;
+    const maxLen = nm ? 6 : 35;
+    if (label && label.length >= 2 && label.length <= maxLen) {
+      if (cur) result.push(cur);
+      cur = { id: Math.random().toString(36).slice(2), label, content: '' };
+    } else if (cur !== null) {
+      if (cur.content || t.trim()) cur.content += (cur.content ? '\n' : '') + t;
+    }
+  }
+  if (cur) result.push(cur);
+  return result
+    .map(s => ({ ...s, content: s.content.replace(/\*\*([^*]+)\*\*/g, '$1').trimEnd() }))
+    .filter(s => s.content.trim() !== '');
+}
+
+function AnalysisEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+
+  function serialize(secs: ASection[]): string {
+    return secs.map(s => `## ${s.label}${s.content ? '\n' + s.content : ''}`).join('\n\n');
+  }
+
+  const [sections, setSections] = useState<ASection[]>(() => parseAnalysis(value));
+
+  function update(next: ASection[]) { setSections(next); onChange(serialize(next)); }
+
+  if (sections.length === 0) {
+    return (
+      <AutoTA value={value} onChange={onChange} placeholder="（空白）"
+        className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm font-mono bg-white min-h-[140px] focus:outline-none focus:ring-1 focus:ring-blue-300 text-gray-700" />
+    );
+  }
+
+  return (
+    <div className="space-y-3 px-4 py-4 border border-blue-200 rounded-xl bg-white">
+      {sections.map((sec, i) => (
+        <div key={sec.id} className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+            <input
+              value={sec.label}
+              onChange={e => update(sections.map((s, j) => j === i ? { ...s, label: e.target.value } : s))}
+              className="text-sm font-semibold text-gray-800 bg-transparent border-none focus:outline-none flex-1"
+            />
+          </div>
+          <div className="pl-7">
+            <AutoTA
+              value={sec.content}
+              onChange={v => update(sections.map((s, j) => j === i ? { ...s, content: v } : s))}
+              placeholder="（無內容）"
+              className="w-full px-3 py-2 border border-gray-100 rounded-lg text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-300 text-gray-700"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── AnalysisNote ──────────────────────────────────────────────────────
+
+function AnalysisNote({ analysisResult }: { analysisResult: string }) {
+  const [open, setOpen] = useState(false);
+  const sections = parseAnalysis(analysisResult).filter(s => !s.label.includes('標題'));
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="SEO 分析筆記"
+        className={`fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-amber-400 hover:bg-amber-500 text-white py-4 px-2 rounded-l-xl shadow-lg transition-all duration-200 ${open ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        style={{ writingMode: 'vertical-rl' }}
+      >
+        <span className="text-xs font-semibold tracking-wide">SEO 筆記</span>
+      </button>
+
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+
+      <div className={`fixed top-0 right-0 h-full w-72 bg-amber-50 border-l border-amber-200 shadow-2xl z-50 flex flex-col transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-200 bg-amber-100/70 shrink-0">
+          <p className="text-sm font-semibold text-amber-900">SEO 分析筆記</p>
+          <button onClick={() => setOpen(false)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-amber-200 text-amber-700 text-lg leading-none">×</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+          {sections.length === 0
+            ? <p className="text-xs text-gray-400">尚無分析內容</p>
+            : sections.map((sec, i) => (
+              <div key={sec.id}>
+                <p className="text-xs font-bold text-amber-800 mb-1.5 flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-700 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                  {sec.label}
+                </p>
+                <div className="pl-6 space-y-0.5">
+                  {sec.content.split('\n').map(l => l.replace(/^[-*]\s+/, '').trim()).filter(Boolean).map((line, li) => (
+                    <p key={li} className="text-xs text-gray-700 leading-relaxed">{line}</p>
+                  ))}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -484,58 +788,62 @@ function OutlineEditor({ value, onChange }: { value: string; onChange: (v: strin
   const field = 'flex-1 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white';
 
   return (
-    <div className="space-y-4 px-4 py-4 border border-blue-300 rounded-xl bg-white min-h-[180px]">
+    <div className="space-y-2 px-4 py-4 border border-blue-200 rounded-xl bg-white min-h-[180px]">
       {items.map((item, i) => (
-        <div key={i} className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-400 shrink-0 w-8">段落</span>
+        <div key={i} className="space-y-1">
+          <div className="flex items-center gap-2 group">
+            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded shrink-0">H2</span>
             <input
               value={item.h2}
               onChange={e => update(items.map((it, ii) => ii === i ? { ...it, h2: e.target.value } : it))}
               placeholder="段落標題"
               className={field}
             />
-            <button onClick={() => update(items.filter((_, ii) => ii !== i))} className="text-gray-300 hover:text-red-400 px-1 shrink-0">✕</button>
+            <button onClick={() => update(items.filter((_, ii) => ii !== i))} className="text-gray-200 group-hover:text-gray-400 hover:!text-red-400 px-1 shrink-0 text-xs transition-colors">✕</button>
           </div>
           {item.h3s.map((h, j) => (
-            <div key={j} className="flex items-center gap-2 pl-10">
-              <span className="text-xs font-medium text-gray-300 shrink-0 w-8">小節</span>
+            <div key={j} className="flex items-center gap-2 pl-6 group">
+              <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-xs font-bold rounded shrink-0">H3</span>
               <input
                 value={h}
                 onChange={e => update(items.map((it, ii) => ii === i ? { ...it, h3s: it.h3s.map((hh, jj) => jj === j ? e.target.value : hh) } : it))}
                 placeholder="小節標題"
-                className={`${field} border-gray-100 text-gray-600`}
+                className={`${field} border-gray-100 text-gray-600 text-xs`}
               />
-              <button onClick={() => update(items.map((it, ii) => ii === i ? { ...it, h3s: it.h3s.filter((_, jj) => jj !== j) } : it))} className="text-gray-300 hover:text-red-400 px-1 shrink-0">✕</button>
+              <button onClick={() => update(items.map((it, ii) => ii === i ? { ...it, h3s: it.h3s.filter((_, jj) => jj !== j) } : it))} className="text-gray-200 group-hover:text-gray-400 hover:!text-red-400 px-1 shrink-0 text-xs transition-colors">✕</button>
             </div>
           ))}
-          <button onClick={() => update(items.map((it, ii) => ii === i ? { ...it, h3s: [...it.h3s, ''] } : it))} className="pl-10 text-xs text-blue-400 hover:text-blue-600">+ 新增小節</button>
+          <button onClick={() => update(items.map((it, ii) => ii === i ? { ...it, h3s: [...it.h3s, ''] } : it))} className="pl-6 text-xs text-gray-400 hover:text-blue-500 flex items-center gap-1 transition-colors">＋ H3 小節</button>
         </div>
       ))}
-      <button onClick={() => update([...items, { h2: '', h3s: [] }])} className="text-xs text-gray-500 hover:text-gray-700">+ 新增段落</button>
+      <div className="pt-1">
+        <button onClick={() => update([...items, { h2: '', h3s: [] }])} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 transition-colors">＋ 段落</button>
+      </div>
     </div>
   );
 }
 
 // ── Stage 2 ───────────────────────────────────────────────────────────
 
-function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
-  title: string; analyzeMsg: string; analysisResult: string;
+function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverride, onSaveOutlineOverride, onBack, onDone }: {
+  title: string; analyzeMsg: string; analysisResult: string; writingGuide: string;
+  outlineOverride: string;
+  onSaveOutlineOverride: (text: string | null) => void;
   onBack: () => void;
   onDone: (outlineMsg: string, outlineResult: string, sections: Section[]) => void;
 }) {
   const [outlining, setOutlining] = useState(false);
   const [outline, setOutline] = useState('');
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
   const outlineMsg = useRef('');
 
   useEffect(() => { run(); }, []); // 自動開始
 
   async function run() {
-    const msg = buildOutlinePrompt(title);
+    const msg = buildOutlinePrompt(title, writingGuide, outlineOverride);
     outlineMsg.current = msg;
-    setOutline(''); setError(''); setEditing(false); setOutlining(true);
+    setOutline(''); setError(''); setOutlining(true);
     try {
       await streamAPI([
         { role: 'user', content: analyzeMsg },
@@ -554,15 +862,35 @@ function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
+      <AnalysisNote analysisResult={analysisResult} />
+
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-gray-500 mb-0.5">選定標題</p>
           <p className="text-base font-semibold text-gray-900">{title}</p>
         </div>
-        <button onClick={run} disabled={outlining} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-          {outlining && <Spinner />}重新產生
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPromptModal(true)}
+            title="查看／修改提示詞"
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+          >
+            <EditIcon />提示詞
+          </button>
+          <button onClick={run} disabled={outlining} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+            {outlining && <Spinner />}重新產生
+          </button>
+        </div>
       </div>
+
+      {showPromptModal && (
+        <PromptEditModal
+          defaultText={PROMPT_DEFAULTS.outline}
+          currentOverride={outlineOverride}
+          onSave={onSaveOutlineOverride}
+          onClose={() => setShowPromptModal(false)}
+        />
+      )}
 
       {error && <Err msg={error} />}
 
@@ -570,22 +898,17 @@ function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
         <div className="flex items-center gap-2 text-sm text-gray-400 py-8"><Spinner /> 產生架構中…</div>
       )}
 
-      {(outline || outlining) && (
+      {outline && outlining && (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-gray-600">文章架構</label>
-            {outline && !outlining && (
-              <button onClick={() => setEditing(v => !v)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700">
-                <EditIcon />{editing ? '完成編輯' : '編輯'}
-              </button>
-            )}
-          </div>
-          {editing
-            ? <OutlineEditor value={outline} onChange={setOutline} />
-            : outline
-              ? <RichEditor value={outline} onChange={setOutline} />
-              : null
-          }
+          <div className="flex items-center gap-2 text-xs text-gray-400"><Spinner />產生架構中…</div>
+          <div className="px-4 py-4 border border-gray-100 rounded-xl bg-white font-mono text-sm text-gray-600 whitespace-pre-wrap min-h-[100px] leading-relaxed">{outline}</div>
+        </div>
+      )}
+
+      {outline && !outlining && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-gray-600">文章架構（可直接編輯）</label>
+          <OutlineEditor value={outline} onChange={setOutline} />
         </div>
       )}
 
@@ -604,11 +927,13 @@ function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
 
 // ── Stage 3 ───────────────────────────────────────────────────────────
 
-function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, onBack }: {
+function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, sectionOverride, onSaveSectionOverride, onBack }: {
   title: string; keyword: string;
   analyzeMsg: string; analysisResult: string;
   outlineMsg: string; outlineResult: string;
-  initSections: Section[];
+  initSections: Section[]; writingGuide: string;
+  sectionOverride: string;
+  onSaveSectionOverride: (text: string | null) => void;
   onBack: () => void;
 }) {
   const [sections, setSections] = useState<Section[]>(initSections);
@@ -617,6 +942,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   const [proofreading, setProofreading] = useState(false);
   const [proofError, setProofError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [showSectionPromptModal, setShowSectionPromptModal] = useState(false);
 
   const outlineText = sections.map(s => `## ${s.h2}` + (s.h3s.length ? '\n' + s.h3s.map(h => `### ${h}`).join('\n') : '')).join('\n\n');
   const fullArticle = sections.filter(s => s.content.trim()).map(s => {
@@ -638,7 +964,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     try {
       const basePrompt = sec.customPrompt.trim()
         ? sec.customPrompt
-        : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle);
+        : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, writingGuide, sectionOverride);
       const finalPrompt = sec.generateTable
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
         : basePrompt;
@@ -669,6 +995,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
 
   return (
     <div className="flex flex-col h-full">
+      <AnalysisNote analysisResult={analysisResult} />
 
       {/* Sticky toolbar */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
@@ -696,12 +1023,29 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               {proofreading && <Spinner />}{proofreading ? '校稿中…' : '校稿'}
             </button>
           )}
+          <button
+            onClick={() => setShowSectionPromptModal(true)}
+            title="查看／修改段落寫作規則"
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${sectionOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+          >
+            <EditIcon />寫作規則
+          </button>
           <button onClick={generateAll} disabled={anyGenerating}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50">
             {anyGenerating && <Spinner />}全部產生
           </button>
         </div>
       </div>
+
+      {showSectionPromptModal && (
+        <PromptEditModal
+          defaultText={PROMPT_DEFAULTS.section}
+          currentOverride={sectionOverride}
+          readonlyNote={writingGuide}
+          onSave={onSaveSectionOverride}
+          onClose={() => setShowSectionPromptModal(false)}
+        />
+      )}
 
       <div className="flex-1 overflow-auto">
         <div className="px-6 py-5 space-y-4">
@@ -783,7 +1127,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                     )}
                   </div>
                   <AutoTA
-                    value={sec.customPrompt.trim() ? sec.customPrompt : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle)}
+                    value={sec.customPrompt.trim() ? sec.customPrompt : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, writingGuide, sectionOverride)}
                     onChange={v => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, customPrompt: v } : s))}
                     placeholder="在此輸入自訂提示詞，或直接修改上方預覽內容…"
                     className="px-3 py-2.5 border border-amber-200 rounded-xl text-xs font-mono bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-300 text-gray-700"
@@ -893,6 +1237,9 @@ function ComposeInner() {
   const vendor = params.get('vendor') ?? '';
 
   const [stage, setStage] = useState<Stage>('analyze');
+  const [writingGuide, setWritingGuide] = useState('');
+  const [clientWritingRules, setClientWritingRules] = useState('');
+  const [promptOverrides, setPromptOverrides] = useState<Record<string, string>>({});
 
   // Cross-stage context
   const [analyzeMsg, setAnalyzeMsg] = useState('');
@@ -901,6 +1248,30 @@ function ComposeInner() {
   const [outlineMsg, setOutlineMsg] = useState('');
   const [outlineResult, setOutlineResult] = useState('');
   const [sections, setSections] = useState<Section[]>([]);
+
+  useEffect(() => {
+    fetch('/api/writer/settings').then(r => r.json()).then((s: { writing_guide?: string }) => {
+      if (s.writing_guide) setWritingGuide(s.writing_guide);
+    }).catch(() => {});
+    fetch('/api/writer/prompt-override').then(r => r.json()).then((overrides: Record<string, string>) => {
+      setPromptOverrides(overrides);
+    }).catch(() => {});
+  }, []);
+
+  async function savePromptOverride(stageKey: string, text: string | null) {
+    try {
+      await fetch('/api/writer/prompt-override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: stageKey, prompt_text: text }),
+      });
+      setPromptOverrides(prev => {
+        const next = { ...prev };
+        if (text === null) { delete next[stageKey]; } else { next[stageKey] = text; }
+        return next;
+      });
+    } catch { /* 靜默失敗 */ }
+  }
 
   const isWrite = stage === 'write';
 
@@ -926,10 +1297,14 @@ function ComposeInner() {
           <Stage1
             keyword={keyword}
             vendor={vendor}
-            onDone={(msg, result, title) => {
+            writingGuide={writingGuide}
+            analyzeOverride={promptOverrides.analyze ?? ''}
+            onSaveAnalyzeOverride={text => savePromptOverride('analyze', text)}
+            onDone={(msg, result, title, rules) => {
               setAnalyzeMsg(msg);
               setAnalysisResult(result);
               setSelectedTitle(title);
+              setClientWritingRules(rules);
               setStage('outline');
             }}
           />
@@ -939,6 +1314,9 @@ function ComposeInner() {
             title={selectedTitle}
             analyzeMsg={analyzeMsg}
             analysisResult={analysisResult}
+            writingGuide={[writingGuide, clientWritingRules].filter(Boolean).join('\n\n')}
+            outlineOverride={promptOverrides.outline ?? ''}
+            onSaveOutlineOverride={text => savePromptOverride('outline', text)}
             onBack={() => setStage('analyze')}
             onDone={(oMsg, oResult, secs) => {
               setOutlineMsg(oMsg);
@@ -957,6 +1335,9 @@ function ComposeInner() {
             outlineMsg={outlineMsg}
             outlineResult={outlineResult}
             initSections={sections}
+            writingGuide={[writingGuide, clientWritingRules].filter(Boolean).join('\n\n')}
+            sectionOverride={promptOverrides.section ?? ''}
+            onSaveSectionOverride={text => savePromptOverride('section', text)}
             onBack={() => setStage('outline')}
           />
         )}
