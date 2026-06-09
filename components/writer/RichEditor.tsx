@@ -14,6 +14,7 @@ type Props = {
   onChange: (md: string) => void;
   placeholder?: string;
   minHeight?: string;
+  editable?: boolean;
 };
 
 function ToolbarBtn({ onClick, active, title, children }: {
@@ -31,7 +32,7 @@ function ToolbarBtn({ onClick, active, title, children }: {
   );
 }
 
-export default function RichEditor({ value, onChange, placeholder, minHeight = '140px' }: Props) {
+export default function RichEditor({ value, onChange, placeholder, minHeight = '140px', editable = true }: Props) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -45,6 +46,7 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
       Markdown.configure({ transformPastedText: true }),
     ],
     content: value,
+    editable,
     editorProps: {
       attributes: {
         class: 'outline-none prose prose-sm max-w-none',
@@ -75,9 +77,9 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
   const can = editor.can().chain().focus();
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+    <div className={editable ? 'border border-gray-200 rounded-xl bg-white overflow-hidden' : 'border border-gray-100 rounded-xl bg-white overflow-hidden'}>
       {/* Toolbar */}
-      <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-100 bg-gray-50/60 flex-wrap">
+      {editable && <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-gray-100 bg-gray-50/60 flex-wrap">
         <ToolbarBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="粗體 (Ctrl+B)">
           <strong>B</strong>
         </ToolbarBtn>
@@ -113,7 +115,7 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
           }}
           title="重做 (Ctrl+Y)"
         >↪</ToolbarBtn>
-      </div>
+      </div>}
 
       {/* Editor area */}
       <div className="relative">

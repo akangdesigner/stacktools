@@ -2,8 +2,6 @@
 
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import RichEditor from '@/components/writer/RichEditor';
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -263,28 +261,6 @@ function EditIcon() {
   );
 }
 
-function MdView({ content }: { content: string }) {
-  return (
-    <div className="text-sm text-gray-800 leading-relaxed">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-        h1: ({ children }) => <h1 className="text-lg font-bold text-gray-900 mt-3 mb-1">{children}</h1>,
-        h2: ({ children }) => <h2 className="text-base font-bold text-gray-900 mt-4 mb-1 pb-1 border-b border-gray-200">{children}</h2>,
-        h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-800 mt-3 mb-0.5">{children}</h3>,
-        p: ({ children }) => <p className="text-sm text-gray-700 mb-2 leading-relaxed">{children}</p>,
-        ul: ({ children }) => <ul className="list-disc pl-5 space-y-0.5 mb-2 text-sm text-gray-700">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal pl-5 space-y-0.5 mb-2 text-sm text-gray-700">{children}</ol>,
-        li: ({ children }) => <li className="text-sm text-gray-700 leading-relaxed">{children}</li>,
-        strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-        table: ({ children }) => <div className="overflow-x-auto my-2"><table className="w-full text-xs border-collapse border border-gray-200">{children}</table></div>,
-        thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
-        th: ({ children }) => <th className="border border-gray-200 px-3 py-1.5 text-left font-semibold text-gray-700">{children}</th>,
-        td: ({ children }) => <td className="border border-gray-200 px-3 py-1.5 text-gray-600">{children}</td>,
-        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">{children}</a>,
-        blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-500 my-2">{children}</blockquote>,
-      }}>{content}</ReactMarkdown>
-    </div>
-  );
-}
 
 function AutoTA({ value, onChange, placeholder, className }: {
   value: string; onChange: (v: string) => void; placeholder?: string; className?: string;
@@ -375,13 +351,12 @@ function Stage1({ keyword, vendor, onDone }: {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState('');
   const [error, setError] = useState('');
-  const [editingResult, setEditingResult] = useState(false);
   const [titles, setTitles] = useState<string[]>([]);
   const [selectedTitle, setSelectedTitle] = useState('');
   const analyzeMsg = useRef('');
 
   async function run() {
-    setResult(''); setError(''); setTitles([]); setSelectedTitle(''); setEditingResult(false);
+    setResult(''); setError(''); setTitles([]); setSelectedTitle('');
     setSearchResults([]);
 
     setSearching(true);
@@ -452,19 +427,10 @@ function Stage1({ keyword, vendor, onDone }: {
 
       {(result || analyzing) && (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-gray-600">分析結果</label>
-            {result && !analyzing && (
-              <button onClick={() => setEditingResult(v => !v)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700">
-                <EditIcon />{editingResult ? '完成編輯' : '編輯'}
-              </button>
-            )}
-          </div>
+          <label className="text-xs font-medium text-gray-600">分析結果</label>
           {analyzing && !result
             ? <div className="flex items-center gap-2 text-sm text-gray-400 py-4"><Spinner /> 分析中…</div>
-            : editingResult
-              ? <AutoTA value={result} onChange={setResult} className="px-3 py-2 border border-blue-300 rounded-xl text-sm font-mono bg-white min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-200" />
-              : <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={result} /></div>
+            : <RichEditor value={result} onChange={setResult} minHeight="200px" />
           }
         </div>
       )}
@@ -617,7 +583,7 @@ function Stage2({ title, analyzeMsg, analysisResult, onBack, onDone }: {
           {editing
             ? <OutlineEditor value={outline} onChange={setOutline} />
             : outline
-              ? <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={outline} /></div>
+              ? <RichEditor value={outline} onChange={setOutline} />
               : null
           }
         </div>
@@ -889,7 +855,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               <div className="px-5 py-4">
                 {proofreading && !proofread
                   ? <div className="flex items-center gap-2 text-sm text-gray-400"><Spinner /> 校稿中…</div>
-                  : <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={proofread} /></div>
+                  : <RichEditor value={proofread} onChange={() => {}} editable={false} />
                 }
                 {proofError && <Err msg={proofError} />}
               </div>
@@ -906,7 +872,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               </div>
               <div className="px-5 py-4">
                 {fullArticle
-                  ? <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={fullArticle} /></div>
+                  ? <RichEditor value={fullArticle} onChange={() => {}} editable={false} />
                   : <p className="text-sm text-gray-400 py-6 text-center">尚無已完成的段落</p>
                 }
               </div>
