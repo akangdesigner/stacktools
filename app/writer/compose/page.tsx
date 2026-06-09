@@ -31,7 +31,6 @@ type Section = {
   h3s: string[];
   content: string;
   generating: boolean;
-  editing: boolean;
   promptStyle: PromptStyle;
   customPrompt: string;
   showPrompt: boolean;
@@ -195,7 +194,6 @@ function parseOutline(text: string): Section[] {
         h3s: [],
         content: '',
         generating: false,
-        editing: false,
         promptStyle: detectStyle(h2text, idx),
         customPrompt: '',
         showPrompt: false,
@@ -669,7 +667,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   async function generateSection(id: string) {
     const sec = sections.find(s => s.id === id);
     if (!sec) return;
-    setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '', editing: false } : s));
+    setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '' } : s));
     setErrors(prev => ({ ...prev, [id]: '' }));
     try {
       const basePrompt = sec.customPrompt.trim()
@@ -793,12 +791,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                   >
                     <EditIcon />{sec.customPrompt.trim() ? '自訂提示詞' : '提示詞'}
                   </button>
-                  {sec.content.trim() && !sec.generating && (
-                    <button onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, editing: !s.editing } : s))}
-                      className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-gray-300 rounded-lg hover:bg-white text-gray-600">
-                      <EditIcon />{sec.editing ? '完成' : '編輯'}
-                    </button>
-                  )}
                   <button onClick={() => generateSection(sec.id)} disabled={sec.generating}
                     className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${sec.content.trim() ? 'border border-gray-300 text-gray-600 hover:bg-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
                     {sec.generating && <Spinner />}
@@ -876,14 +868,12 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
                         placeholder="撰寫中…"
                         className="px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono bg-white min-h-[140px] focus:outline-none focus:ring-2 focus:ring-gray-300" />
-                    : sec.editing
-                      ? <RichEditor
-                          value={sec.content}
-                          onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
-                          placeholder="開始編輯…"
-                          minHeight="140px"
-                        />
-                      : <div className="px-4 py-3 border border-gray-100 rounded-xl bg-white"><MdView content={sec.content} /></div>
+                    : <RichEditor
+                        value={sec.content}
+                        onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
+                        placeholder="開始編輯…"
+                        minHeight="140px"
+                      />
                   }
                 </div>
               )}
