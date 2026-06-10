@@ -9,12 +9,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, category, amount, currency, cycle, next_billing_date, status, note, account, password, payer, auto_renew, department } = body;
+  const { name, category, amount, currency, cycle, next_billing_date, status, note, payer, auto_renew, department } = body;
 
   if (!name || !category || amount == null) {
     return NextResponse.json({ error: '缺少必填欄位' }, { status: 400 });
   }
 
-  const sub = createSubscription({ name, category, amount, currency, cycle, next_billing_date, status, note, account, password, payer, auto_renew, department });
+  const sub = createSubscription({ name, category, amount, currency, cycle, next_billing_date, status, note, payer, auto_renew, department });
   return NextResponse.json(sub, { status: 201 });
 }

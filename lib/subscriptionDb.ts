@@ -66,8 +66,6 @@ export interface Subscription {
   next_billing_date: string | null;
   status: SubscriptionStatus;
   note: string | null;
-  account: string | null;
-  password: string | null;
   payer: string | null;
   auto_renew: number; // 1=是, 0=否
   department: SubscriptionDepartment;
@@ -102,8 +100,6 @@ export interface CreateSubscriptionInput {
   next_billing_date?: string;
   status?: SubscriptionStatus;
   note?: string;
-  account?: string;
-  password?: string;
   payer?: string;
   auto_renew?: number;
   department?: SubscriptionDepartment;
@@ -112,8 +108,8 @@ export interface CreateSubscriptionInput {
 export function createSubscription(input: CreateSubscriptionInput): Subscription {
   const id = crypto.randomUUID();
   getSubscriptionDb().prepare(`
-    INSERT INTO subscriptions (id, name, category, amount, currency, cycle, next_billing_date, status, note, account, password, payer, auto_renew, department)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO subscriptions (id, name, category, amount, currency, cycle, next_billing_date, status, note, payer, auto_renew, department)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     input.name,
@@ -124,8 +120,6 @@ export function createSubscription(input: CreateSubscriptionInput): Subscription
     input.next_billing_date ?? null,
     input.status ?? 'active',
     input.note ?? null,
-    input.account ?? null,
-    input.password ?? null,
     input.payer ?? null,
     input.auto_renew ?? 1,
     input.department ?? 'tech',
@@ -142,8 +136,6 @@ export interface UpdateSubscriptionInput {
   next_billing_date?: string | null;
   status?: SubscriptionStatus;
   note?: string | null;
-  account?: string | null;
-  password?: string | null;
   payer?: string | null;
   auto_renew?: number;
   department?: SubscriptionDepartment;
@@ -165,8 +157,6 @@ export function updateSubscription(id: string, input: UpdateSubscriptionInput): 
   if (input.next_billing_date !== undefined) set('next_billing_date', input.next_billing_date);
   if (input.status !== undefined) set('status', input.status);
   if (input.note !== undefined) set('note', input.note);
-  if (input.account !== undefined) set('account', input.account);
-  if (input.password !== undefined) set('password', input.password);
   if (input.payer !== undefined) set('payer', input.payer);
   if (input.auto_renew !== undefined) set('auto_renew', input.auto_renew);
   if (input.department !== undefined) set('department', input.department);

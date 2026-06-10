@@ -90,8 +90,6 @@ const EMPTY_FORM = {
   next_billing_date: '',
   status: 'active' as SubscriptionStatus,
   note: '',
-  account: '',
-  password: '',
   payer: '',
   auto_renew: true,
   department: 'tech' as SubscriptionDepartment,
@@ -113,7 +111,6 @@ export default function SubscriptionPage() {
   const [formError, setFormError] = useState('');
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [showPw, setShowPw] = useState(false);
 
   const fetchSubs = useCallback(async () => {
     setLoading(true);
@@ -162,8 +159,6 @@ export default function SubscriptionPage() {
       next_billing_date: s.next_billing_date ?? '',
       status: s.status,
       note: s.note ?? '',
-      account: s.account ?? '',
-      password: s.password ?? '',
       payer: s.payer ?? '',
       auto_renew: s.auto_renew === 1,
       department: s.department ?? 'tech',
@@ -173,7 +168,7 @@ export default function SubscriptionPage() {
     setModal('edit');
   }
 
-  function closeModal() { setModal(null); setEditTarget(null); setShowPw(false); }
+  function closeModal() { setModal(null); setEditTarget(null); }
 
   async function handleSave() {
     if (!form.name.trim()) { setFormError('請輸入服務名稱'); return; }
@@ -190,8 +185,6 @@ export default function SubscriptionPage() {
       next_billing_date: form.next_billing_date || null,
       status: form.status,
       note: form.note.trim() || null,
-      account: form.account.trim() || null,
-      password: form.password.trim() || null,
       payer: form.payer.trim() || null,
       auto_renew: form.auto_renew ? 1 : 0,
       department: form.department,
@@ -329,7 +322,6 @@ export default function SubscriptionPage() {
                                 className={`hover:bg-gray-50 transition-colors ${urgent ? 'bg-orange-50 hover:bg-orange-50' : ''}`}>
                                 <td className="px-4 py-3">
                                   <div className="font-medium text-gray-900">{s.name}</div>
-                                  {s.account && <div className="text-xs text-gray-400 mt-0.5">{s.account}</div>}
                                   {s.note && <div className="text-xs text-gray-400">{s.note}</div>}
                                 </td>
                                 <td className="px-4 py-3">
@@ -401,26 +393,6 @@ export default function SubscriptionPage() {
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
                   className={inputCls} placeholder="例：Claude API、Midjourney…" />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="帳號">
-                  <input value={form.account} onChange={e => setForm({ ...form, account: e.target.value })}
-                    className={inputCls} placeholder="登入帳號或信箱" />
-                </Field>
-                <Field label="密碼">
-                  <div className="relative">
-                    <input
-                      type={showPw ? 'text' : 'password'}
-                      value={form.password}
-                      onChange={e => setForm({ ...form, password: e.target.value })}
-                      className={inputCls + ' pr-10'}
-                      placeholder="登入密碼" />
-                    <button type="button" onClick={() => setShowPw(p => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
-                      {showPw ? '隱藏' : '顯示'}
-                    </button>
-                  </div>
-                </Field>
-              </div>
               <div className="grid grid-cols-3 gap-3">
                 <Field label="部門">
                   <select value={form.department} onChange={e => setForm({ ...form, department: e.target.value as SubscriptionDepartment })}
