@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       query: keyword,
       search_depth: 'basic',
       include_answer: false,
-      max_results: 6,
+      max_results: 10,
     }),
   });
 

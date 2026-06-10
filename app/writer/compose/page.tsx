@@ -6,19 +6,32 @@ import RichEditor from '@/components/writer/RichEditor';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
-type Message = { role: 'user' | 'assistant'; content: string };
+type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 type SearchResult = { title: string; url: string; content: string };
 type Stage = 'analyze' | 'outline' | 'write';
 
-type PromptStyle = 'info' | 'scene' | 'faq' | 'brand' | 'cta' | 'compare';
+type PromptStyle = 'info' | 'scene' | 'faq' | 'compare' | 'conclusion';
 
 const STYLE_LABELS: Record<PromptStyle, string> = {
-  info:    '資訊型',
-  scene:   '情境／開場',
-  faq:     'FAQ 型',
-  brand:   '品牌介紹',
-  cta:     '行動呼籲',
-  compare: '品牌比較',
+  scene:      '前言',
+  info:       '一般段落',
+  compare:    '逐項比較',
+  faq:        'FAQ',
+  conclusion: '總結',
+};
+
+type ContentDepth = 'brief' | 'standard' | 'detailed';
+
+const DEPTH_LABELS: Record<ContentDepth, string> = {
+  brief:    '精簡',
+  standard: '標準',
+  detailed: '深度',
+};
+
+const DEPTH_INSTRUCTIONS: Record<ContentDepth, string> = {
+  brief:    '篇幅精簡：整個段落（含所有 H3）控制在 150 字以內，每個 H3 只需 1–2 句核心重點，不展開細節。',
+  standard: '篇幅標準：每個 H3 子節寫 3–4 句，涵蓋主要說明並附一個具體例子或判斷依據。',
+  detailed: '篇幅深度：每個 H3 子節寫 4–6 句，包含具體案例、數據、操作細節或比較，充分說明不跳過。',
 };
 
 type RelatedLink = { text: string; url: string };
@@ -30,56 +43,63 @@ type Section = {
   content: string;
   generating: boolean;
   promptStyle: PromptStyle;
-  customPrompt: string;
-  showPrompt: boolean;
   generateTable: boolean;
   relatedLinks: RelatedLink[];
   showRelatedLinks: boolean;
+  isEditing: boolean;
+  revisePrompt: string;
+  contentDepth: ContentDepth;
 };
 
 // ── Prompt Defaults（可被個人化覆蓋的靜態指令）────────────────────────
 
 export const PROMPT_DEFAULTS = {
-  analyze: `你的任務是根據我提供的關鍵字、品牌名稱、品牌網址或參考資料，協助我產出可直接上稿的繁體中文 SEO 文章。
+  analyze: `你是一位台灣繁體中文 SEO 內容策略師。根據提供的關鍵字與品牌資訊，產出 SEO 寫作控制表與標題提案，供後續撰文使用。
 
-文章定位是「搜尋意圖導向的資訊整理型 SEO 文章」，不是部落格心得文、學術論文、品牌業配文或 AI 百科文。
+請依以下格式輸出，每個項目用 ### 標題分隔：
 
-內容應以清楚、實用、可掃讀為優先；正文可以自然好讀，但 H2 / H3 目錄必須維持資訊整理型 SEO 標題，不要過度口語化、情緒化、故事化或論文化。
+### 搜尋意圖
+搜尋者是誰、核心需求、決策階段、主要疑慮。
 
-請先調查並整理成 SEO 寫作控制表，內容包含：
-1. 搜尋意圖：搜尋者是誰、核心需求、決策階段、主要疑慮。
-2. 首頁競品觀察：首頁文章通常怎麼寫、常見架構、內容形式、競品缺口。
-3. 品牌服務確認：品牌實際提供哪些服務、哪些可安全描述、哪些不能貿然宣稱。
-4. 文章策略：建議切入角度、需要加強的內容、應避免的寫法。
-5. 標題提案：提供 5 個 SEO 標題，並簡短說明各自適合的搜尋意圖。
+### 競品觀察
+首頁文章常見架構、內容形式、明顯競品缺口（3–5 點）。
 
-品牌相關內容必須保守處理，不得捏造服務、成果、案例、數據、保證或品牌優勢。若品牌資訊不足，請明確標記「不可直接宣稱」，並改用中性描述或提醒讀者向品牌方確認。`,
+### 品牌服務確認
+只描述可被客觀確認的服務範圍。不可捏造服務、成果、數據或保證效果。資訊不足處標記「不可直接宣稱」。
+
+### 文章策略
+建議切入角度、需強化的內容面向、應避免的寫法（3–5 點）。
+
+### 標題提案
+直接列出 5 個標題，每行一個，不加編號、不加說明。
+
+標題風格參考（勿複製，只參考結構與語氣）：
+假牙種類有哪些？2 分鐘了解活動、固定與全口假牙優缺點與適用族群
+MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
+2026保養品推薦TOP 17！保濕、抗老、美白激推這幾款！
+
+品牌相關內容必須保守處理，不得捏造任何內容。`,
 
   outline: `請根據這個標題建立 SEO 文章架構，目錄只列到 H3，不列 H4。
 
+【固定結構規則 — 必須嚴格遵守】
+文章架構固定為以下順序，不得更改：
+1. 第一個 H2：標題固定為「前言」，不要加任何 H3，直接是短段落
+2. 中間 3–5 個 H2：核心內容段落，依搜尋意圖排列，每個 H2 底下有 2–4 個 H3
+3. 倒數第二個 H2：常見問題 FAQ，固定列出 5 個 H3（每個 H3 是一個常見問題的標題）
+4. 最後一個 H2：總結，不需要 H3
+
 輸出規則（必須遵守）：
 - H2 是文章的各個主要段落名稱，不是文章標題本身。請直接從第一個 H2 段落開始輸出，不要把標題放進架構裡。
-- H3 是各 H2 段落底下的小節。
-- 每個 H2 底下應有 2–4 個 H3。
-- 架構通常有 5–8 個 H2 段落。
+- H3 是各 H2 段落底下的小節。前言與總結不需要 H3。
 - 只輸出 ## H2 和 ### H3，不要加其他說明文字、前言、序號或任何 Markdown 以外的文字。
 
-文章架構請符合以下標準：
-- 目錄需清楚呈現資料整理邏輯，並圍繞文章核心主題。
-- H2 / H3 必須是資訊整理型 SEO 標題，不要過度口語化、心得化、故事化或論文化。
-- 段落順序需符合搜尋意圖與讀者決策流程。
-- 保留 FAQ、文章總結與品牌介紹段落。
-- 品牌介紹段落原則上放在文章後段，通常在 FAQ 之前。
-- 若品牌資訊不足，就刪除品牌段落。
-- 若 H2 過多，請合併內容重疊、過度細分、與主題距離較遠的段落。
-- 次要主題可下放為 H3，不要全部拆成 H2。
+內容段落標準：
+- H2 / H3 必須是資訊整理型 SEO 標題，不要過度口語化、心得化或論文化。
+- 段落順序符合讀者決策流程：概念理解 → 選擇判斷 → 注意事項 → 比較。
+- 若 H2 過多，合併內容重疊的段落；次要主題下放為 H3。
 
-輸出後請自行從一般讀者角度檢查：
-- 讀者是否能快速找到答案？
-- 是否缺少比較、流程、注意事項、FAQ 或具體判斷建議？
-- 是否在維持 SEO 專業的同時，也保留閱讀順序與理解體驗？
-
-若有需要調整，請直接輸出校正後的最終架構，不要另外寫一大段分析。`,
+若有需要調整，請直接輸出校正後的最終架構，不要另外寫分析說明。`,
 
   section: `內容品質要求：
 - 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
@@ -114,17 +134,35 @@ ${body}${guideBlock}
 請直接輸出架構，格式為 ## H2 和 ### H3，第一行從 ## 開始，不要有任何前言或說明。`;
 }
 
-function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, writingGuide = '', sectionOverride = ''): string {
-  const h3s = sec.h3s.length > 0 ? `（包含其下 H3：${sec.h3s.join('、')}）` : '';
+function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, writingGuide = '', sectionOverride = '', clientWritingRules = '', completedContext = '', brandDescription = ''): string {
+  const h3Block = sec.h3s.length > 0
+    ? `\n\n此段落必須依序包含以下 H3 子節，每個 H3 請使用 ### 標題格式獨立成一小節，不可省略或合併：\n${sec.h3s.map(h => `- ### ${h}`).join('\n')}`
+    : '';
+  const prevBlock = completedContext.trim()
+    ? `【已完成段落參考 — 請閱讀以下段落，避免重複說明相同內容，並據此調整本段落的切入角度】\n${completedContext.trim()}\n\n`
+    : '';
+  const clientRulesText = [
+    brandDescription.trim() ? `品牌描述：${brandDescription.trim()}` : '',
+    clientWritingRules.trim(),
+  ].filter(Boolean).join('\n');
+  const clientBlock = clientRulesText
+    ? `【客戶設定 — 最高優先，全段落強制遵守，不得違反】\n${clientRulesText}\n\n`
+    : '';
   const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（段落必須符合）：\n${writingGuide.trim()}` : '';
-  const header = `完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落${h3s}的正文內容。\n\n`;
+  const depthBlock = `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}`;
+  const clientTailBlock = clientRulesText
+    ? `\n\n⚠️ 輸出前最終確認：客戶設定必須貫穿每一句，不只是開頭：\n${clientRulesText}`
+    : '';
+  const h3FormatReminder = sec.h3s.length > 0 ? '，H3 子節一律使用 ### 標題格式' : '';
+  const header = `${prevBlock}${clientBlock}完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落的正文內容。${h3Block}\n\n`;
   const writingRules = `\n\n${sectionOverride.trim() || PROMPT_DEFAULTS.section}`;
-  const footer = `${guideBlock}${writingRules}\n\n從 ## 標題開始輸出，只輸出該段落正文，不要加任何說明或備註。`;
+  const footer = `${guideBlock}${writingRules}${depthBlock}${clientTailBlock}\n\n從 ## 標題開始輸出${h3FormatReminder}，只輸出該段落正文，不要加任何說明或備註。`;
 
   if (style === 'scene') {
+    const sceneFooter = `${guideBlock}${writingRules}${clientTailBlock}\n\n從 ## 標題開始輸出，只輸出前言正文，不要加任何說明或備註。`;
     return `${header}這是文章的「前言」，需要快速破題、簡潔有力。
 
-寫法要求：長度控制在 3–5 句（約 100–150 字），不拖長。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。必須在前言中自然帶到文章所有主要關鍵字，關鍵字要融入語意脈絡，不要硬塞或重複堆砌。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。${footer}`;
+寫法要求：全段只有連續段落，不分 H3，不加條列。長度嚴格控制在 100–150 字以內（3–5 句話）。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。必須自然帶到文章的主要關鍵字，關鍵字融入語意脈絡，不要硬塞。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。${sceneFooter}`;
   }
 
   if (style === 'faq') {
@@ -133,32 +171,22 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
 寫法要求：每一題先用粗體寫出問題，問題語句要貼近讀者真正會搜尋的方式說話，然後用一到三句自然語句直接回答，不要再拆子條列。問題之間用空行分隔。不重複前面段落說過的內容。繁體中文，語氣直接親切。${footer}`;
   }
 
-  if (style === 'brand') {
-    return `${header}這個段落介紹品牌或服務，語氣要穩重誠實。
-
-寫法要求：以散文段落寫作，只描述可被客觀確認的服務範圍或特色。絕對不捏造數據、案例、得獎記錄或任何保證效果的說法。可以自然帶出諮詢或了解更多的方向，但不強迫推銷。繁體中文，語氣專業但不冷漠。${footer}`;
-  }
-
-  if (style === 'cta') {
-    return `${header}這個段落的任務是讓讀者願意採取下一步行動。
-
-寫法要求：以散文段落寫作，不要用條列符號。先說清楚「現在行動的理由」，點出讀者的時機感或痛點，再自然帶出行動方向（如：了解更多、前往官網、立即諮詢）。語氣積極但不強迫，給讀者選擇感，不要讓人覺得被推銷。繁體中文，語氣真誠有溫度。${footer}`;
-  }
-
   if (style === 'compare') {
-    return `${header}這個段落要並列比較多個品牌、產品、診所或方案，讓讀者可以快速對比。H3 小節即為各個比較項目。
+    return `${header}這個段落逐一介紹 H3 列出的各個品牌、產品或選項，讓讀者可以橫向比較。
 
-格式規定（每個項目都必須遵守）：
-- 每個項目以「**品牌名稱 產品／服務名稱**」粗體開頭，獨立一行，不要用 ## 或 ### 標題語法
-- 根據文章主題選定 3–4 個比較欄位，例如：
-  - 美妝保養類：產品特色、容量與價格、適用膚質
-  - 診所／服務類：服務特色、費用參考、適合族群
-  - 軟體／工具類：功能特色、方案與費用、適合對象
-- 每個欄位以「**欄位名稱**：說明內容」格式呈現
-- 所有項目的欄位名稱必須完全一致，方便讀者橫向對比
-- 項目之間空一行分隔
+格式規定：
+- 每個 H3 子節對應一個品牌或選項，用 ### 標題單獨開頭
+- 根據文章主題選定 3–4 個固定屬性（如：特色、費用、適合族群），所有 H3 使用完全相同的屬性欄位
+- 每個屬性以「**屬性名稱**：說明」格式呈現
+- 內容客觀中立，只描述可被確認的資訊，不捏造數據或保證效果
 
-內容客觀中立，只描述可被確認的資訊，不誇大也不貶低任何品牌。繁體中文，語氣清楚專業。${footer}`;
+繁體中文，語氣清楚專業。${footer}`;
+  }
+
+  if (style === 'conclusion') {
+    return `${header}這個段落是文章總結，幫助讀者回顧核心重點並做出決策。
+
+寫法要求：2–4 句話整合全文核心重點，不重複前面已詳細說明的內容，不要只是條列各段標題。若有品牌，可自然引導讀者下一步（如：諮詢、了解更多），語氣收尾有力但不強推。繁體中文，簡潔有力。${footer}`;
   }
 
   // 預設 info 風格
@@ -182,29 +210,31 @@ function parseTitles(text: string): string[] {
     if (/標題提案|標題建議/.test(t)) { inSection = true; continue; }
     if (inSection && /^#{1,3}\s/.test(t) && !/標題/.test(t)) break;
     if (inSection) {
-      // 支援：「1. 標題」「1、標題」「1) 標題」「- 標題」「* 標題」「• 標題」「標題 1：xxx」「**1. 標題**」
-      const m = t.match(/^(?:標題\s*\d+\s*[：:]\s*|\d+[.、)]\s*|[-*•]\s+|\*\*\d+[.、)]\s*)(.+)/);
-      if (m) {
-        const title = m[1]
+      if (t.startsWith('#')) break; // 遇到下一個 ### 區塊就停止
+      // 有前綴：「1. 標題」「- 標題」「標題N:」等
+      const prefixMatch = t.match(/^(?:標題(?:提案)?\s*\d+\s*[：:]\s*|\d+[.、)]\s*|[-*•]\s+|\*\*\d+[.、)]\s*)(.+)/);
+      const raw = prefixMatch ? prefixMatch[1] : (t.length >= 8 ? t : null);
+      if (raw) {
+        const title = raw
+          .replace(/^標題(?:提案)?\s*\d+\s*[：:]\s*/, '') // 移除殘留「標題N:」前綴
           .replace(/\*\*/g, '')                   // 移除 bold 符號
           .replace(/\s*[—–]\s*.+$/, '')            // 移除 em/en dash 後的說明
           .replace(/\s+-\s+.+$/, '')               // 移除「空格-空格」後的說明
           .replace(/\s*[（(][^）)]*[）)]\s*$/, '')  // 移除結尾括號說明
           .replace(/搜尋意圖[：:].+$/, '')           // 移除「搜尋意圖：...」尾綴
           .trim();
-        if (title.length > 3) titles.push(title);
+        if (title.length >= 8) titles.push(title);
       }
     }
   }
   return titles;
 }
 
-function detectStyle(h2: string, index: number): PromptStyle {
-  if (/FAQ|常見問題|Q&A/i.test(h2)) return 'faq';
-  if (/比較|評比|評測|推薦|排行|哪款|怎麼選|選購/.test(h2)) return 'compare';
-  if (/品牌|關於|服務介紹|公司簡介/.test(h2)) return 'brand';
-  if (/立即|馬上|如何選購|立刻|推薦|購買|選擇指南/.test(h2)) return 'cta';
+function detectStyle(h2: string, index: number, total: number): PromptStyle {
   if (index === 0) return 'scene';
+  if (index === total - 1) return 'conclusion';
+  if (index === total - 2) return 'faq';
+  if (/比較|評比|評測|排行|TOP\s*\d|十大|推薦名單/.test(h2)) return 'compare';
   return 'info';
 }
 
@@ -224,19 +254,21 @@ function parseOutline(text: string): Section[] {
         h3s: [],
         content: '',
         generating: false,
-        promptStyle: detectStyle(h2text, idx),
-        customPrompt: '',
-        showPrompt: false,
+        promptStyle: 'info', // 暫定，解析完後統一套用 detectStyle
         generateTable: /比較|差異|優缺點|選購指南|推薦/.test(h2text),
         relatedLinks: [],
         showRelatedLinks: false,
+        isEditing: false,
+        revisePrompt: '',
+        contentDepth: 'standard',
       };
     } else if (h3 && cur) {
       cur.h3s.push(h3[1].trim());
     }
   }
   if (cur) sections.push(cur);
-  return sections;
+  const total = sections.length;
+  return sections.map((s, i) => ({ ...s, promptStyle: detectStyle(s.h2, i, total) }));
 }
 
 // ── Stream ────────────────────────────────────────────────────────────
@@ -444,7 +476,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
   keyword: string; vendor: string; writingGuide: string;
   analyzeOverride: string;
   onSaveAnalyzeOverride: (text: string | null) => void;
-  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string) => void;
+  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string, brandDescription: string) => void;
 }) {
   const [brandName, setBrandName] = useState(vendor);
   const [brandUrl, setBrandUrl] = useState('');
@@ -454,6 +486,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchPage, setSearchPage] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState('');
   const [error, setError] = useState('');
@@ -485,16 +518,25 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
     }
   }
 
+  async function fetchSearch(): Promise<SearchResult[]> {
+    setSearching(true);
+    setSearchPage(0);
+    try {
+      const r = await fetch(`/api/writer/search?keyword=${encodeURIComponent(keyword)}`);
+      if (r.ok) {
+        const refs = ((await r.json()) as { results?: SearchResult[] }).results ?? [];
+        setSearchResults(refs);
+        return refs;
+      }
+    } catch { /* 不阻斷 */ } finally { setSearching(false); }
+    return [];
+  }
+
   async function run() {
     setResult(''); setError(''); setTitles([]); setSelectedTitle('');
     setSearchResults([]);
 
-    setSearching(true);
-    let refs: SearchResult[] = [];
-    try {
-      const r = await fetch(`/api/writer/search?keyword=${encodeURIComponent(keyword)}`);
-      if (r.ok) { refs = ((await r.json()) as { results?: SearchResult[] }).results ?? []; setSearchResults(refs); }
-    } catch { /* 不阻斷 */ } finally { setSearching(false); }
+    const refs = await fetchSearch();
 
     const combinedGuide = [writingGuide, clientWritingRules].filter(Boolean).join('\n\n');
     const msg = buildAnalyzePrompt(keyword, brandName, brandUrl, refs, brandDescription, combinedGuide, analyzeOverride);
@@ -564,14 +606,31 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
 
       {error && <Err msg={error} />}
 
-      {searchResults.length > 0 && (
+      {searchResults.length > 0 && (() => {
+        const PAGE_SIZE = 5;
+        const totalPages = Math.ceil(searchResults.length / PAGE_SIZE);
+        const displayed = searchResults.slice(searchPage * PAGE_SIZE, (searchPage + 1) * PAGE_SIZE);
+        return (
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            Tavily 競品參考連結
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Tavily 競品參考連結
+              {totalPages > 1 && <span className="text-gray-400">（{searchPage + 1}/{totalPages}）</span>}
+            </p>
+            {totalPages > 1 && (
+              <button
+                onClick={() => setSearchPage(p => (p + 1) % totalPages)}
+                disabled={searching || analyzing}
+                className="flex items-center gap-1 text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                換一批
+              </button>
+            )}
+          </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50 divide-y divide-gray-100">
-            {searchResults.map((r, i) => (
+            {displayed.map((r, i) => (
               <a key={i} href={r.url} target="_blank" rel="noopener noreferrer"
                 className="flex items-start gap-3 px-4 py-2.5 hover:bg-blue-50/50 transition-colors group">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 group-hover:bg-blue-100 text-gray-500 text-xs flex items-center justify-center mt-0.5">{i + 1}</span>
@@ -584,7 +643,8 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {(result || analyzing) && (
         <div className="space-y-1.5">
@@ -626,7 +686,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
           <label className="block text-sm font-semibold text-gray-800">選擇 SEO 標題</label>
           <TitleSelector titles={titles} value={selectedTitle} onChange={setSelectedTitle} />
           {selectedTitle && (
-            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules)}
+            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules, brandDescription)}
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 transition-colors">
               確認標題，進入架構規劃 →
             </button>
@@ -837,10 +897,12 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
   const [error, setError] = useState('');
   const [showPromptModal, setShowPromptModal] = useState(false);
   const outlineMsg = useRef('');
+  const runId = useRef(0);
 
   useEffect(() => { run(); }, []); // 自動開始
 
   async function run() {
+    const id = ++runId.current;
     const msg = buildOutlinePrompt(title, writingGuide, outlineOverride);
     outlineMsg.current = msg;
     setOutline(''); setError(''); setOutlining(true);
@@ -849,9 +911,9 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
         { role: 'user', content: analyzeMsg },
         { role: 'assistant', content: analysisResult },
         { role: 'user', content: msg },
-      ], chunk => setOutline(r => r + chunk));
-    } catch (e) { setError(e instanceof Error ? e.message : '產生架構失敗'); }
-    finally { setOutlining(false); }
+      ], chunk => { if (runId.current === id) setOutline(r => r + chunk); });
+    } catch (e) { if (runId.current === id) setError(e instanceof Error ? e.message : '產生架構失敗'); }
+    finally { if (runId.current === id) setOutlining(false); }
   }
 
   function confirm() {
@@ -927,11 +989,13 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
 
 // ── Stage 3 ───────────────────────────────────────────────────────────
 
-function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, sectionOverride, onSaveSectionOverride, onBack }: {
+function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, sectionOverride, onSaveSectionOverride, onBack }: {
   title: string; keyword: string;
   analyzeMsg: string; analysisResult: string;
   outlineMsg: string; outlineResult: string;
   initSections: Section[]; writingGuide: string;
+  clientWritingRules: string;
+  brandDescription: string;
   sectionOverride: string;
   onSaveSectionOverride: (text: string | null) => void;
   onBack: () => void;
@@ -956,19 +1020,40 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   const doneCount = sections.filter(s => s.content.trim()).length;
   const anyGenerating = sections.some(s => s.generating);
 
+  function buildSystemMessage(): string {
+    const parts: string[] = [];
+    if (brandDescription.trim()) {
+      parts.push(`【品牌背景資訊 — 只作為事實依據，不得捏造超出此範圍的內容】\n${brandDescription.trim()}`);
+    }
+    if (clientWritingRules.trim()) {
+      parts.push(`【客戶寫作風格 — 最高優先級，從第一句到最後一句全面套用】
+這是整體語氣與措辭的設定，必須貫穿每一句話，不是在結尾插詞。
+${clientWritingRules.trim()}`);
+    }
+    if (writingGuide.trim()) {
+      parts.push(`【全域寫作規則 — 每段落強制遵守】\n${writingGuide.trim()}`);
+    }
+    return parts.join('\n\n');
+  }
+
   async function generateSection(id: string) {
     const sec = sections.find(s => s.id === id);
     if (!sec) return;
     setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '' } : s));
     setErrors(prev => ({ ...prev, [id]: '' }));
     try {
-      const basePrompt = sec.customPrompt.trim()
-        ? sec.customPrompt
-        : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, writingGuide, sectionOverride);
+      const completedContext = sections
+        .filter(s => s.id !== id && s.content.trim())
+        .map(s => `## ${s.h2}\n${s.content.trim().slice(0, 400)}`)
+        .join('\n\n---\n\n');
+      const basePrompt = buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, writingGuide, sectionOverride, clientWritingRules, completedContext, brandDescription);
       const finalPrompt = sec.generateTable
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
         : basePrompt;
+      const sys = buildSystemMessage();
+      const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
+        ...sysMsg,
         { role: 'user', content: analyzeMsg },
         { role: 'assistant', content: analysisResult },
         { role: 'user', content: outlineMsg },
@@ -979,8 +1064,32 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false } : s)); }
   }
 
+  async function reviseSection(id: string) {
+    const sec = sections.find(s => s.id === id);
+    if (!sec || !sec.revisePrompt.trim()) return;
+    const instruction = sec.revisePrompt.trim();
+    setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '', revisePrompt: '', isEditing: false } : s));
+    setErrors(prev => ({ ...prev, [id]: '' }));
+    try {
+      const sys = buildSystemMessage();
+      const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
+      await streamAPI([
+        ...sysMsg,
+        { role: 'user', content: analyzeMsg },
+        { role: 'assistant', content: analysisResult },
+        { role: 'user', content: outlineMsg },
+        { role: 'assistant', content: outlineResult },
+        { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${sec.content}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。` },
+      ], chunk => setSections(prev => prev.map(s => s.id === id ? { ...s, content: s.content + chunk } : s)));
+    } catch (e) { setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '修改失敗' })); }
+    finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false } : s)); }
+  }
+
   async function generateAll() {
-    await Promise.all(sections.filter(s => !s.content.trim() && !s.generating).map(s => generateSection(s.id)));
+    const pending = sections.filter(s => !s.content.trim() && !s.generating);
+    for (const s of pending) {
+      await generateSection(s.id);
+    }
   }
 
   async function runProofread() {
@@ -1041,7 +1150,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
         <PromptEditModal
           defaultText={PROMPT_DEFAULTS.section}
           currentOverride={sectionOverride}
-          readonlyNote={writingGuide}
+          readonlyNote={clientWritingRules}
           onSave={onSaveSectionOverride}
           onClose={() => setShowSectionPromptModal(false)}
         />
@@ -1067,7 +1176,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                     onChange={e => {
                       const newStyle = e.target.value as PromptStyle;
                       setSections(prev => prev.map(s => s.id === sec.id
-                        ? { ...s, promptStyle: newStyle, customPrompt: '' }
+                        ? { ...s, promptStyle: newStyle }
                         : s));
                     }}
                     disabled={sec.generating}
@@ -1075,6 +1184,19 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                   >
                     {(Object.keys(STYLE_LABELS) as PromptStyle[]).map(k => (
                       <option key={k} value={k}>{STYLE_LABELS[k]}</option>
+                    ))}
+                  </select>
+                  {/* 深度下拉 */}
+                  <select
+                    value={sec.contentDepth}
+                    onChange={e => setSections(prev => prev.map(s => s.id === sec.id
+                      ? { ...s, contentDepth: e.target.value as ContentDepth }
+                      : s))}
+                    disabled={sec.generating}
+                    className="text-xs px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-50"
+                  >
+                    {(Object.keys(DEPTH_LABELS) as ContentDepth[]).map(k => (
+                      <option key={k} value={k}>{DEPTH_LABELS[k]}</option>
                     ))}
                   </select>
                   {/* 插入表格 */}
@@ -1094,13 +1216,14 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                   >
                     延伸閱讀{sec.relatedLinks.length > 0 ? ` (${sec.relatedLinks.length})` : ' +'}
                   </button>
-                  {/* 提示詞預覽按鈕 */}
-                  <button
-                    onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, showPrompt: !s.showPrompt } : s))}
-                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded-lg transition-colors ${sec.showPrompt ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
-                  >
-                    <EditIcon />{sec.customPrompt.trim() ? '自訂提示詞' : '提示詞'}
-                  </button>
+                  {sec.content.trim() && !sec.generating && (
+                    <button
+                      onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, isEditing: !s.isEditing } : s))}
+                      className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded-lg transition-colors ${sec.isEditing ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
+                    >
+                      {sec.isEditing ? '完成' : '編輯'}
+                    </button>
+                  )}
                   <button onClick={() => generateSection(sec.id)} disabled={sec.generating}
                     className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${sec.content.trim() ? 'border border-gray-300 text-gray-600 hover:bg-white' : 'bg-gray-900 text-white hover:bg-gray-700'}`}>
                     {sec.generating && <Spinner />}
@@ -1109,32 +1232,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                 </div>
               </div>
 
-              {/* 提示詞編輯器 */}
-              {sec.showPrompt && (
-                <div className="px-5 py-4 border-t border-amber-100 bg-amber-50/30">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-amber-800">
-                      提示詞預覽
-                      {sec.customPrompt.trim() && <span className="ml-1.5 px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded text-xs">已自訂</span>}
-                    </p>
-                    {sec.customPrompt.trim() && (
-                      <button
-                        onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, customPrompt: '' } : s))}
-                        className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        重設為預設
-                      </button>
-                    )}
-                  </div>
-                  <AutoTA
-                    value={sec.customPrompt.trim() ? sec.customPrompt : buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, writingGuide, sectionOverride)}
-                    onChange={v => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, customPrompt: v } : s))}
-                    placeholder="在此輸入自訂提示詞，或直接修改上方預覽內容…"
-                    className="px-3 py-2.5 border border-amber-200 rounded-xl text-xs font-mono bg-white min-h-[120px] focus:outline-none focus:ring-2 focus:ring-amber-300 text-gray-700"
-                  />
-                  <p className="text-xs text-gray-400 mt-1.5">修改後即套用。切換風格下拉將清除自訂內容。</p>
-                </div>
-              )}
 
               {/* 延伸閱讀編輯器 */}
               {sec.showRelatedLinks && (
@@ -1172,7 +1269,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               {errors[sec.id] && <div className="px-5 py-3"><Err msg={errors[sec.id]} /></div>}
 
               {(sec.content.trim() || sec.generating) && (
-                <div className="px-5 py-4">
+                <div className="px-5 pt-4 pb-3">
                   {sec.generating
                     ? <AutoTA value={sec.content}
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
@@ -1183,8 +1280,27 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
                         placeholder="開始編輯…"
                         minHeight="140px"
+                        editable={sec.isEditing}
                       />
                   }
+                  {/* AI 修改輸入框 */}
+                  {sec.content.trim() && !sec.generating && (
+                    <div className="mt-3 flex items-end gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-gray-400 transition-colors">
+                      <AutoTA
+                        value={sec.revisePrompt}
+                        onChange={v => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, revisePrompt: v } : s))}
+                        placeholder="輸入修改指令，例如：把語氣改得更強硬、縮短篇幅、加入比較表格…"
+                        className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none resize-none min-h-[36px]"
+                      />
+                      <button
+                        onClick={() => reviseSection(sec.id)}
+                        disabled={!sec.revisePrompt.trim()}
+                        className="flex-shrink-0 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        AI 修改
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1239,6 +1355,7 @@ function ComposeInner() {
   const [stage, setStage] = useState<Stage>('analyze');
   const [writingGuide, setWritingGuide] = useState('');
   const [clientWritingRules, setClientWritingRules] = useState('');
+  const [brandDescription, setBrandDescriptionGlobal] = useState('');
   const [promptOverrides, setPromptOverrides] = useState<Record<string, string>>({});
 
   // Cross-stage context
@@ -1300,11 +1417,12 @@ function ComposeInner() {
             writingGuide={writingGuide}
             analyzeOverride={promptOverrides.analyze ?? ''}
             onSaveAnalyzeOverride={text => savePromptOverride('analyze', text)}
-            onDone={(msg, result, title, rules) => {
+            onDone={(msg, result, title, rules, brandDesc) => {
               setAnalyzeMsg(msg);
               setAnalysisResult(result);
               setSelectedTitle(title);
               setClientWritingRules(rules);
+              setBrandDescriptionGlobal(brandDesc);
               setStage('outline');
             }}
           />
@@ -1335,7 +1453,9 @@ function ComposeInner() {
             outlineMsg={outlineMsg}
             outlineResult={outlineResult}
             initSections={sections}
-            writingGuide={[writingGuide, clientWritingRules].filter(Boolean).join('\n\n')}
+            writingGuide={writingGuide}
+            clientWritingRules={clientWritingRules}
+            brandDescription={brandDescription}
             sectionOverride={promptOverrides.section ?? ''}
             onSaveSectionOverride={text => savePromptOverride('section', text)}
             onBack={() => setStage('outline')}
