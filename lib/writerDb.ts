@@ -82,10 +82,20 @@ const SETTING_DEFAULTS: WriterSettings = {
   openrouter_model: 'openai/gpt-4o-mini',
 };
 
+// 已退役的 OpenRouter 型號 → 新版對應（舊瀏覽器頁面可能把退役型號存回來）
+const MODEL_ALIASES: Record<string, string> = {
+  'anthropic/claude-3.5-sonnet-20241022': 'anthropic/claude-sonnet-4.6',
+  'anthropic/claude-3-haiku-20240307': 'anthropic/claude-haiku-4.5',
+  'google/gemini-1.5-flash': 'google/gemini-2.5-flash',
+  'google/gemini-1.5-pro': 'google/gemini-2.5-pro',
+};
+
 export function getSettings(): WriterSettings {
   const rows = db().prepare('SELECT key, value FROM writer_settings').all() as { key: string; value: string }[];
   const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
-  return { ...SETTING_DEFAULTS, ...map } as WriterSettings;
+  const settings = { ...SETTING_DEFAULTS, ...map } as WriterSettings;
+  settings.openrouter_model = MODEL_ALIASES[settings.openrouter_model] ?? settings.openrouter_model;
+  return settings;
 }
 
 export function setSetting(key: keyof WriterSettings, value: string): void {

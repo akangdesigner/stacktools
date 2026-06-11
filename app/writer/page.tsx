@@ -1092,20 +1092,20 @@ function SettingsModal({ initial, onClose, onSave }: {
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold text-gray-700">寫文 AI 模型</legend>
           <select className={inputCls} value={form.openrouter_model} onChange={e => set('openrouter_model', e.target.value)}>
+            <optgroup label="✦ Claude（Anthropic）— 中文最自然，寫作規則服從度最高">
+              <option value="anthropic/claude-haiku-4.5">Claude Haiku 4.5 — 快、規則服從好｜$1/$5 ✓ 推薦</option>
+              <option value="anthropic/claude-sonnet-4.6">Claude Sonnet 4.6 — 寫作品質最佳｜$3/$15</option>
+            </optgroup>
             <optgroup label="✦ GPT（OpenAI）— 通用能力強，格式穩定">
-              <option value="openai/gpt-4o-mini">GPT-4o mini — 性價比高，速度快｜費用低 ✓ 推薦</option>
-              <option value="openai/gpt-4o">GPT-4o — 旗艦，能力全面｜費用中高</option>
+              <option value="openai/gpt-4o-mini">GPT-4o mini — 最便宜，適合草稿｜$0.15/$0.60</option>
+              <option value="openai/gpt-4o">GPT-4o — 能力全面｜$2.5/$10</option>
             </optgroup>
-            <optgroup label="✦ Gemini（Google）— 速度極快，適合大量產出">
-              <option value="google/gemini-1.5-flash">Gemini 1.5 Flash — 超快速，大量產出｜費用極低</option>
-              <option value="google/gemini-1.5-pro">Gemini 1.5 Pro — 長文理解強｜費用中等</option>
-            </optgroup>
-            <optgroup label="✦ Claude（Anthropic）— 中文最自然（需在 OpenRouter 另行開啟 Anthropic 存取）">
-              <option value="anthropic/claude-3.5-sonnet-20241022">Claude 3.5 Sonnet — 強力寫作，邏輯清晰｜費用中高</option>
-              <option value="anthropic/claude-3-haiku-20240307">Claude 3 Haiku — 速度快，適合草稿｜費用低</option>
+            <optgroup label="✦ Gemini（Google）— 速度快，適合大量產出">
+              <option value="google/gemini-2.5-flash">Gemini 2.5 Flash — 快速便宜｜$0.3/$2.5</option>
+              <option value="google/gemini-2.5-pro">Gemini 2.5 Pro — 長文理解強｜$1.25/$10</option>
             </optgroup>
           </select>
-          <p className="text-xs text-gray-400">不確定選哪個？選「GPT-4o mini」即可，速度快、費用低、品質穩定。Claude 系列需先至 openrouter.ai 帳號設定開啟 Anthropic。</p>
+          <p className="text-xs text-gray-400">價格為每百萬 tokens（輸入/輸出）。要嚴格遵守客戶寫作風格選「Claude Haiku 4.5」；追求最低成本選「GPT-4o mini」。</p>
         </fieldset>
 
         {err && <p className="text-sm text-red-600">{err}</p>}

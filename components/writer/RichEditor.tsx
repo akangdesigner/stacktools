@@ -7,6 +7,7 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
+import Image from '@tiptap/extension-image';
 import { Markdown } from 'tiptap-markdown';
 
 type Props = {
@@ -39,6 +40,7 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
+      Image.configure({ inline: false, allowBase64: true }),
       Table.configure({ resizable: false }),
       TableRow,
       TableCell,
@@ -59,6 +61,14 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
       onChangeRef.current(md);
     },
   });
+
+  // editable 切換時同步
+  useEffect(() => {
+    if (!editor) return;
+    if (editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   // 外部 value 改變時同步（例如重新產生）
   const lastValueRef = useRef(value);
@@ -134,6 +144,7 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
           .tiptap-writer th, .tiptap-writer td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
           .tiptap-writer th { background: #f9fafb; font-weight: 600; }
           .tiptap-writer .outline-none:focus { outline: none; }
+          .tiptap-writer img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.5rem 0; display: block; }
         `}</style>
         <div className="tiptap-writer">
           <EditorContent editor={editor} />

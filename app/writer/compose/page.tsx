@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import RichEditor from '@/components/writer/RichEditor';
+import SectionBlockEditor from '@/components/writer/SectionBlockEditor';
+import StructurePanel from '@/components/writer/StructurePanel';
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -100,11 +102,6 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 - 若 H2 過多，合併內容重疊的段落；次要主題下放為 H3。
 
 若有需要調整，請直接輸出校正後的最終架構，不要另外寫分析說明。`,
-
-  section: `內容品質要求：
-- 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
-- 禁用先否定再肯定句型（「不是 A 而是 B」類）。
-- 格式依內容性質：說明型→段落；條件/注意→項目符號；步驟→編號；比較→表格。`,
 };
 
 // ── Prompts ───────────────────────────────────────────────────────────
@@ -134,35 +131,22 @@ ${body}${guideBlock}
 請直接輸出架構，格式為 ## H2 和 ### H3，第一行從 ## 開始，不要有任何前言或說明。`;
 }
 
-function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, writingGuide = '', sectionOverride = '', clientWritingRules = '', completedContext = '', brandDescription = ''): string {
+function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, completedContext = ''): string {
   const h3Block = sec.h3s.length > 0
     ? `\n\n此段落必須依序包含以下 H3 子節，每個 H3 請使用 ### 標題格式獨立成一小節，不可省略或合併：\n${sec.h3s.map(h => `- ### ${h}`).join('\n')}`
     : '';
   const prevBlock = completedContext.trim()
-    ? `【已完成段落參考 — 請閱讀以下段落，避免重複說明相同內容，並據此調整本段落的切入角度】\n${completedContext.trim()}\n\n`
+    ? `【已完成段落參考 — 避免重複說明相同內容，據此調整切入角度】\n${completedContext.trim()}\n\n`
     : '';
-  const clientRulesText = [
-    brandDescription.trim() ? `品牌描述：${brandDescription.trim()}` : '',
-    clientWritingRules.trim(),
-  ].filter(Boolean).join('\n');
-  const clientBlock = clientRulesText
-    ? `【客戶設定 — 最高優先，全段落強制遵守，不得違反】\n${clientRulesText}\n\n`
-    : '';
-  const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（段落必須符合）：\n${writingGuide.trim()}` : '';
   const depthBlock = `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}`;
-  const clientTailBlock = clientRulesText
-    ? `\n\n⚠️ 輸出前最終確認：客戶設定必須貫穿每一句，不只是開頭：\n${clientRulesText}`
-    : '';
   const h3FormatReminder = sec.h3s.length > 0 ? '，H3 子節一律使用 ### 標題格式' : '';
-  const header = `${prevBlock}${clientBlock}完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落的正文內容。${h3Block}\n\n`;
-  const writingRules = `\n\n${sectionOverride.trim() || PROMPT_DEFAULTS.section}`;
-  const footer = `${guideBlock}${writingRules}${depthBlock}${clientTailBlock}\n\n從 ## 標題開始輸出${h3FormatReminder}，只輸出該段落正文，不要加任何說明或備註。`;
+  const header = `${prevBlock}完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落的正文內容。${h3Block}\n\n`;
+  const footer = `${depthBlock}\n\n從 ## 標題開始輸出${h3FormatReminder}，只輸出該段落正文，不要加任何說明或備註。`;
 
   if (style === 'scene') {
-    const sceneFooter = `${guideBlock}${writingRules}${clientTailBlock}\n\n從 ## 標題開始輸出，只輸出前言正文，不要加任何說明或備註。`;
     return `${header}這是文章的「前言」，需要快速破題、簡潔有力。
 
-寫法要求：全段只有連續段落，不分 H3，不加條列。長度嚴格控制在 100–150 字以內（3–5 句話）。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。必須自然帶到文章的主要關鍵字，關鍵字融入語意脈絡，不要硬塞。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。${sceneFooter}`;
+寫法要求：全段只有連續段落，不分 H3，不加條列。長度嚴格控制在 100–150 字以內（3–5 句話）。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。必須自然帶到文章的主要關鍵字，關鍵字融入語意脈絡，不要硬塞。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。\n\n從 ## 標題開始輸出，只輸出前言正文，不要加任何說明或備註。`;
   }
 
   if (style === 'faq') {
@@ -193,6 +177,43 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   return `${header}這個段落要提供清楚、實用的資訊，讓讀者讀完真的有收穫。
 
 寫法要求：以散文段落寫作為主。若需要條列，格式必須是「**粗體名稱**：一句說明」，不要用普通的 - 條列符號。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。繁體中文，風格清楚自然。${footer}`;
+}
+
+const QUALITY_RULES = `內容品質規則（每句都要符合）：
+- 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
+- 禁用「先否定再肯定」句型：不是A而是B、不只是A更是B、不應該A而應該B。
+- 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。`;
+
+function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string): string {
+  const parts: string[] = [];
+  // 使用者寫作規則排最前面，確保模型第一眼就看到且優先執行
+  if (sectionOverride.trim()) {
+    parts.push(`【使用者指定寫作規則 — 最高優先，必須在每一句話中完全體現，不得打折扣】\n${sectionOverride.trim()}`);
+  }
+  if (brandDescription.trim()) {
+    parts.push(`【品牌背景資訊 — 只作為事實依據，不得捏造超出此範圍的內容】\n${brandDescription.trim()}`);
+  }
+  if (clientWritingRules.trim()) {
+    parts.push(`【客戶寫作風格 — 高優先，若與使用者指定規則無衝突則一起遵守】\n${clientWritingRules.trim()}`);
+  }
+  const guideText = [writingGuide.trim(), QUALITY_RULES].filter(Boolean).join('\n\n');
+  parts.push(`【全域寫作規則】\n${guideText}`);
+  return parts.join('\n\n');
+}
+
+// 小模型在長對話下會忽略 system message 的風格規則，必須把規則原文重申在最後一則訊息結尾
+function buildPriorityReminder(sectionOverride: string, clientWritingRules: string): string {
+  if (!sectionOverride.trim() && !clientWritingRules.trim()) return '';
+  const parts = ['【寫作規則重申 — 絕對優先，優先於上述所有寫法、語氣與品質要求】'];
+  if (clientWritingRules.trim()) parts.push(`客戶寫作風格：\n${clientWritingRules.trim()}`);
+  if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（最高優先，逐字執行，不得淡化或省略）：\n${sectionOverride.trim()}`);
+  parts.push('輸出前自我檢查：若任何一段沒有完整體現上述規則，該輸出視為錯誤，必須重寫後再輸出。');
+  return '\n\n' + parts.join('\n\n');
+}
+
+// CommonMark 不解析「**注意：**內容」這種粗體內含結尾標點又緊接文字的寫法（** 會原樣顯示），把標點移出粗體
+function normalizeBoldPunctuation(md: string): string {
+  return md.replace(/\*\*([^*\n]+?)([：:，。、；！？]+)\*\*(?=\S)/g, '**$1**$2');
 }
 
 function buildProofreadPrompt(article: string) {
@@ -338,10 +359,9 @@ function AutoTA({ value, onChange, placeholder, className }: {
 
 // ── PromptEditModal ───────────────────────────────────────────────────
 
-function PromptEditModal({ defaultText, currentOverride, readonlyNote, onSave, onClose }: {
+function PromptEditModal({ defaultText, currentOverride, onSave, onClose }: {
   defaultText: string;
   currentOverride: string;
-  readonlyNote?: string;
   onSave: (text: string | null) => void;
   onClose: () => void;
 }) {
@@ -372,12 +392,6 @@ function PromptEditModal({ defaultText, currentOverride, readonlyNote, onSave, o
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          {readonlyNote?.trim() && (
-            <div className="px-3 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-              <p className="text-xs font-semibold text-emerald-700 mb-1.5">客戶寫作規則（自動套用，唯讀）</p>
-              <p className="text-xs text-emerald-800 whitespace-pre-wrap leading-relaxed">{readonlyNote.trim()}</p>
-            </div>
-          )}
           <AutoTA
             value={draft}
             onChange={setDraft}
@@ -394,6 +408,108 @@ function PromptEditModal({ defaultText, currentOverride, readonlyNote, onSave, o
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors text-gray-600">取消</button>
             <button onClick={handleSave} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">儲存個人版</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SystemPromptModal（Stage 3 寫作規則 = 完整 system prompt）─────────
+
+function SystemPromptModal({ writingGuide, clientWritingRules, brandDescription, currentOverride, onSave, onClose }: {
+  writingGuide: string;
+  clientWritingRules: string;
+  brandDescription: string;
+  currentOverride: string;
+  onSave: (text: string | null) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(currentOverride);
+  const [copied, setCopied] = useState(false);
+  const preview = buildSystemMessage(draft, brandDescription, clientWritingRules, writingGuide);
+
+  function handleSave() {
+    onSave(draft.trim() || null);
+    onClose();
+  }
+
+  function copyPreview() {
+    navigator.clipboard.writeText(preview);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">段落寫作規則（System Prompt）</p>
+            <p className="text-xs text-gray-400 mt-0.5">每次產生段落時，以下內容會依此順序組合成一個 system prompt 送給模型。</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {draft.trim() !== '' && <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">已設定個人規則</span>}
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 text-lg leading-none">×</button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {/* 1. 個人額外規則（可編輯） */}
+          <div className="px-3 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-xs font-semibold text-amber-700 mb-1.5">① 個人額外規則（最高優先，可編輯）</p>
+            <AutoTA
+              value={draft}
+              onChange={setDraft}
+              placeholder="留空＝不加入。輸入後會放在 system prompt 最前面，優先於客戶與全域規則。"
+              className="px-3 py-2.5 border border-amber-200 rounded-lg text-xs font-mono bg-white min-h-[80px] focus:outline-none focus:ring-2 focus:ring-amber-300 text-gray-700"
+            />
+          </div>
+
+          {/* 2. 品牌背景（唯讀） */}
+          <div className="px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl">
+            <p className="text-xs font-semibold text-gray-600 mb-1.5">② 品牌背景資訊（唯讀，來自客戶設定）</p>
+            {brandDescription.trim()
+              ? <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{brandDescription.trim()}</p>
+              : <p className="text-xs text-gray-400">未填寫 — 不會加入 system prompt</p>}
+          </div>
+
+          {/* 3. 客戶寫作風格（唯讀） */}
+          <div className="px-3 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <p className="text-xs font-semibold text-blue-700 mb-1.5">③ 客戶寫作風格（唯讀，來自客戶設定）</p>
+            {clientWritingRules.trim()
+              ? <p className="text-xs text-blue-900 whitespace-pre-wrap leading-relaxed">{clientWritingRules.trim()}</p>
+              : <p className="text-xs text-gray-400">未選擇客戶 — 不會加入 system prompt</p>}
+          </div>
+
+          {/* 4. 全域寫作規則（唯讀） */}
+          <div className="px-3 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <p className="text-xs font-semibold text-emerald-700 mb-1.5">④ 全域寫作規則（唯讀，來自全域設定＋內建品質規則）</p>
+            <p className="text-xs text-emerald-900 whitespace-pre-wrap leading-relaxed">{[writingGuide.trim(), QUALITY_RULES].filter(Boolean).join('\n\n')}</p>
+          </div>
+
+          {/* 完整組合預覽 */}
+          <div className="px-3 py-3 bg-gray-900 rounded-xl">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold text-gray-300">完整 System Prompt（實際送出內容，{preview.length} 字）</p>
+              <button onClick={copyPreview} className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors">
+                {copied ? '已複製 ✓' : '複製'}
+              </button>
+            </div>
+            <pre className="text-xs text-gray-100 whitespace-pre-wrap leading-relaxed font-mono max-h-60 overflow-y-auto">{preview}</pre>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          <button
+            onClick={() => setDraft('')}
+            className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+          >
+            清除個人規則
+          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors text-gray-600">取消</button>
+            <button onClick={handleSave} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">儲存</button>
           </div>
         </div>
       </div>
@@ -1007,6 +1123,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   const [proofError, setProofError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [showSectionPromptModal, setShowSectionPromptModal] = useState(false);
+  const [showStructure, setShowStructure] = useState(false);
 
   const outlineText = sections.map(s => `## ${s.h2}` + (s.h3s.length ? '\n' + s.h3s.map(h => `### ${h}`).join('\n') : '')).join('\n\n');
   const fullArticle = sections.filter(s => s.content.trim()).map(s => {
@@ -1020,22 +1137,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   const doneCount = sections.filter(s => s.content.trim()).length;
   const anyGenerating = sections.some(s => s.generating);
 
-  function buildSystemMessage(): string {
-    const parts: string[] = [];
-    if (brandDescription.trim()) {
-      parts.push(`【品牌背景資訊 — 只作為事實依據，不得捏造超出此範圍的內容】\n${brandDescription.trim()}`);
-    }
-    if (clientWritingRules.trim()) {
-      parts.push(`【客戶寫作風格 — 最高優先級，從第一句到最後一句全面套用】
-這是整體語氣與措辭的設定，必須貫穿每一句話，不是在結尾插詞。
-${clientWritingRules.trim()}`);
-    }
-    if (writingGuide.trim()) {
-      parts.push(`【全域寫作規則 — 每段落強制遵守】\n${writingGuide.trim()}`);
-    }
-    return parts.join('\n\n');
-  }
-
   async function generateSection(id: string) {
     const sec = sections.find(s => s.id === id);
     if (!sec) return;
@@ -1046,11 +1147,11 @@ ${clientWritingRules.trim()}`);
         .filter(s => s.id !== id && s.content.trim())
         .map(s => `## ${s.h2}\n${s.content.trim().slice(0, 400)}`)
         .join('\n\n---\n\n');
-      const basePrompt = buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, writingGuide, sectionOverride, clientWritingRules, completedContext, brandDescription);
-      const finalPrompt = sec.generateTable
+      const basePrompt = buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, completedContext);
+      const finalPrompt = (sec.generateTable
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
-        : basePrompt;
-      const sys = buildSystemMessage();
+        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules);
+      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
         ...sysMsg,
@@ -1061,7 +1162,7 @@ ${clientWritingRules.trim()}`);
         { role: 'user', content: finalPrompt },
       ], chunk => setSections(prev => prev.map(s => s.id === id ? { ...s, content: s.content + chunk } : s)));
     } catch (e) { setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '產生失敗' })); }
-    finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false } : s)); }
+    finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: normalizeBoldPunctuation(s.content) } : s)); }
   }
 
   async function reviseSection(id: string) {
@@ -1071,7 +1172,7 @@ ${clientWritingRules.trim()}`);
     setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '', revisePrompt: '', isEditing: false } : s));
     setErrors(prev => ({ ...prev, [id]: '' }));
     try {
-      const sys = buildSystemMessage();
+      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
         ...sysMsg,
@@ -1079,10 +1180,10 @@ ${clientWritingRules.trim()}`);
         { role: 'assistant', content: analysisResult },
         { role: 'user', content: outlineMsg },
         { role: 'assistant', content: outlineResult },
-        { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${sec.content}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。` },
+        { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${sec.content}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules)}` },
       ], chunk => setSections(prev => prev.map(s => s.id === id ? { ...s, content: s.content + chunk } : s)));
     } catch (e) { setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '修改失敗' })); }
-    finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false } : s)); }
+    finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: normalizeBoldPunctuation(s.content) } : s)); }
   }
 
   async function generateAll() {
@@ -1105,6 +1206,12 @@ ${clientWritingRules.trim()}`);
   return (
     <div className="flex flex-col h-full">
       <AnalysisNote analysisResult={analysisResult} />
+      <StructurePanel
+        open={showStructure}
+        onClose={() => setShowStructure(false)}
+        sections={sections}
+        onUpdate={setSections}
+      />
 
       {/* Sticky toolbar */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
@@ -1133,6 +1240,13 @@ ${clientWritingRules.trim()}`);
             </button>
           )}
           <button
+            onClick={() => setShowStructure(v => !v)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${showStructure ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            結構
+          </button>
+          <button
             onClick={() => setShowSectionPromptModal(true)}
             title="查看／修改段落寫作規則"
             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${sectionOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
@@ -1147,10 +1261,11 @@ ${clientWritingRules.trim()}`);
       </div>
 
       {showSectionPromptModal && (
-        <PromptEditModal
-          defaultText={PROMPT_DEFAULTS.section}
+        <SystemPromptModal
+          writingGuide={writingGuide}
+          clientWritingRules={clientWritingRules}
+          brandDescription={brandDescription}
           currentOverride={sectionOverride}
-          readonlyNote={clientWritingRules}
           onSave={onSaveSectionOverride}
           onClose={() => setShowSectionPromptModal(false)}
         />
@@ -1275,11 +1390,9 @@ ${clientWritingRules.trim()}`);
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
                         placeholder="撰寫中…"
                         className="px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono bg-white min-h-[140px] focus:outline-none focus:ring-2 focus:ring-gray-300" />
-                    : <RichEditor
+                    : <SectionBlockEditor
                         value={sec.content}
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
-                        placeholder="開始編輯…"
-                        minHeight="140px"
                         editable={sec.isEditing}
                       />
                   }
