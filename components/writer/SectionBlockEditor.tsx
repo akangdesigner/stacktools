@@ -5,41 +5,249 @@ import RichEditor from './RichEditor';
 
 function uid() { return Math.random().toString(36).slice(2); }
 
-type H3Block = { id: string; heading: string; body: string };
-type InsertType = 'link' | 'image';
+// ── ContentItem types ─────────────────────────────────────────────────
 
-function parseBlocks(md: string): { preamble: string; blocks: H3Block[] } {
+type H3Item    = { kind: 'h3';    id: string; heading: string; body: string };
+type ImageItem = { kind: 'image'; id: string; alt: string; src: string; raw: string };
+type LinkItem  = { kind: 'link';  id: string; label: string; url: string; raw: string };
+type ContentItem = H3Item | ImageItem | LinkItem;
+
+function parseContent(md: string): { preamble: string; items: ContentItem[] } {
   const lines = md.split('\n');
+  const items: ContentItem[] = [];
   const preambleLines: string[] = [];
-  const blocks: H3Block[] = [];
-  let cur: { heading: string; bodyLines: string[] } | null = null;
-  for (const line of lines) {
-    const m = line.match(/^###\s+(.+)/);
-    if (m) {
-      if (cur) blocks.push({ id: uid(), heading: cur.heading, body: cur.bodyLines.join('\n').trimEnd() });
-      cur = { heading: m[1].trim(), bodyLines: [] };
-    } else if (cur) {
-      cur.bodyLines.push(line);
-    } else {
-      preambleLines.push(line);
-    }
+  let h3Heading: string | null = null;
+  let h3BodyLines: string[] = [];
+
+  function pushH3() {
+    if (h3Heading === null) return;
+    items.push({ kind: 'h3', id: uid(), heading: h3Heading, body: h3BodyLines.join('\n').trimEnd() });
+    h3Heading = null;
+    h3BodyLines = [];
   }
-  if (cur) blocks.push({ id: uid(), heading: cur.heading, body: cur.bodyLines.join('\n').trimEnd() });
-  return { preamble: preambleLines.join('\n').trimEnd(), blocks };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      if (h3Heading !== null) h3BodyLines.push(line);
+      else if (preambleLines.length) preambleLines.push(line);
+      continue;
+    }
+
+    // H1/H2: stays in current context
+    if (/^#{1,2}\s/.test(trimmed)) {
+      if (h3Heading !== null) h3BodyLines.push(line);
+      else preambleLines.push(line);
+      continue;
+    }
+
+    // H3: flush previous, start new
+    if (/^###\s+/.test(trimmed)) {
+      pushH3();
+      h3Heading = trimmed.replace(/^###\s+/, '').trim();
+      continue;
+    }
+
+    // Image: always standalone
+    if (/^!\[/.test(trimmed)) {
+      pushH3();
+      const m = trimmed.match(/^!\[([^\]]*)\]\(([^)]*)\)/);
+      items.push({ kind: 'image', id: uid(), alt: m?.[1] ?? '圖片', src: m?.[2] ?? '', raw: line });
+      continue;
+    }
+
+    // Extended reading link: always standalone
+    if (/\*\*延伸閱讀/.test(trimmed)) {
+      pushH3();
+      const m = trimmed.match(/\[([^\]]+)\]\(([^)]+)\)/);
+      items.push({ kind: 'link', id: uid(), label: m?.[1] ?? '延伸閱讀', url: m?.[2] ?? '', raw: line });
+      continue;
+    }
+
+    // Regular content
+    if (h3Heading !== null) h3BodyLines.push(line);
+    else preambleLines.push(line);
+  }
+
+  pushH3();
+  return { preamble: preambleLines.join('\n').trimEnd(), items };
 }
 
-function serializeBlocks(preamble: string, blocks: H3Block[]): string {
+function serializeContent(preamble: string, items: ContentItem[]): string {
   const parts: string[] = [];
   if (preamble.trim()) parts.push(preamble.trim());
-  for (const b of blocks) {
-    parts.push(`### ${b.heading}${b.body.trim() ? '\n\n' + b.body.trim() : ''}`);
+  for (const item of items) {
+    if (item.kind === 'h3') {
+      parts.push(`### ${item.heading}${item.body.trim() ? '\n\n' + item.body.trim() : ''}`);
+    } else {
+      parts.push(item.raw);
+    }
   }
   return parts.join('\n\n');
 }
 
+// Parse a freshly-inserted snippet into ContentItem(s)
+function parseInserted(md: string): ContentItem[] {
+  const trimmed = md.trim();
+  if (!trimmed) return [];
+  if (/^###\s+/.test(trimmed)) {
+    const m = trimmed.match(/^###\s+([^\n]+)/);
+    const heading = m?.[1]?.trim() ?? '新小節';
+    const body = trimmed.includes('\n') ? trimmed.slice(trimmed.indexOf('\n') + 1).trim() : '';
+    return [{ kind: 'h3', id: uid(), heading, body }];
+  }
+  if (/^!\[/.test(trimmed)) {
+    const m = trimmed.match(/^!\[([^\]]*)\]\(([^)]*)\)/);
+    return [{ kind: 'image', id: uid(), alt: m?.[1] ?? '圖片', src: m?.[2] ?? '', raw: trimmed }];
+  }
+  if (/\*\*延伸閱讀/.test(trimmed)) {
+    const m = trimmed.match(/\[([^\]]+)\]\(([^)]+)\)/);
+    return [{ kind: 'link', id: uid(), label: m?.[1] ?? '延伸閱讀', url: m?.[2] ?? '', raw: trimmed }];
+  }
+  return [];
+}
+
+// ── ImageCard ─────────────────────────────────────────────────────────
+
+function ImageCard({ item, onReplace, onDelete }: {
+  item: ImageItem;
+  onReplace: (raw: string) => void;
+  onDelete: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+        onReplace(`![${item.alt}](${canvas.toDataURL('image/jpeg', 0.85)})`);
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div className="px-4 py-3 group/img">
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
+        {item.src
+          ? <img src={item.src} alt={item.alt} className="max-w-full h-auto block mx-auto" style={{ maxHeight: '320px', objectFit: 'contain' }} />
+          : <p className="text-xs text-gray-400 px-3 py-2">🖼️ {item.alt}</p>
+        }
+        {item.alt && item.alt !== '圖片' && item.src && (
+          <p className="text-xs text-gray-400 text-center py-1.5 border-t border-gray-100">{item.alt}</p>
+        )}
+        {/* hover 控制列 */}
+        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity">
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            className="h-6 px-2 flex items-center rounded-full bg-black/40 text-white text-xs hover:bg-black/70 transition-colors">
+            換圖
+          </button>
+          <button type="button" onClick={onDelete}
+            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/40 text-white text-xs hover:bg-red-500/80 transition-colors">
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LinkCard ──────────────────────────────────────────────────────────
+
+function LinkCard({ item, onUpdate, onDelete }: {
+  item: LinkItem;
+  onUpdate: (raw: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [label, setLabel] = useState(item.label);
+  const [url, setUrl]   = useState(item.url);
+
+  function confirm() {
+    if (!url.trim()) return;
+    onUpdate(`**延伸閱讀：**[${label || url}](${url})`);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="px-4 py-2.5">
+        <div className="flex flex-col gap-2 px-3.5 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <p className="text-xs font-semibold text-amber-700">編輯延伸閱讀</p>
+          <input
+            autoFocus
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            placeholder="連結標題"
+            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white"
+          />
+          <input
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            placeholder="https://..."
+            onKeyDown={e => e.key === 'Enter' && confirm()}
+            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 bg-white"
+          />
+          <div className="flex gap-2">
+            <button type="button" onClick={confirm} disabled={!url.trim()}
+              className="flex-1 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40 transition-colors">
+              儲存
+            </button>
+            <button type="button" onClick={() => { setLabel(item.label); setUrl(item.url); setEditing(false); }}
+              className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors">
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-2.5 group/link">
+      <div className="flex items-center gap-2.5 px-3.5 py-2.5 bg-amber-50 border border-amber-100 rounded-xl">
+        <span className="text-sm shrink-0">🔗</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-amber-700 mb-0.5">延伸閱讀</p>
+          <a href={item.url} target="_blank" rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:text-blue-800 underline block truncate">{item.label}</a>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover/link:opacity-100 transition-opacity shrink-0">
+          <button type="button" onClick={() => setEditing(true)}
+            className="h-5 px-2 text-xs text-amber-600 hover:text-amber-900 hover:bg-amber-100 rounded-full transition-colors">
+            編輯
+          </button>
+          <button type="button" onClick={onDelete}
+            className="w-5 h-5 flex items-center justify-center rounded-full text-amber-300 hover:text-red-400 hover:bg-red-50 transition-colors text-sm">
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── InsertDivider ─────────────────────────────────────────────────────
 
-function InsertDivider({ onInsert }: { onInsert: (md: string) => void }) {
+function InsertDivider({ onInsert, onInsertH2 }: { onInsert: (md: string) => void; onInsertH2?: () => void }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<'pick' | 'link'>('pick');
   const [linkText, setLinkText] = useState('');
@@ -72,16 +280,42 @@ function InsertDivider({ onInsert }: { onInsert: (md: string) => void }) {
   function handleImageFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    onInsert(`![圖片](${url})`);
-    setOpen(false);
-    // reset input so the same file can be re-selected
     e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+        onInsert(`![圖片](${canvas.toDataURL('image/jpeg', 0.85)})`);
+        setOpen(false);
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
   }
 
   return (
     <div ref={containerRef} className="relative flex items-center justify-center py-2 group/divider">
-      <div className="absolute inset-x-0 top-1/2 h-px bg-gray-100 group-hover/divider:bg-blue-100 transition-colors" />
+      <div className="absolute left-4 right-4 top-1/2 h-px bg-gray-200 transition-colors" />
+      {/* file input 常駐 DOM，確保 ref 穩定可重複選檔 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageFile}
+      />
       <button
         type="button"
         onClick={toggle}
@@ -95,30 +329,42 @@ function InsertDivider({ onInsert }: { onInsert: (md: string) => void }) {
       {open && (
         <div className="absolute top-7 left-1/2 -translate-x-1/2 z-30 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden w-60">
           {step === 'pick' && (
-            <div className="flex p-1.5 gap-1">
-              <button type="button"
-                onClick={() => setStep('link')}
-                className="flex-1 px-2 py-3 text-xs text-gray-700 hover:bg-blue-50 rounded-lg flex flex-col items-center gap-1 transition-colors"
-              >
-                <span className="text-base">🔗</span>
-                <span className="font-medium">延伸閱讀連結</span>
-              </button>
-              <button type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 px-2 py-3 text-xs text-gray-700 hover:bg-blue-50 rounded-lg flex flex-col items-center gap-1 transition-colors"
-              >
-                <span className="text-base">🖼️</span>
-                <span className="font-medium">上傳圖片</span>
-              </button>
-              {/* hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageFile}
-              />
-            </div>
+            <>
+              <div className="flex p-1.5 gap-1">
+                <button type="button"
+                  onClick={() => setStep('link')}
+                  className="flex-1 px-2 py-3 text-xs text-gray-700 hover:bg-blue-50 rounded-lg flex flex-col items-center gap-1 transition-colors"
+                >
+                  <span className="text-base">🔗</span>
+                  <span className="font-medium">延伸閱讀連結</span>
+                </button>
+                <button type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 px-2 py-3 text-xs text-gray-700 hover:bg-blue-50 rounded-lg flex flex-col items-center gap-1 transition-colors"
+                >
+                  <span className="text-base">🖼️</span>
+                  <span className="font-medium">上傳圖片</span>
+                </button>
+              </div>
+              <div className="flex p-1.5 pt-0 gap-1 border-t border-gray-100 mt-0">
+                <button type="button"
+                  onClick={() => { onInsert('### 新小節\n\n'); setOpen(false); }}
+                  className="flex-1 px-2 py-2.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <span className="px-1 py-0.5 bg-gray-100 text-gray-500 text-xs font-bold rounded shrink-0">H3</span>
+                  新增小節
+                </button>
+                {onInsertH2 && (
+                  <button type="button"
+                    onClick={() => { onInsertH2(); setOpen(false); }}
+                    className="flex-1 px-2 py-2.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-2 transition-colors"
+                  >
+                    <span className="px-1 py-0.5 bg-blue-50 text-blue-600 text-xs font-bold rounded shrink-0">H2</span>
+                    新增段落
+                  </button>
+                )}
+              </div>
+            </>
           )}
 
           {step === 'link' && (
@@ -162,50 +408,71 @@ function InsertDivider({ onInsert }: { onInsert: (md: string) => void }) {
 
 // ── SectionBlockEditor ────────────────────────────────────────────────
 
-export default function SectionBlockEditor({ value, onChange, editable = false }: {
+export default function SectionBlockEditor({ value, onChange, editable = false, onInsertH2 }: {
   value: string;
   onChange: (v: string) => void;
   editable?: boolean;
+  onInsertH2?: () => void;
 }) {
   const [preamble, setPreamble] = useState('');
-  const [blocks, setBlocks] = useState<H3Block[]>([]);
+  const [items, setItems] = useState<ContentItem[]>([]);
   const lastSer = useRef<string | null>(null);
 
   useEffect(() => {
     if (value !== lastSer.current) {
-      const { preamble: p, blocks: b } = parseBlocks(value);
-      setPreamble(p);
-      setBlocks(b);
+      const parsed = parseContent(value);
+      setPreamble(parsed.preamble);
+      setItems(parsed.items);
       lastSer.current = value;
     }
   }, [value]);
 
-  function insertAfter(blockId: string, md: string) {
-    // Compute next blocks outside of setState to avoid calling onChange during render
-    const next = blocks.map(b =>
-      b.id === blockId ? { ...b, body: b.body.trim() + '\n\n' + md } : b
-    );
-    const serialized = serializeBlocks(preamble, next);
+  function applyChange(newPreamble: string, newItems: ContentItem[]) {
+    const serialized = serializeContent(newPreamble, newItems);
     lastSer.current = serialized;
-    setBlocks(next);
+    setPreamble(newPreamble);
+    setItems(newItems);
     onChange(serialized);
   }
 
-  // editable mode or no H3 blocks → single full RichEditor
-  if (editable || blocks.length === 0) {
+  function deleteItem(itemId: string) {
+    applyChange(preamble, items.filter(it => it.id !== itemId));
+  }
+
+  function updateItem(itemId: string, raw: string) {
+    const parsed = parseInserted(raw);
+    if (!parsed.length) return;
+    applyChange(preamble, items.map(it => it.id === itemId ? { ...parsed[0], id: itemId } : it));
+  }
+
+  function insertAfterItem(itemId: string | null, md: string) {
+    const newItems = parseInserted(md);
+    if (!newItems.length) return;
+    if (itemId === null) {
+      // 插入到 preamble 之後、所有 items 之前
+      applyChange(preamble, [...newItems, ...items]);
+    } else {
+      const idx = items.findIndex(it => it.id === itemId);
+      const next = [...items];
+      next.splice(idx + 1, 0, ...newItems);
+      applyChange(preamble, next);
+    }
+  }
+
+  // 編輯模式 → 單一完整 RichEditor
+  if (editable) {
     return (
       <RichEditor
         value={value}
         onChange={onChange}
         placeholder="開始編輯…"
         minHeight="140px"
-        editable={editable}
+        editable={true}
       />
     );
   }
 
-  // Strip ## heading lines from preamble (already shown in card header)
-  const displayPreamble = preamble.split('\n').filter(l => !/^##\s/.test(l)).join('\n').trim();
+  const displayPreamble = preamble.trim();
 
   return (
     <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
@@ -214,19 +481,47 @@ export default function SectionBlockEditor({ value, onChange, editable = false }
           <RichEditor value={displayPreamble} onChange={() => {}} editable={false} minHeight="auto" />
         </div>
       )}
-      {blocks.map(block => (
-        <div key={block.id} className="border-b border-gray-100 last:border-b-0">
-          <div className="px-4 pt-3 pb-1">
-            <RichEditor
-              value={`### ${block.heading}\n\n${block.body}`}
-              onChange={() => {}}
-              editable={false}
-              minHeight="60px"
+
+      {/* H2 下方 InsertDivider */}
+      <InsertDivider onInsert={md => insertAfterItem(null, md)} onInsertH2={onInsertH2} />
+
+      {items.map(item => (
+        <div key={item.id} className="border-b border-gray-100 last:border-b-0">
+
+          {item.kind === 'h3' && (
+            <div className="px-4 pt-3 pb-1">
+              <RichEditor
+                value={`### ${item.heading}\n\n${item.body}`}
+                onChange={() => {}}
+                editable={false}
+                minHeight="60px"
+              />
+            </div>
+          )}
+
+          {item.kind === 'image' && (
+            <ImageCard
+              item={item}
+              onReplace={raw => updateItem(item.id, raw)}
+              onDelete={() => deleteItem(item.id)}
             />
-          </div>
-          <InsertDivider onInsert={md => insertAfter(block.id, md)} />
+          )}
+
+          {item.kind === 'link' && (
+            <LinkCard
+              item={item}
+              onUpdate={raw => updateItem(item.id, raw)}
+              onDelete={() => deleteItem(item.id)}
+            />
+          )}
+
+          <InsertDivider onInsert={md => insertAfterItem(item.id, md)} onInsertH2={onInsertH2} />
         </div>
       ))}
+
+      {items.length === 0 && !displayPreamble && (
+        <div className="px-4 py-6 text-center text-xs text-gray-300">尚無內容</div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import StructurePanel from '@/components/writer/StructurePanel';
 
 type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 type SearchResult = { title: string; url: string; content: string };
-type Stage = 'analyze' | 'outline' | 'write';
+type Stage = 'analyze' | 'outline' | 'write' | 'review';
 
 type PromptStyle = 'info' | 'scene' | 'faq' | 'compare' | 'conclusion';
 
@@ -36,8 +36,6 @@ const DEPTH_INSTRUCTIONS: Record<ContentDepth, string> = {
   detailed: '篇幅深度：每個 H3 子節寫 4–6 句，包含具體案例、數據、操作細節或比較，充分說明不跳過。',
 };
 
-type RelatedLink = { text: string; url: string };
-
 type Section = {
   id: string;
   h2: string;
@@ -46,10 +44,9 @@ type Section = {
   generating: boolean;
   promptStyle: PromptStyle;
   generateTable: boolean;
-  relatedLinks: RelatedLink[];
-  showRelatedLinks: boolean;
   isEditing: boolean;
   revisePrompt: string;
+  reviseQuotes: string[];
   contentDepth: ContentDepth;
 };
 
@@ -216,8 +213,44 @@ function normalizeBoldPunctuation(md: string): string {
   return md.replace(/\*\*([^*\n]+?)([：:，。、；！？]+)\*\*(?=\S)/g, '**$1**$2');
 }
 
-function buildProofreadPrompt(article: string) {
-  return `以下是 SEO 文章草稿，請以「校稿編輯」角色條列修改建議（不要直接改稿）：\n\n${article}\n\n請從以下角度審查，每條建議標明段落位置：\n1. 資訊正確性\n2. 段落邏輯\n3. 低資訊句\n4. 語氣問題\n5. SEO 標題品質\n6. 品牌描述`;
+function buildReviewPrompt(article: string, opts: {
+  title: string; keyword: string;
+  writingGuide: string; clientWritingRules: string;
+  sectionOverride: string; brandDescription: string;
+}): string {
+  const ruleBlocks = [
+    opts.sectionOverride.trim() && `【使用者指定寫作規則 — 最高優先】\n${opts.sectionOverride.trim()}`,
+    opts.brandDescription.trim() && `【品牌背景資訊 — 不得捏造超出此範圍的內容】\n${opts.brandDescription.trim()}`,
+    opts.clientWritingRules.trim() && `【客戶寫作風格規則】\n${opts.clientWritingRules.trim()}`,
+    `【內容品質規則】\n${QUALITY_RULES}`,
+    opts.writingGuide.trim() && `【全域寫作規則】\n${opts.writingGuide.trim()}`,
+  ].filter(Boolean).join('\n\n');
+  return `你是一位嚴格的 SEO 文章審稿員。請對照下列寫作要求，找出文章需要修改的地方。
+
+文章標題：${opts.title}
+目標關鍵字：${opts.keyword}
+
+寫作要求：
+${ruleBlocks}
+
+---
+
+待審稿文章：
+
+${article}
+
+---
+
+請先輸出整體評分（格式：「整體評分：X/10 — 說明」），再對每個需要修改的地方輸出以下格式區塊：
+
+---SUGGESTION---
+SECTION: （問題所在的 H2 段落名稱）
+ISSUE: （一句話說明問題）
+OLD: （從文章精確引用需要修改的原文字句，必須與文章一字不差）
+NEW: （修改後的建議文字；若整句要刪除則此欄完全空白，不要填任何說明文字）
+---END---
+
+規定：OLD 必須是文章的精確引用，不可改動；若刪除整句則 NEW 欄留空；只列真正重要的問題；繁體中文輸出。`;
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────
@@ -277,10 +310,9 @@ function parseOutline(text: string): Section[] {
         generating: false,
         promptStyle: 'info', // 暫定，解析完後統一套用 detectStyle
         generateTable: /比較|差異|優缺點|選購指南|推薦/.test(h2text),
-        relatedLinks: [],
-        showRelatedLinks: false,
         isEditing: false,
         revisePrompt: '',
+        reviseQuotes: [],
         contentDepth: 'standard',
       };
     } else if (h3 && cur) {
@@ -333,8 +365,20 @@ function Spinner() {
   );
 }
 
-function Err({ msg }: { msg: string }) {
-  return <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{msg}</div>;
+function Err({ msg, onDismiss }: { msg: string; onDismiss?: () => void }) {
+  return (
+    <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+      <span className="shrink-0 mt-0.5">⚠️</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-amber-900 mb-1 text-xs">AI 無法執行此指令</p>
+        <p className="text-xs leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">{msg}</p>
+      </div>
+      {onDismiss && (
+        <button type="button" onClick={onDismiss}
+          className="shrink-0 w-5 h-5 flex items-center justify-center text-amber-400 hover:text-amber-700 text-base leading-none mt-0.5">×</button>
+      )}
+    </div>
+  );
 }
 
 function EditIcon() {
@@ -523,6 +567,7 @@ function Stepper({ stage }: { stage: Stage }) {
     { key: 'analyze', label: 'SEO 分析' },
     { key: 'outline', label: '文章架構' },
     { key: 'write', label: '段落撰寫' },
+    { key: 'review', label: 'AI 校稿' },
   ];
   const idx = steps.findIndex(s => s.key === stage);
   return (
@@ -895,7 +940,7 @@ function AnalysisNote({ analysisResult }: { analysisResult: string }) {
       <button
         onClick={() => setOpen(v => !v)}
         title="SEO 分析筆記"
-        className={`fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-amber-400 hover:bg-amber-500 text-white py-4 px-2 rounded-l-xl shadow-lg transition-all duration-200 ${open ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`fixed right-0 top-[57%] -translate-y-1/2 z-40 bg-amber-400 hover:bg-amber-500 text-white py-4 px-2 rounded-l-xl shadow-lg transition-all duration-200 ${open ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         style={{ writingMode: 'vertical-rl' }}
       >
         <span className="text-xs font-semibold tracking-wide">SEO 筆記</span>
@@ -1105,7 +1150,7 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
 
 // ── Stage 3 ───────────────────────────────────────────────────────────
 
-function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, sectionOverride, onSaveSectionOverride, onBack }: {
+function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, sectionOverride, onSaveSectionOverride, onBack, onNext }: {
   title: string; keyword: string;
   analyzeMsg: string; analysisResult: string;
   outlineMsg: string; outlineResult: string;
@@ -1115,25 +1160,63 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   sectionOverride: string;
   onSaveSectionOverride: (text: string | null) => void;
   onBack: () => void;
+  onNext: (sections: Section[]) => void;
 }) {
   const [sections, setSections] = useState<Section[]>(initSections);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [proofread, setProofread] = useState('');
-  const [proofreading, setProofreading] = useState(false);
-  const [proofError, setProofError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [showSectionPromptModal, setShowSectionPromptModal] = useState(false);
   const [showStructure, setShowStructure] = useState(false);
+  const [atMenuSecId, setAtMenuSecId] = useState<string | null>(null);
+
+  function getBlockItems(content: string): { label: string; full: string }[] {
+    const items: { label: string; full: string }[] = [];
+    const lines = content.split('\n');
+    let buf: string[] = [];
+    function flushBuf() {
+      const text = buf.join('\n').trim();
+      if (text) items.push({ label: text.slice(0, 32) + (text.length > 32 ? '…' : ''), full: text });
+      buf = [];
+    }
+    for (const line of lines) {
+      if (/^#{1,2}\s/.test(line)) continue;
+      if (/^###\s+(.+)/.test(line)) {
+        flushBuf();
+        const h3 = line.replace(/^###\s+/, '').trim();
+        items.push({ label: `H3 ${h3}`, full: h3 });
+      } else if (line.trim()) {
+        buf.push(line);
+      } else {
+        flushBuf();
+      }
+    }
+    flushBuf();
+    return items;
+  }
+
+  function insertSectionAfter(afterIdx: number) {
+    const newSec: Section = {
+      id: Math.random().toString(36).slice(2),
+      h2: '新段落',
+      h3s: [],
+      content: '',
+      generating: false,
+      promptStyle: 'info',
+      generateTable: false,
+      isEditing: false,
+      revisePrompt: '',
+      reviseQuotes: [],
+      contentDepth: 'standard',
+    };
+    setSections(prev => {
+      const next = [...prev];
+      next.splice(afterIdx + 1, 0, newSec);
+      return next;
+    });
+  }
 
   const outlineText = sections.map(s => `## ${s.h2}` + (s.h3s.length ? '\n' + s.h3s.map(h => `### ${h}`).join('\n') : '')).join('\n\n');
-  const fullArticle = sections.filter(s => s.content.trim()).map(s => {
-    let text = s.content.trim();
-    const links = s.relatedLinks.filter(l => l.text.trim() || l.url.trim());
-    if (links.length > 0) {
-      text += '\n\n延伸閱讀：\n' + links.map(l => `- [${l.text}](${l.url})`).join('\n');
-    }
-    return text;
-  }).join('\n\n');
+  const fullArticle = sections.filter(s => s.content.trim()).map(s => s.content.trim()).join('\n\n');
   const doneCount = sections.filter(s => s.content.trim()).length;
   const anyGenerating = sections.some(s => s.generating);
 
@@ -1169,21 +1252,84 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     const sec = sections.find(s => s.id === id);
     if (!sec || !sec.revisePrompt.trim()) return;
     const instruction = sec.revisePrompt.trim();
-    setSections(prev => prev.map(s => s.id === id ? { ...s, generating: true, content: '', revisePrompt: '', isEditing: false } : s));
+    const quotes = (sec.reviseQuotes ?? []).filter(q => q.trim());
+    const originalContent = sec.content;
     setErrors(prev => ({ ...prev, [id]: '' }));
-    try {
-      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide);
-      const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
-      await streamAPI([
-        ...sysMsg,
-        { role: 'user', content: analyzeMsg },
-        { role: 'assistant', content: analysisResult },
-        { role: 'user', content: outlineMsg },
-        { role: 'assistant', content: outlineResult },
-        { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${sec.content}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules)}` },
-      ], chunk => setSections(prev => prev.map(s => s.id === id ? { ...s, content: s.content + chunk } : s)));
-    } catch (e) { setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '修改失敗' })); }
-    finally { setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: normalizeBoldPunctuation(s.content) } : s)); }
+    const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide);
+    const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
+    const baseMessages = [
+      ...sysMsg,
+      { role: 'user' as const, content: analyzeMsg },
+      { role: 'assistant' as const, content: analysisResult },
+      { role: 'user' as const, content: outlineMsg },
+      { role: 'assistant' as const, content: outlineResult },
+    ];
+
+    function isAIRefusal(text: string): boolean {
+      return /^(我無法|抱歉|很抱歉|無法按照|無法執行|指令內容不明確)/.test(text.trim());
+    }
+
+    if (quotes.length > 0) {
+      // 目標段落修改：循序逐段 streaming，逐段即時 find-replace
+      setSections(prev => prev.map(s => s.id === id
+        ? { ...s, generating: true, revisePrompt: '', reviseQuotes: [], isEditing: false }
+        : s));
+      let currentContent = originalContent;
+      try {
+        for (const quote of quotes) {
+          let replacement = '';
+          await streamAPI([
+            ...baseMessages,
+            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules)}` },
+          ], chunk => {
+            replacement += chunk;
+            const partial = currentContent.includes(quote)
+              ? currentContent.replace(quote, replacement)
+              : currentContent + '\n\n' + replacement;
+            setSections(prev => prev.map(s => s.id === id ? { ...s, content: partial } : s));
+          });
+          const trimmed = replacement.trim();
+          if (isAIRefusal(trimmed)) {
+            setErrors(prev => ({ ...prev, [id]: trimmed }));
+            setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: currentContent } : s));
+            return;
+          }
+          currentContent = currentContent.includes(quote)
+            ? currentContent.replace(quote, trimmed)
+            : currentContent;
+        }
+        setSections(prev => prev.map(s => s.id === id
+          ? { ...s, generating: false, content: normalizeBoldPunctuation(currentContent) }
+          : s));
+      } catch (e) {
+        setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '修改失敗' }));
+        setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: currentContent } : s));
+      }
+    } else {
+      // 全段修改：清空並重新生成（streaming 顯示）
+      setSections(prev => prev.map(s => s.id === id
+        ? { ...s, generating: true, content: '', revisePrompt: '', reviseQuotes: [], isEditing: false }
+        : s));
+      let streamed = '';
+      try {
+        await streamAPI([
+          ...baseMessages,
+          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules)}` },
+        ], chunk => {
+          streamed += chunk;
+          setSections(prev => prev.map(s => s.id === id ? { ...s, content: streamed } : s));
+        });
+        if (isAIRefusal(streamed)) {
+          setErrors(prev => ({ ...prev, [id]: streamed.trim() }));
+          setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: originalContent } : s));
+        } else {
+          setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: normalizeBoldPunctuation(streamed) } : s));
+        }
+      } catch (e) {
+        setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : '修改失敗' }));
+        setSections(prev => prev.map(s => s.id === id ? { ...s, generating: false, content: originalContent } : s));
+      }
+    }
   }
 
   async function generateAll() {
@@ -1191,16 +1337,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     for (const s of pending) {
       await generateSection(s.id);
     }
-  }
-
-  async function runProofread() {
-    if (!fullArticle.trim()) return;
-    setProofread(''); setProofError(''); setProofreading(true);
-    try {
-      await streamAPI([{ role: 'user', content: buildProofreadPrompt(fullArticle) }],
-        chunk => setProofread(r => r + chunk));
-    } catch (e) { setProofError(e instanceof Error ? e.message : '校稿失敗'); }
-    finally { setProofreading(false); }
   }
 
   return (
@@ -1212,6 +1348,14 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
         sections={sections}
         onUpdate={setSections}
       />
+      {/* 結構右側 tab */}
+      <button
+        onClick={() => setShowStructure(v => !v)}
+        className={`fixed right-0 top-[44%] -translate-y-1/2 z-40 bg-gray-600 hover:bg-gray-700 text-white py-4 px-2 rounded-l-xl shadow-lg transition-all duration-200 ${showStructure ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        style={{ writingMode: 'vertical-rl' }}
+      >
+        <span className="text-xs font-semibold tracking-wide">文章結構</span>
+      </button>
 
       {/* Sticky toolbar */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
@@ -1233,19 +1377,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               複製全文
             </button>
           )}
-          {fullArticle && (
-            <button onClick={runProofread} disabled={proofreading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50">
-              {proofreading && <Spinner />}{proofreading ? '校稿中…' : '校稿'}
-            </button>
-          )}
-          <button
-            onClick={() => setShowStructure(v => !v)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${showStructure ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            結構
-          </button>
           <button
             onClick={() => setShowSectionPromptModal(true)}
             title="查看／修改段落寫作規則"
@@ -1275,12 +1406,12 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
         <div className="px-6 py-5 space-y-4">
 
           {/* Section cards */}
-          {sections.map(sec => (
-            <div key={sec.id} className={`border rounded-2xl overflow-hidden ${sec.content.trim() ? 'border-emerald-200' : 'border-gray-200'}`}>
+          {sections.map((sec, i) => (
+            <div key={sec.id} id={`sec-${sec.id}`} className={`border rounded-2xl overflow-hidden ${sec.content.trim() ? 'border-emerald-200' : 'border-gray-200'}`}>
               <div className={`flex items-start justify-between gap-4 px-5 py-3.5 ${sec.content.trim() ? 'bg-emerald-50/50' : 'bg-gray-50/50'}`}>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900">{sec.h2}</p>
-                  {sec.h3s.length > 0 && (
+                  <p className="text-sm font-semibold text-gray-500">{sec.h2}</p>
+                  {sec.h3s.length > 0 && !sec.content.trim() && (
                     <p className="text-xs text-gray-400 mt-0.5">{sec.h3s.map(h => `↳ ${h}`).join('   ')}</p>
                   )}
                 </div>
@@ -1324,13 +1455,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                     />
                     表格
                   </label>
-                  {/* 延伸閱讀 */}
-                  <button
-                    onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, showRelatedLinks: !s.showRelatedLinks } : s))}
-                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded-lg transition-colors ${sec.showRelatedLinks ? 'bg-blue-50 border-blue-300 text-blue-700' : sec.relatedLinks.length > 0 ? 'border-blue-200 text-blue-600' : 'border-gray-300 text-gray-500 hover:bg-white'}`}
-                  >
-                    延伸閱讀{sec.relatedLinks.length > 0 ? ` (${sec.relatedLinks.length})` : ' +'}
-                  </button>
                   {sec.content.trim() && !sec.generating && (
                     <button
                       onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, isEditing: !s.isEditing } : s))}
@@ -1348,43 +1472,14 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               </div>
 
 
-              {/* 延伸閱讀編輯器 */}
-              {sec.showRelatedLinks && (
-                <div className="px-5 py-4 border-t border-blue-100 bg-blue-50/30">
-                  <p className="text-xs font-medium text-blue-800 mb-2">延伸閱讀連結</p>
-                  <div className="space-y-2">
-                    {sec.relatedLinks.map((link, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <input
-                          value={link.text}
-                          onChange={e => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: s.relatedLinks.map((l, j) => j === i ? { ...l, text: e.target.value } : l) } : s))}
-                          placeholder="文章標題"
-                          className="flex-1 px-2.5 py-1.5 border border-blue-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
-                        />
-                        <input
-                          value={link.url}
-                          onChange={e => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: s.relatedLinks.map((l, j) => j === i ? { ...l, url: e.target.value } : l) } : s))}
-                          placeholder="https://..."
-                          className="flex-1 px-2.5 py-1.5 border border-blue-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
-                        />
-                        <button
-                          onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: s.relatedLinks.filter((_, j) => j !== i) } : s))}
-                          className="text-gray-400 hover:text-red-500 text-xs px-1.5"
-                        >✕</button>
-                      </div>
-                    ))}
-                    <button
-                      onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, relatedLinks: [...s.relatedLinks, { text: '', url: '' }] } : s))}
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                    >+ 新增連結</button>
-                  </div>
+              {errors[sec.id] && (
+                <div className="px-5 py-3">
+                  <Err msg={errors[sec.id]} onDismiss={() => setErrors(prev => ({ ...prev, [sec.id]: '' }))} />
                 </div>
               )}
 
-              {errors[sec.id] && <div className="px-5 py-3"><Err msg={errors[sec.id]} /></div>}
-
               {(sec.content.trim() || sec.generating) && (
-                <div className="px-5 pt-4 pb-3">
+                <div className="px-5 pt-4 pb-3" id={`sec-content-${sec.id}`}>
                   {sec.generating
                     ? <AutoTA value={sec.content}
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
@@ -1394,24 +1489,67 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                         value={sec.content}
                         onChange={content => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, content } : s))}
                         editable={sec.isEditing}
+                        onInsertH2={() => insertSectionAfter(i)}
                       />
                   }
                   {/* AI 修改輸入框 */}
                   {sec.content.trim() && !sec.generating && (
-                    <div className="mt-3 flex items-end gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-gray-400 transition-colors">
-                      <AutoTA
-                        value={sec.revisePrompt}
-                        onChange={v => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, revisePrompt: v } : s))}
-                        placeholder="輸入修改指令，例如：把語氣改得更強硬、縮短篇幅、加入比較表格…"
-                        className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none resize-none min-h-[36px]"
-                      />
-                      <button
-                        onClick={() => reviseSection(sec.id)}
-                        disabled={!sec.revisePrompt.trim()}
-                        className="flex-shrink-0 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        AI 修改
-                      </button>
+                    <div className="mt-3">
+                      {/* 已引用段落顯示（多段）*/}
+                      {(sec.reviseQuotes ?? []).length > 0 && (
+                        <div className="mb-1.5 flex flex-col gap-1">
+                          {(sec.reviseQuotes ?? []).map((q, qi) => (
+                            <div key={qi} className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
+                              <span className="text-blue-400 text-xs font-bold shrink-0 mt-0.5">@</span>
+                              <p className="flex-1 text-xs text-blue-700 line-clamp-2">{q}</p>
+                              <button type="button"
+                                onClick={() => setSections(prev => prev.map(s => s.id === sec.id
+                                  ? { ...s, reviseQuotes: (s.reviseQuotes ?? []).filter((_, j) => j !== qi) }
+                                  : s))}
+                                className="shrink-0 w-4 h-4 flex items-center justify-center text-blue-300 hover:text-blue-500 text-xs leading-none">×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* 輸入框 + @ 選單 */}
+                      <div className="relative">
+                        {atMenuSecId === sec.id && (
+                          <div className="absolute bottom-full mb-1.5 left-0 right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                            <p className="px-3 py-1.5 text-xs text-gray-400 bg-gray-50 border-b border-gray-100">選擇要引用的段落</p>
+                            {getBlockItems(sec.content).map((item, k) => (
+                              <button key={k} type="button"
+                                onClick={() => {
+                                  setSections(prev => prev.map(s => s.id === sec.id
+                                    ? { ...s, revisePrompt: s.revisePrompt.replace(/@\s*$/, ''), reviseQuotes: [...(s.reviseQuotes ?? []), item.full] }
+                                    : s));
+                                  setAtMenuSecId(null);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-blue-50 transition-colors truncate">
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-end gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-gray-400 transition-colors">
+                          <AutoTA
+                            value={sec.revisePrompt}
+                            onChange={v => {
+                              setSections(prev => prev.map(s => s.id === sec.id ? { ...s, revisePrompt: v } : s));
+                              if (/@\s*$/.test(v)) setAtMenuSecId(sec.id);
+                              else setAtMenuSecId(null);
+                            }}
+                            placeholder="輸入修改指令，或 @ 引用段落…"
+                            className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 focus:outline-none resize-none min-h-[36px]"
+                          />
+                          <button
+                            onClick={() => { reviseSection(sec.id); setAtMenuSecId(null); }}
+                            disabled={!sec.revisePrompt.trim()}
+                            className="flex-shrink-0 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            AI 修改
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1419,19 +1557,15 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
             </div>
           ))}
 
-          {/* Proofread */}
-          {(proofread || proofreading) && (
-            <div className="border border-violet-200 rounded-2xl overflow-hidden">
-              <div className="bg-violet-50/50 px-5 py-3.5">
-                <p className="text-sm font-bold text-violet-800">校稿建議</p>
-              </div>
-              <div className="px-5 py-4">
-                {proofreading && !proofread
-                  ? <div className="flex items-center gap-2 text-sm text-gray-400"><Spinner /> 校稿中…</div>
-                  : <RichEditor value={proofread} onChange={() => {}} editable={false} />
-                }
-                {proofError && <Err msg={proofError} />}
-              </div>
+          {/* 進入 AI 校稿 */}
+          {doneCount > 0 && !anyGenerating && (
+            <div className="flex justify-end pt-2 pb-1">
+              <button
+                onClick={() => onNext(sections)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white text-sm rounded-xl hover:bg-violet-700 transition-colors"
+              >
+                進入 AI 校稿 →
+              </button>
             </div>
           )}
 
@@ -1458,6 +1592,451 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   );
 }
 
+// ── ReviewMd（校稿報告專用輕量 Markdown 渲染）────────────────────────
+
+function inlineNodes(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*\n]+\*\*|✓|✗)/g);
+  return parts.map((p, i) => {
+    if (p === '✓') return <span key={i} className="text-emerald-600 font-bold">✓</span>;
+    if (p === '✗') return <span key={i} className="text-red-500 font-bold">✗</span>;
+    if (p.startsWith('**') && p.endsWith('**')) return <strong key={i} className="font-semibold text-gray-900">{p.slice(2, -2)}</strong>;
+    return p || null;
+  });
+}
+
+function ReviewMd({ text }: { text: string }) {
+  const nodes: React.ReactNode[] = [];
+  let listBuf: string[] = [];
+  let tableBuf: string[] = [];
+
+  function flushList() {
+    if (!listBuf.length) return;
+    nodes.push(
+      <ul key={nodes.length} className="list-disc pl-5 my-1.5 space-y-0.5">
+        {listBuf.map((t, i) => <li key={i} className="text-sm text-gray-700 leading-relaxed">{inlineNodes(t)}</li>)}
+      </ul>
+    );
+    listBuf = [];
+  }
+
+  function flushTable() {
+    if (!tableBuf.length) return;
+    const rows = tableBuf.filter(l => !/^\s*\|[-:\s|]+\|\s*$/.test(l));
+    if (rows.length > 0) {
+      const parse = (row: string) => row.split('|').slice(1, -1).map(c => c.trim());
+      const [header, ...body] = rows;
+      nodes.push(
+        <div key={nodes.length} className="overflow-x-auto my-2">
+          <table className="text-xs border-collapse w-full">
+            <thead>
+              <tr>{parse(header).map((c, i) => <th key={i} className="border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-left font-semibold text-gray-700">{inlineNodes(c)}</th>)}</tr>
+            </thead>
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri} className="even:bg-gray-50/50">
+                  {parse(row).map((c, ci) => <td key={ci} className="border border-gray-200 px-2.5 py-1.5 text-gray-600">{inlineNodes(c)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    tableBuf = [];
+  }
+
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd();
+    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      flushList();
+      tableBuf.push(line);
+    } else if (line.startsWith('### ')) {
+      flushList(); flushTable();
+      nodes.push(<h3 key={nodes.length} className="text-sm font-bold text-gray-900 mt-4 mb-1 pb-0.5 border-b border-gray-200">{inlineNodes(line.slice(4))}</h3>);
+    } else if (line.startsWith('## ')) {
+      flushList(); flushTable();
+      nodes.push(<h2 key={nodes.length} className="text-sm font-bold text-gray-900 mt-5 mb-1">{inlineNodes(line.slice(3))}</h2>);
+    } else if (/^#+ /.test(line)) {
+      /* 跳過 H1/其他標題行 */
+    } else if (/^\s*[-*]\s+/.test(line) || /^\s*\d+[.)]\s+/.test(line)) {
+      flushList(); flushTable();
+      listBuf.push(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, ''));
+    } else if (line.trim() === '') {
+      flushList(); flushTable();
+    } else {
+      flushList(); flushTable();
+      nodes.push(<p key={nodes.length} className="text-sm text-gray-700 leading-relaxed my-0.5">{inlineNodes(line)}</p>);
+    }
+  }
+  flushList(); flushTable();
+  return <div className="space-y-0">{nodes}</div>;
+}
+
+// ── Diff / Suggestion helpers ─────────────────────────────────────────
+
+type DiffPart = { type: 'same' | 'del' | 'add'; text: string };
+type Suggestion = {
+  id: string; section: string; issue: string;
+  old: string; new: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'error';
+};
+
+function computeDiff(a: string, b: string): DiffPart[] {
+  const ac = [...a], bc = [...b];
+  const m = ac.length, n = bc.length;
+  if (m === 0 && n === 0) return [];
+  if (m === 0) return [{ type: 'add', text: b }];
+  if (n === 0) return [{ type: 'del', text: a }];
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = ac[i-1] === bc[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  const raw: { type: 'same' | 'del' | 'add'; ch: string }[] = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && ac[i-1] === bc[j-1]) { raw.unshift({ type: 'same', ch: ac[i-1] }); i--; j--; }
+    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { raw.unshift({ type: 'add', ch: bc[j-1] }); j--; }
+    else { raw.unshift({ type: 'del', ch: ac[i-1] }); i--; }
+  }
+  const parts: DiffPart[] = [];
+  for (const r of raw) {
+    const last = parts[parts.length - 1];
+    if (last && last.type === r.type) last.text += r.ch;
+    else parts.push({ type: r.type, text: r.ch });
+  }
+  return parts;
+}
+
+function parseSuggestions(text: string): Suggestion[] {
+  const result: Suggestion[] = [];
+  const blocks = text.split(/---SUGGESTION---/);
+  for (const block of blocks.slice(1)) {
+    const endIdx = block.indexOf('---END---');
+    const content = endIdx >= 0 ? block.slice(0, endIdx) : block;
+
+    // 逐行解析，避免 regex 跨行誤匹配
+    const fields: Record<string, string[]> = {};
+    let cur = '';
+    for (const line of content.split('\n')) {
+      const km = line.match(/^(SECTION|ISSUE|OLD|NEW):\s*(.*)/);
+      if (km) { cur = km[1]; fields[cur] = [km[2]]; }
+      else if (cur && line.trim()) fields[cur].push(line);
+    }
+    const get = (k: string) => (fields[k] ?? []).join('\n').trim().replace(/^[「『【]|[」』】]$/g, '');
+
+    const section = get('SECTION'), issue = get('ISSUE'), old = get('OLD');
+    let nw = get('NEW');
+    // 刪除標記正規化：AI 有時填「應刪除」、「（刪除）」等，統一轉成空字串
+    if (/^[（(]?(?:刪除此句|刪除|移除|空)[）)]?$/.test(nw)) nw = '';
+
+    if (old || nw) result.push({ id: Math.random().toString(36).slice(2), section, issue, old, new: nw, status: 'pending' });
+  }
+  return result;
+}
+
+function SuggestionCard({ s, onAccept, onReject, onJump }: {
+  s: Suggestion; onAccept: () => void; onReject: () => void; onJump: () => void;
+}) {
+  const diff = (s.old || s.new) ? computeDiff(s.old, s.new) : null;
+  return (
+    <div className={`border rounded-xl p-4 space-y-2.5 transition-opacity ${s.status !== 'pending' ? 'opacity-50' : 'border-gray-200 bg-white'}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          {s.section && <span className="inline-block text-xs text-violet-500 font-medium mb-0.5">{s.section}</span>}
+          <p className="text-sm text-gray-700">{s.issue}</p>
+        </div>
+        {s.status === 'pending' && s.old && (
+          <button onClick={onJump} className="shrink-0 text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors">跳至</button>
+        )}
+      </div>
+      {diff && (
+        <div className="text-sm rounded-lg bg-gray-50 px-3 py-2.5 leading-relaxed break-all font-sans border border-gray-100">
+          {diff.map((p, i) =>
+            p.type === 'del' ? <span key={i} className="bg-red-100 text-red-600 line-through">{p.text}</span>
+            : p.type === 'add' ? <span key={i} className="bg-green-100 text-green-700">{p.text}</span>
+            : <span key={i}>{p.text}</span>
+          )}
+        </div>
+      )}
+      {s.status === 'pending' && (
+        <div className="flex gap-2">
+          <button onClick={onAccept} className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium">採用修改</button>
+          <button onClick={onReject} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors">略過</button>
+        </div>
+      )}
+      {s.status === 'accepted' && <p className="text-xs text-emerald-600 font-medium">✓ 已採用</p>}
+      {s.status === 'rejected' && <p className="text-xs text-gray-400">已略過</p>}
+      {s.status === 'error' && <p className="text-xs text-red-500">找不到原文，請手動修改</p>}
+    </div>
+  );
+}
+
+function extractOverallEval(raw: string): string {
+  const idx = raw.indexOf('---SUGGESTION---');
+  return (idx >= 0 ? raw.slice(0, idx) : raw).trim();
+}
+
+function buildFinalScorePrompt(article: string, opts: {
+  title: string; keyword: string;
+  writingGuide: string; clientWritingRules: string;
+  sectionOverride: string; brandDescription: string;
+}): string {
+  const ruleBlocks = [
+    opts.sectionOverride.trim() && `【使用者指定寫作規則】\n${opts.sectionOverride.trim()}`,
+    opts.clientWritingRules.trim() && `【客戶寫作風格規則】\n${opts.clientWritingRules.trim()}`,
+    `【內容品質規則】\n${QUALITY_RULES}`,
+    opts.writingGuide.trim() && `【全域寫作規則】\n${opts.writingGuide.trim()}`,
+  ].filter(Boolean).join('\n\n');
+  return `你是一位嚴格的 SEO 文章審稿員。請對比以下寫作要求，對修改後的文章給出整體評分。
+
+文章標題：${opts.title}
+目標關鍵字：${opts.keyword}
+
+寫作要求：
+${ruleBlocks}
+
+修改後文章：
+${article}
+
+只輸出整體評分與改善說明，格式：整體評分：X/10 — 說明（說明請提及與初稿相比有哪些改善）。繁體中文。`;
+}
+
+// ── Stage 4 ───────────────────────────────────────────────────────────
+
+function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, sectionOverride, onBack }: {
+  title: string; keyword: string;
+  sections: Section[];
+  writingGuide: string; clientWritingRules: string;
+  brandDescription: string; sectionOverride: string;
+  onBack: () => void;
+}) {
+  const [reviewing, setReviewing] = useState(false);
+  const [overallEval, setOverallEval] = useState('');
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [error, setError] = useState('');
+  const [finalScore, setFinalScore] = useState('');
+  const [finalScoring, setFinalScoring] = useState(false);
+  const runIdRef = useRef(0);
+
+  const initArticle = sections
+    .filter(s => s.content.trim())
+    .map(s => s.content.trim().replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, '![$1][圖片]'))
+    .join('\n\n');
+  const [articleText, setArticleText] = useState(initArticle);
+
+  useEffect(() => { if (articleText.trim()) runReview(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function runReview() {
+    if (!articleText.trim()) return;
+    const id = ++runIdRef.current;
+    setOverallEval(''); setSuggestions([]); setFinalScore(''); setError(''); setReviewing(true);
+    let buf = '';
+    try {
+      const prompt = buildReviewPrompt(articleText, { title, keyword, writingGuide, clientWritingRules, sectionOverride, brandDescription });
+      await streamAPI([{ role: 'user', content: prompt }], chunk => {
+        if (runIdRef.current !== id) return;
+        buf += chunk;
+        setOverallEval(extractOverallEval(buf));
+      });
+      if (runIdRef.current === id) {
+        setOverallEval(extractOverallEval(buf));
+        setSuggestions(parseSuggestions(buf));
+      }
+    } catch (e) { if (runIdRef.current === id) setError(e instanceof Error ? e.message : '校稿失敗'); }
+    finally { if (runIdRef.current === id) setReviewing(false); }
+  }
+
+  async function runFinalScore() {
+    if (!articleText.trim()) return;
+    const id = ++runIdRef.current;
+    setFinalScore(''); setFinalScoring(true);
+    let buf = '';
+    try {
+      const prompt = buildFinalScorePrompt(articleText, { title, keyword, writingGuide, clientWritingRules, sectionOverride, brandDescription });
+      await streamAPI([{ role: 'user', content: prompt }], chunk => {
+        if (runIdRef.current !== id) return;
+        buf += chunk;
+        setFinalScore(buf);
+      });
+    } catch (e) { if (runIdRef.current === id) setFinalScore('評分失敗，請重試'); }
+    finally { if (runIdRef.current === id) setFinalScoring(false); }
+  }
+
+  function applyChange(suggId: string) {
+    const s = suggestions.find(x => x.id === suggId);
+    if (!s) return;
+    if (s.old && !articleText.includes(s.old)) {
+      setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'error' } : x));
+      return;
+    }
+    setArticleText(prev => s.old ? prev.replace(s.old, s.new) : prev + (s.new ? '\n\n' + s.new : ''));
+    setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
+  }
+
+  function jumpToText(text: string) {
+    if (!text) return;
+    const panel = document.getElementById('article-panel');
+    if (!panel) return;
+    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+    const search = text.slice(0, 15);
+    let node = walker.nextNode();
+    while (node) {
+      const content = node.textContent ?? '';
+      const idx = content.indexOf(search);
+      if (idx >= 0) {
+        const range = document.createRange();
+        range.setStart(node, idx);
+        range.setEnd(node, Math.min(idx + text.length, content.length));
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
+        (node.parentElement as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      node = walker.nextNode();
+    }
+  }
+
+  const pendingCount = suggestions.filter(s => s.status === 'pending').length;
+  const acceptedCount = suggestions.filter(s => s.status === 'accepted').length;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Sticky toolbar */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
+        <button onClick={onBack} className="text-gray-400 hover:text-gray-700 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
+          <p className="text-xs text-gray-400">AI 校稿 · 先看總評，再逐條處理</p>
+        </div>
+        {suggestions.length > 0 && !reviewing && (
+          <span className="text-xs text-violet-500 font-medium shrink-0">
+            {pendingCount > 0 ? `${pendingCount} 條待確認` : '全部處理完畢 ✓'}
+          </span>
+        )}
+        <button onClick={runReview} disabled={reviewing || finalScoring || !articleText.trim()}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 shrink-0">
+          {reviewing && <Spinner />}{reviewing ? '校稿中…' : '重新校稿'}
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full px-4 py-4 grid grid-cols-2 gap-4">
+          {/* 左：可編輯原文 */}
+          <div className="flex flex-col overflow-hidden">
+            <p className="text-xs font-medium text-gray-500 mb-2 shrink-0">文章原文（可編輯）</p>
+            <div id="article-panel" className="flex-1 overflow-auto">
+              <RichEditor value={articleText} onChange={setArticleText} editable={true} minHeight="100%" />
+            </div>
+          </div>
+
+          {/* 右：總評 + 建議卡片 */}
+          <div className="flex flex-col overflow-hidden gap-3">
+
+            {/* 上：總評卡片（固定高度） */}
+            <div className="shrink-0">
+              {reviewing && !overallEval && (
+                <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 flex items-center gap-2.5">
+                  <Spinner /><span className="text-sm text-gray-500">AI 正在審查，生成總評…</span>
+                </div>
+              )}
+              {(overallEval || finalScore) && (
+                <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 space-y-2">
+                  {/* 初稿評分 */}
+                  <div>
+                    {finalScore && <p className="text-xs text-gray-400 mb-0.5">初稿</p>}
+                    <ReviewMd text={overallEval} />
+                  </div>
+                  {/* 修改後評分 */}
+                  {finalScoring && (
+                    <div className="border-t border-violet-200 pt-2 flex items-center gap-2 text-sm text-gray-500">
+                      <Spinner /><span>重新評分中…</span>
+                    </div>
+                  )}
+                  {finalScore && !finalScoring && (
+                    <div className="border-t border-violet-200 pt-2">
+                      <p className="text-xs text-emerald-600 mb-0.5">修改後</p>
+                      <ReviewMd text={finalScore} />
+                    </div>
+                  )}
+                  {/* 取得最終評分按鈕 */}
+                  {!reviewing && !finalScoring && !finalScore && acceptedCount > 0 && (
+                    <div className="border-t border-violet-100 pt-2">
+                      <button onClick={runFinalScore}
+                        className="w-full py-1.5 text-xs text-violet-600 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors font-medium">
+                        完成修改，取得最終評分
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {error && <Err msg={error} />}
+            </div>
+
+            {/* 下：修改建議卡片（可捲動） */}
+            <div className="flex-1 overflow-auto space-y-2 pr-0.5">
+              {reviewing && overallEval && (
+                <div className="border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-2 text-xs text-gray-400">
+                  <Spinner /><span>繼續解析修改建議…</span>
+                </div>
+              )}
+              {!reviewing && suggestions.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-gray-400 px-1">修改建議 · {suggestions.length} 條</p>
+                  {suggestions.map(s => (
+                    <SuggestionCard
+                      key={s.id}
+                      s={s}
+                      onAccept={() => applyChange(s.id)}
+                      onReject={() => setSuggestions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'rejected' } : x))}
+                      onJump={() => jumpToText(s.old)}
+                    />
+                  ))}
+                </>
+              )}
+              {!reviewing && suggestions.length === 0 && overallEval && (
+                <p className="text-xs text-gray-400 text-center py-4">無具體修改建議</p>
+              )}
+              {!reviewing && !overallEval && !error && (
+                <p className="text-sm text-gray-400 py-8 text-center">點擊「重新校稿」開始</p>
+              )}
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Draft（localStorage 草稿暫存）────────────────────────────────────
+
+const DRAFT_KEY = 'writer:compose:draft';
+
+type Draft = {
+  keyword: string;
+  selectedTitle: string;
+  analyzeMsg: string;
+  analysisResult: string;
+  outlineMsg: string;
+  outlineResult: string;
+  sections: Section[];
+  clientWritingRules: string;
+  brandDescription: string;
+  savedAt: number;
+};
+
+function saveDraft(d: Omit<Draft, 'savedAt'>) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, savedAt: Date.now() })); } catch { /* ignore */ }
+}
+function loadDraft(): Draft | null {
+  try { const r = localStorage.getItem(DRAFT_KEY); return r ? JSON.parse(r) as Draft : null; } catch { return null; }
+}
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────
 
 function ComposeInner() {
@@ -1478,8 +2057,25 @@ function ComposeInner() {
   const [outlineMsg, setOutlineMsg] = useState('');
   const [outlineResult, setOutlineResult] = useState('');
   const [sections, setSections] = useState<Section[]>([]);
+  const [reviewSections, setReviewSections] = useState<Section[]>([]);
+  const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
+
+  function restoreDraft(d: Draft) {
+    setAnalyzeMsg(d.analyzeMsg);
+    setAnalysisResult(d.analysisResult);
+    setSelectedTitle(d.selectedTitle);
+    setClientWritingRules(d.clientWritingRules);
+    setBrandDescriptionGlobal(d.brandDescription);
+    setOutlineMsg(d.outlineMsg);
+    setOutlineResult(d.outlineResult);
+    setSections(d.sections);
+    setReviewSections([]);
+    setStage('write');
+    setSavedDraft(null);
+  }
 
   useEffect(() => {
+    setSavedDraft(loadDraft());
     fetch('/api/writer/settings').then(r => r.json()).then((s: { writing_guide?: string }) => {
       if (s.writing_guide) setWritingGuide(s.writing_guide);
     }).catch(() => {});
@@ -1503,13 +2099,13 @@ function ComposeInner() {
     } catch { /* 靜默失敗 */ }
   }
 
-  const isWrite = stage === 'write';
+  const isFullScreen = stage === 'write' || stage === 'review';
 
   return (
-    <div className={`flex flex-col ${isWrite ? 'h-screen' : 'min-h-screen'}`}>
+    <div className={`flex flex-col ${isFullScreen ? 'h-screen' : 'min-h-screen'}`}>
 
       {/* Header */}
-      <div className={`${isWrite ? 'hidden' : 'block'} border-b border-gray-100 bg-white`}>
+      <div className={`${isFullScreen ? 'hidden' : 'block'} border-b border-gray-100 bg-white`}>
         <div className="max-w-2xl mx-auto px-6 py-4 flex items-center gap-4">
           <a href="/writer" className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
@@ -1522,7 +2118,25 @@ function ComposeInner() {
       </div>
 
       {/* Content */}
-      <div className={`flex-1 ${isWrite ? 'overflow-hidden' : 'px-6 py-8'}`}>
+      <div className={`flex-1 ${isFullScreen ? 'overflow-hidden' : 'px-6 py-8'}`}>
+        {stage === 'analyze' && savedDraft && (
+          <div className="max-w-2xl mx-auto mb-4">
+            <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-800">找到上次的草稿</p>
+                <p className="text-xs text-amber-600 truncate">{savedDraft.selectedTitle}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => restoreDraft(savedDraft)}
+                  className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
+                  繼續撰寫 →
+                </button>
+                <button onClick={() => { setSavedDraft(null); clearDraft(); }}
+                  className="text-xs text-amber-400 hover:text-amber-700 transition-colors">略過</button>
+              </div>
+            </div>
+          </div>
+        )}
         {stage === 'analyze' && (
           <Stage1
             keyword={keyword}
@@ -1553,6 +2167,8 @@ function ComposeInner() {
               setOutlineMsg(oMsg);
               setOutlineResult(oResult);
               setSections(secs);
+              setReviewSections([]);
+              saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg: oMsg, outlineResult: oResult, sections: secs, clientWritingRules, brandDescription });
               setStage('write');
             }}
           />
@@ -1572,6 +2188,19 @@ function ComposeInner() {
             sectionOverride={promptOverrides.section ?? ''}
             onSaveSectionOverride={text => savePromptOverride('section', text)}
             onBack={() => setStage('outline')}
+            onNext={secs => { setReviewSections(secs); saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections: secs, clientWritingRules, brandDescription }); setStage('review'); }}
+          />
+        )}
+        {stage === 'review' && (
+          <Stage4
+            title={selectedTitle}
+            keyword={keyword}
+            sections={reviewSections}
+            writingGuide={writingGuide}
+            clientWritingRules={clientWritingRules}
+            brandDescription={brandDescription}
+            sectionOverride={promptOverrides.section ?? ''}
+            onBack={() => setStage('write')}
           />
         )}
       </div>
