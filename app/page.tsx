@@ -15,7 +15,7 @@ type Tool = {
   hrOnly?: boolean;
 };
 
-const internalTools: Tool[] = [
+const marketingTools: Tool[] = [
   {
     href: "/writer",
     title: "寫手流程工具",
@@ -79,6 +79,9 @@ const internalTools: Tool[] = [
     iconBg: "bg-cyan-100",
     inDev: false,
   },
+];
+
+const hrTools: Tool[] = [
   {
     href: "/finance",
     title: "財務發票管理",
@@ -96,6 +99,36 @@ const internalTools: Tool[] = [
     icon: "🔔",
     color: "bg-indigo-50 border-indigo-200 hover:border-indigo-400",
     iconBg: "bg-indigo-100",
+    inDev: false,
+  },
+];
+
+const techTools: Tool[] = [
+  {
+    href: "/dev",
+    title: "會議記錄與開發進度",
+    description: "技術部內部會議討論紀錄，以及個人開發進度表，方便團隊掌握討論內容與任務追蹤。",
+    icon: "🛠️",
+    color: "bg-slate-50 border-slate-200 hover:border-slate-400",
+    iconBg: "bg-slate-100",
+    inDev: false,
+  },
+  {
+    href: "/monthly-plan",
+    title: "客戶進度追蹤",
+    description: "查看本月合約里程碑、SEO 請款時間、月費請款與網站續約提醒，工程師掌握客戶執行進度與報告週期。",
+    icon: "📅",
+    color: "bg-purple-50 border-purple-200 hover:border-purple-400",
+    iconBg: "bg-purple-100",
+    inDev: false,
+  },
+  {
+    href: "/page-tracker",
+    title: "網頁改動追蹤",
+    description: "記錄網頁改動日期與內容，自動取得當下 GSC 數據（點擊、曝光、CTR、排名），回頭對照成效差異。",
+    icon: "📈",
+    color: "bg-sky-50 border-sky-200 hover:border-sky-400",
+    iconBg: "bg-sky-100",
     inDev: false,
   },
 ];
@@ -143,7 +176,7 @@ const externalTools: Tool[] = [
 export default function HomePage() {
   const [showSuspended, setShowSuspended] = useState(false);
 
-  function renderCard(tool: typeof internalTools[0]) {
+  function renderCard(tool: Tool) {
     const badge = tool.suspended
       ? <span className="absolute top-3 right-3 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-300 rounded-full px-2 py-0.5">暫時下架</span>
       : tool.inDev
@@ -206,13 +239,31 @@ export default function HomePage() {
       </div>
     )}
     <div className="p-8 max-w-2xl space-y-10">
-      {/* 內部工具 */}
+      {/* 行銷部 */}
       <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">內部工具</h2>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">行銷部</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {internalTools.map((tool) => renderCard(tool))}
+          {marketingTools.map((tool) => renderCard(tool))}
         </div>
       </div>
+
+      {/* HR 總部 */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">HR 總部</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {hrTools.map((tool) => renderCard(tool))}
+        </div>
+      </div>
+
+      {/* 技術部（有工具才顯示） */}
+      {techTools.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">技術部</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {techTools.map((tool) => renderCard(tool))}
+          </div>
+        </div>
+      )}
 
       {/* 外部產品 */}
       <div>

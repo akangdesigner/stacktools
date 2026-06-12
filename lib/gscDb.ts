@@ -38,6 +38,38 @@ function getDb(): Database.Database {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS page_change_snapshots (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      log_id        INTEGER NOT NULL REFERENCES page_change_logs(id) ON DELETE CASCADE,
+      snapshot_date TEXT NOT NULL,
+      clicks        INTEGER,
+      impressions   INTEGER,
+      ctr           REAL,
+      avg_position  REAL,
+      created_at    TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS page_change_logs (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id    INTEGER NOT NULL,
+      client_name  TEXT NOT NULL,
+      site_url     TEXT NOT NULL,
+      page_url     TEXT NOT NULL,
+      change_date  TEXT NOT NULL,
+      gsc_date     TEXT,
+      title        TEXT,
+      description  TEXT NOT NULL,
+      clicks       INTEGER,
+      impressions  INTEGER,
+      ctr          REAL,
+      avg_position REAL,
+      created_at   TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS gsc_article_pages (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL REFERENCES gsc_clients(id) ON DELETE CASCADE,
@@ -53,6 +85,8 @@ function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN auto_update          INTEGER NOT NULL DEFAULT 0`); } catch {}
   try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN article_sheet_id    TEXT NOT NULL DEFAULT ''`); } catch {}
   try { db.exec(`ALTER TABLE gsc_clients ADD COLUMN article_sheet_tab   TEXT NOT NULL DEFAULT ''`); } catch {}
+  try { db.exec(`ALTER TABLE page_change_logs ADD COLUMN gsc_date TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE page_change_logs ADD COLUMN title TEXT`); } catch {}
 
   return db;
 }
@@ -166,4 +200,74 @@ export function replaceKeywords(client_id: number, keywords: { keyword: string; 
     del.run(client_id);
     for (const k of keywords) ins.run(client_id, k.keyword, k.label);
   })();
+}
+
+// ── Page Change Logs ─────────────────────────────────
+export interface PageChangeLog {
+  id: number;
+  client_id: number;
+  client_name: string;
+  site_url: string;
+  page_url: string;
+  change_date: string;
+  gsc_date: string | null;
+  title: string | null;
+  description: string;
+  clicks: number | null;
+  impressions: number | null;
+  ctr: number | null;
+  avg_position: number | null;
+  created_at: string;
+}
+
+export function listPageChangeLogs(): PageChangeLog[] {
+  return getDb().prepare('SELECT * FROM page_change_logs ORDER BY change_date DESC, id DESC').all() as PageChangeLog[];
+}
+
+export function createPageChangeLog(data: Omit<PageChangeLog, 'id' | 'created_at'>): PageChangeLog {
+  const db = getDb();
+  const res = db.prepare(`
+    INSERT INTO page_change_logs
+      (client_id, client_name, site_url, page_url, change_date, gsc_date, title, description, clicks, impressions, ctr, avg_position)
+    VALUES
+      (@client_id, @client_name, @site_url, @page_url, @change_date, @gsc_date, @title, @description, @clicks, @impressions, @ctr, @avg_position)
+  `).run(data);
+  return db.prepare('SELECT * FROM page_change_logs WHERE id = ?').get(res.lastInsertRowid) as PageChangeLog;
+}
+
+export function deletePageChangeLog(id: number): void {
+  getDb().prepare('DELETE FROM page_change_logs WHERE id = ?').run(id);
+}
+
+export function getPageChangeLogById(id: number): PageChangeLog | null {
+  return getDb().prepare('SELECT * FROM page_change_logs WHERE id = ?').get(id) as PageChangeLog | null;
+}
+
+// ── Page Change Snapshots ────────────────────────────
+export interface PageChangeSnapshot {
+  id: number;
+  log_id: number;
+  snapshot_date: string;
+  clicks: number | null;
+  impressions: number | null;
+  ctr: number | null;
+  avg_position: number | null;
+  created_at: string;
+}
+
+export function listAllSnapshots(): PageChangeSnapshot[] {
+  return getDb().prepare('SELECT * FROM page_change_snapshots ORDER BY log_id, snapshot_date ASC').all() as PageChangeSnapshot[];
+}
+
+export function createSnapshot(log_id: number, data: Omit<PageChangeSnapshot, 'id' | 'log_id' | 'created_at'>): PageChangeSnapshot {
+  const db = getDb();
+  const res = db.prepare(`
+    INSERT INTO page_change_snapshots (log_id, snapshot_date, clicks, impressions, ctr, avg_position)
+    VALUES (@log_id, @snapshot_date, @clicks, @impressions, @ctr, @avg_position)
+  `).run({ log_id, ...data });
+  return db.prepare('SELECT * FROM page_change_snapshots WHERE id = ?').get(res.lastInsertRowid) as PageChangeSnapshot;
+}
+
+export function deleteSnapshot(id: number): void {
+  getDb().prepare('DELETE FROM page_change_snapshots WHERE id = ?').run(id);
 }
