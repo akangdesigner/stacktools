@@ -39,6 +39,10 @@ export function getMeeting(id: number): Meeting | null {
   return { ...row, attendees: JSON.parse(row.attendees) };
 }
 
+export function updateMeeting(id: number, title: string, date: string, attendees: string[], content: string) {
+  db.prepare('UPDATE meetings SET title = ?, date = ?, attendees = ?, content = ? WHERE id = ?').run(title, date, JSON.stringify(attendees), content, id);
+}
+
 export function deleteMeeting(id: number) {
   db.prepare('DELETE FROM meetings WHERE id = ?').run(id);
 }
