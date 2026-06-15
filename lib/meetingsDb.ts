@@ -33,6 +33,12 @@ export function createMeeting(title: string, date: string, attendees: string[], 
   return result.lastInsertRowid as number;
 }
 
+export function getMeeting(id: number): Meeting | null {
+  const row = db.prepare('SELECT * FROM meetings WHERE id = ?').get(id) as (Omit<Meeting, 'attendees'> & { attendees: string }) | undefined;
+  if (!row) return null;
+  return { ...row, attendees: JSON.parse(row.attendees) };
+}
+
 export function deleteMeeting(id: number) {
   db.prepare('DELETE FROM meetings WHERE id = ?').run(id);
 }
