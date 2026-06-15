@@ -1,0 +1,38 @@
+import Database from 'better-sqlite3';
+import path from 'path';
+
+const db = new Database(path.join(process.cwd(), 'dev.db'));
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS meetings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL,
+    attendees TEXT NOT NULL DEFAULT '[]',
+    content TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  );
+`);
+
+export interface Meeting {
+  id: number;
+  title: string;
+  date: string;
+  attendees: string[];
+  content: string;
+  created_at: string;
+}
+
+export function getMeetings(): Meeting[] {
+  const rows = db.prepare('SELECT * FROM meetings ORDER BY date DESC, id DESC').all() as (Omit<Meeting, 'attendees'> & { attendees: string })[];
+  return rows.map(r => ({ ...r, attendees: JSON.parse(r.attendees) }));
+}
+
+export function createMeeting(title: string, date: string, attendees: string[], content: string): number {
+  const result = db.prepare('INSERT INTO meetings (title, date, attendees, content) VALUES (?, ?, ?, ?)').run(title, date, JSON.stringify(attendees), content);
+  return result.lastInsertRowid as number;
+}
+
+export function deleteMeeting(id: number) {
+  db.prepare('DELETE FROM meetings WHERE id = ?').run(id);
+}

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import SearchInput from './SearchInput';
 
 const WEBHOOK_URL = 'https://n8n.dg166.com/webhook/monthly-plan';
 
@@ -64,10 +65,11 @@ function shiftMonth(year: number, month: number, delta: number): string {
 export default async function MonthlyPlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; search?: string }>;
 }) {
   const params = await searchParams;
   const { year, month } = parseMonth(params.month);
+  const search = (params.search ?? '').trim().toLowerCase();
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const startDate = `${year}-${pad(month)}-01`;
@@ -75,7 +77,11 @@ export default async function MonthlyPlanPage({
   const endDate   = `${year}-${pad(month)}-${pad(lastDay)}`;
 
   const allData = await fetchData();
-  const filtered = allData.filter(e => e.date && e.date >= startDate && e.date <= endDate);
+  const clients = [...new Set(allData.map(e => e.channel_name))].sort();
+  const filtered = allData.filter(e =>
+    e.date && e.date >= startDate && e.date <= endDate &&
+    (!search || e.channel_name === params.search)
+  );
 
   const grouped = new Map<string, PlanEvent[]>();
   for (const e of filtered) {
@@ -102,14 +108,18 @@ export default async function MonthlyPlanPage({
           <h1 className="text-2xl font-bold text-gray-900">客戶進度追蹤</h1>
           <p className="text-sm text-gray-500 mt-0.5">合約里程碑、請款與續約提醒</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href={prevHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-2 flex-nowrap">
+          <SearchInput clients={clients} value={params.search ?? ''} />
+          <Link href="/monthly-plan#today" className="px-3 py-1.5 rounded-lg border border-blue-200 text-sm text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap shrink-0">
+            跳至今天
+          </Link>
+          <Link href={prevHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
             ← 上月
           </Link>
-          <span className="text-sm font-semibold text-gray-900 min-w-24 text-center">
+          <span className="text-sm font-semibold text-gray-900 min-w-24 text-center shrink-0">
             {year} 年 {month} 月
           </span>
-          <Link href={nextHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+          <Link href={nextHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
             下月 →
           </Link>
         </div>
@@ -146,7 +156,7 @@ export default async function MonthlyPlanPage({
             const events  = grouped.get(date) ?? [];
 
             return (
-              <div key={date}>
+              <div key={date} id={isToday ? 'today' : undefined}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`text-sm font-semibold ${isToday ? 'text-blue-600' : isPast ? 'text-gray-400' : 'text-gray-700'}`}>
                     {month} / {d.getDate()}（週{WEEKDAYS[d.getDay()]}）

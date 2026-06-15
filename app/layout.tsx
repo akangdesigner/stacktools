@@ -4,6 +4,7 @@ import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import AuthProvider from "@/components/AuthProvider";
 import ChatBot from "@/components/ChatBot";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,7 +35,8 @@ export default function RootLayout({
       <body className="min-h-screen flex bg-gray-50">
         <AuthProvider>
           <Sidebar />
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto flex flex-col">
+            <Breadcrumb />
             {children}
           </main>
           <ChatBot />
