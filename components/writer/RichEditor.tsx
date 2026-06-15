@@ -8,6 +8,7 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
 
 type Props = {
@@ -40,6 +41,10 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+      }),
       Image.configure({ inline: false, allowBase64: true }),
       Table.configure({ resizable: false }),
       TableRow,
@@ -133,8 +138,8 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
           <p className="absolute top-3 left-4 text-sm text-gray-300 pointer-events-none select-none">{placeholder}</p>
         )}
         <style>{`
-          .tiptap-writer h2 { font-size: 1rem; font-weight: 700; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px solid #e5e7eb; }
-          .tiptap-writer h3 { font-size: 0.875rem; font-weight: 600; margin: 0.75rem 0 0.15rem; }
+          .tiptap-writer h2 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px solid #e5e7eb; }
+          .tiptap-writer h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.15rem; }
           .tiptap-writer p { font-size: 0.875rem; color: #374151; margin-bottom: 0.5rem; line-height: 1.6; }
           .tiptap-writer ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
           .tiptap-writer ol { list-style: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
@@ -145,6 +150,8 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
           .tiptap-writer th { background: #f9fafb; font-weight: 600; }
           .tiptap-writer .outline-none:focus { outline: none; }
           .tiptap-writer img { max-width: 100%; height: auto; border-radius: 6px; margin: 0.5rem 0; display: block; }
+          .tiptap-writer a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font-size: inherit; }
+          .tiptap-writer a:hover { color: #1d4ed8; background: #eff6ff; border-radius: 2px; padding: 0 1px; }
         `}</style>
         <div className="tiptap-writer">
           <EditorContent editor={editor} />

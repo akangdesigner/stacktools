@@ -31,9 +31,18 @@ const DEPTH_LABELS: Record<ContentDepth, string> = {
 };
 
 const DEPTH_INSTRUCTIONS: Record<ContentDepth, string> = {
-  brief:    '篇幅精簡：整個段落（含所有 H3）控制在 150 字以內，每個 H3 只需 1–2 句核心重點，不展開細節。',
-  standard: '篇幅標準：每個 H3 子節寫 3–4 句，涵蓋主要說明並附一個具體例子或判斷依據。',
-  detailed: '篇幅深度：每個 H3 子節寫 4–6 句，包含具體案例、數據、操作細節或比較，充分說明不跳過。',
+  brief:    `篇幅精簡：
+・每個 H3 只寫 1 段，3–4 句，約 80–100 字
+・說核心結論 + 一個最重要的判斷依據，不展開細節、不加條列
+・整個段落（含所有 H3）總字數控制在 250 字以內`,
+  standard: `篇幅標準：
+・每個 H3 寫 1 段，3–4 句，約 80–120 字
+・說明核心概念 + 一個具體判斷依據或常見情境
+・不必加條列，自然段落即可`,
+  detailed: `篇幅深度：
+・每個 H3 寫 2–3 段或搭配條列，約 150–250 字
+・必須包含：具體數字或研究結論、操作步驟或情境範例、常見錯誤或注意事項至少其中兩項
+・內容要讓讀者讀完即可判斷或操作，不能只是概念說明`,
 };
 
 type Section = {
@@ -48,6 +57,7 @@ type Section = {
   revisePrompt: string;
   reviseQuotes: string[];
   contentDepth: ContentDepth;
+  h3Depths: ContentDepth[];
 };
 
 // ── Prompt Defaults（可被個人化覆蓋的靜態指令）────────────────────────
@@ -103,17 +113,20 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 
 // ── Prompts ───────────────────────────────────────────────────────────
 
-function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string, refs: SearchResult[], brandDescription = '', writingGuide = '', override = '') {
+function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string, refs: SearchResult[], brandDescription = '', writingGuide = '', override = '', brandSiteContent = '') {
   const refBlock = refs.length > 0
     ? `以下是搜尋「${keyword}」取得的競品參考資料，請在分析時參考這些頁面：\n\n${refs.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.content.slice(0, 300)}`).join('\n\n')}\n\n---\n\n`
     : '';
   const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（必須遵守）：\n${writingGuide.trim()}` : '';
+  const brandSiteBlock = brandSiteContent.trim()
+    ? `\n\n【品牌網站實際內容（以此為準，不得超出範圍）】\n${brandSiteContent.trim()}`
+    : '';
   const body = override.trim() || PROMPT_DEFAULTS.analyze;
   return `${refBlock}${body}
 
 關鍵字：${keyword}
 品牌名稱：${brandName.trim() || '（未提供）'}
-品牌網址：${brandUrl.trim() || '（未提供）'}${brandDescription.trim() ? `\n品牌描述：${brandDescription.trim()}` : ''}${guideBlock}
+品牌網址：${brandUrl.trim() || '（未提供）'}${brandDescription.trim() ? `\n品牌描述：${brandDescription.trim()}` : ''}${brandSiteBlock}${guideBlock}
 
 請進行 SEO 寫作控制表與標題提案。輸出完畢後請立即停止，不要自行產生文章架構、前言、段落或任何正文內容，等待下一步指令。`;
 }
@@ -135,7 +148,14 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   const prevBlock = completedContext.trim()
     ? `【已完成段落參考 — 避免重複說明相同內容，據此調整切入角度】\n${completedContext.trim()}\n\n`
     : '';
-  const depthBlock = `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}`;
+  const h3Depths = sec.h3Depths ?? sec.h3s.map(() => sec.contentDepth);
+  const hasPerH3Depth = sec.h3s.length > 0 && h3Depths.length === sec.h3s.length;
+  const depthBlock = hasPerH3Depth
+    ? `\n\n各 H3 子節篇幅要求（依序對應，各自獨立）：\n${sec.h3s.map((h, i) => {
+        const d = h3Depths[i] ?? 'standard';
+        return `・### ${h}：${DEPTH_LABELS[d]}\n${DEPTH_INSTRUCTIONS[d].split('\n').slice(1).join('\n')}`;
+      }).join('\n\n')}`
+    : `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}`;
   const h3FormatReminder = sec.h3s.length > 0 ? '，H3 子節一律使用 ### 標題格式' : '';
   const header = `${prevBlock}完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落的正文內容。${h3Block}\n\n`;
   const footer = `${depthBlock}\n\n從 ## 標題開始輸出${h3FormatReminder}，只輸出該段落正文，不要加任何說明或備註。`;
@@ -181,17 +201,26 @@ const QUALITY_RULES = `內容品質規則（每句都要符合）：
 - 禁用「先否定再肯定」句型：不是A而是B、不只是A更是B、不應該A而應該B。
 - 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。`;
 
-function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string): string {
+function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string, authorityRefs: SearchResult[] = []): string {
   const parts: string[] = [];
-  // 使用者寫作規則排最前面，確保模型第一眼就看到且優先執行
+  parts.push(`【行為規範 — 最優先執行】
+・直接輸出段落內容，絕對不得向使用者提問、列出選項方案、要求使用者做決定。
+・規則之間有衝突時，自行判斷最合理的詮釋方式後直接撰寫，不得停下來說明衝突。
+・若某條規則在特定段落難以完全執行，盡量融入其精神，不必逐字強制套用。`);
   if (sectionOverride.trim()) {
-    parts.push(`【使用者指定寫作規則 — 最高優先，必須在每一句話中完全體現，不得打折扣】\n${sectionOverride.trim()}`);
+    parts.push(`【使用者指定寫作規則 — 高優先，靈活詮釋其精神融入內容】\n${sectionOverride.trim()}`);
   }
   if (brandDescription.trim()) {
     parts.push(`【品牌背景資訊 — 只作為事實依據，不得捏造超出此範圍的內容】\n${brandDescription.trim()}`);
   }
   if (clientWritingRules.trim()) {
     parts.push(`【客戶寫作風格 — 高優先，若與使用者指定規則無衝突則一起遵守】\n${clientWritingRules.trim()}`);
+  }
+  if (authorityRefs.length > 0) {
+    const refList = authorityRefs
+      .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content.slice(0, 200)}`)
+      .join('\n\n');
+    parts.push(`【可引用的權威來源】若段落中提到具體數據、研究結論或事實宣稱，請在該句子的關鍵詞上用 Markdown 超連結格式標注來源，例如：[研究指出 8 週後症狀改善](https://...)。引用以下清單中的 URL，若無對應來源請勿捏造連結。\n${refList}`);
   }
   const guideText = [writingGuide.trim(), QUALITY_RULES].filter(Boolean).join('\n\n');
   parts.push(`【全域寫作規則】\n${guideText}`);
@@ -201,10 +230,9 @@ function buildSystemMessage(sectionOverride: string, brandDescription: string, c
 // 小模型在長對話下會忽略 system message 的風格規則，必須把規則原文重申在最後一則訊息結尾
 function buildPriorityReminder(sectionOverride: string, clientWritingRules: string): string {
   if (!sectionOverride.trim() && !clientWritingRules.trim()) return '';
-  const parts = ['【寫作規則重申 — 絕對優先，優先於上述所有寫法、語氣與品質要求】'];
+  const parts = ['【寫作規則重申 — 直接輸出，不得提問或列選項】'];
   if (clientWritingRules.trim()) parts.push(`客戶寫作風格：\n${clientWritingRules.trim()}`);
-  if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（最高優先，逐字執行，不得淡化或省略）：\n${sectionOverride.trim()}`);
-  parts.push('輸出前自我檢查：若任何一段沒有完整體現上述規則，該輸出視為錯誤，必須重寫後再輸出。');
+  if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（盡量融入其精神，難以執行時自行判斷最合理的方式）：\n${sectionOverride.trim()}`);
   return '\n\n' + parts.join('\n\n');
 }
 
@@ -213,27 +241,43 @@ function normalizeBoldPunctuation(md: string): string {
   return md.replace(/\*\*([^*\n]+?)([：:，。、；！？]+)\*\*(?=\S)/g, '**$1**$2');
 }
 
-function buildReviewPrompt(article: string, opts: {
-  title: string; keyword: string;
+function buildReviewSystemMessage(opts: {
   writingGuide: string; clientWritingRules: string;
   sectionOverride: string; brandDescription: string;
 }): string {
-  const ruleBlocks = [
-    opts.sectionOverride.trim() && `【使用者指定寫作規則 — 最高優先】\n${opts.sectionOverride.trim()}`,
-    opts.brandDescription.trim() && `【品牌背景資訊 — 不得捏造超出此範圍的內容】\n${opts.brandDescription.trim()}`,
-    opts.clientWritingRules.trim() && `【客戶寫作風格規則】\n${opts.clientWritingRules.trim()}`,
-    `【內容品質規則】\n${QUALITY_RULES}`,
-    opts.writingGuide.trim() && `【全域寫作規則】\n${opts.writingGuide.trim()}`,
-  ].filter(Boolean).join('\n\n');
-  return `你是一位嚴格的 SEO 文章審稿員。請對照下列寫作要求，找出文章需要修改的地方。
+  const parts: string[] = [];
 
-文章標題：${opts.title}
+  parts.push(`你是一位專業的 SEO 文章審稿員，專門審查繁體中文內容行銷文章。每條修改建議只針對一句話，不改整段。
+
+【文字品質】
+・刪除低資訊句：每句必須帶新資訊，不用不同說法重複同一件事
+・禁用「先否定、再肯定」句型：不是A而是B／不只A更是B／不應該A而應該B
+・避免低資訊連接詞開頭：「然而」「換句話說」「這樣」「這件事」「這一點」
+・錯誤做法的提醒順序：先給正確判斷標準，再簡短補充風險；不要先講錯誤
+
+【E-E-A-T】
+・文章中以 [文字](URL) 格式標注的超連結代表已引用來源，審稿時視為具備可查證依據，不需要建議補充來源
+・數據、研究、法規若沒有附超連結，才建議補充來源或改為保守說法
+・術語說明層次清楚：概念 → 判斷依據 → 實作，不可跳過關鍵步驟
+・效果宣稱保守，不得出現「保證」「100%」「一定」等絕對用語
+・可建議補充具體案例、操作情境或參考文獻
+
+【其他】
+・品牌相關宣稱不得超出品牌描述範圍，不捏造成效或數據
+・H3 小節之間不可重複說明相同概念`);
+
+  if (opts.brandDescription.trim())
+    parts.push(`【品牌背景資訊 — 宣稱必須在此範圍內】\n${opts.brandDescription.trim()}`);
+  if (opts.clientWritingRules.trim())
+    parts.push(`【客戶寫作風格規則】\n${opts.clientWritingRules.trim()}`);
+  if (opts.sectionOverride.trim())
+    parts.push(`【使用者指定寫作規則 — 最高優先】\n${opts.sectionOverride.trim()}`);
+  return parts.join('\n\n');
+}
+
+function buildReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
+  return `文章標題：${opts.title}
 目標關鍵字：${opts.keyword}
-
-寫作要求：
-${ruleBlocks}
-
----
 
 待審稿文章：
 
@@ -241,16 +285,20 @@ ${article}
 
 ---
 
-請先輸出整體評分（格式：「整體評分：X/10 — 說明」），再對每個需要修改的地方輸出以下格式區塊：
+請先輸出整體評分（格式：「整體評分：X/10 — 說明」），再挑出最重要的問題，最多輸出 15 條修改建議（優先選對品質影響最大的，微小措辭問題請忽略）。每條建議輸出以下格式區塊：
 
 ---SUGGESTION---
 SECTION: （問題所在的 H2 段落名稱）
 ISSUE: （一句話說明問題）
-OLD: （從文章精確引用需要修改的原文字句，必須與文章一字不差）
-NEW: （修改後的建議文字；若整句要刪除則此欄完全空白，不要填任何說明文字）
+OLD: （從文章中精確複製需要改動的最短文字：若只改一個詞或片語，就只複製那個詞或片語；若需要改整句，就複製到句號/問號/驚嘆號為止，不得超過一個句子；絕對不可引用多句或整段；不可含 ## / ### 標題行；必須與文章一字不差）
+NEW: （修改後的替換文字，長度與 OLD 對應；若整句要刪除則此欄完全空白）
 ---END---
 
-規定：OLD 必須是文章的精確引用，不可改動；若刪除整句則 NEW 欄留空；只列真正重要的問題；繁體中文輸出。`;
+重要規定（違反則建議無效）：
+1. OLD 最多一句話，若一段有多個問題請拆成多條建議各改一句
+2. OLD 禁止引用整段落或跨句引用
+3. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
+4. 若刪除整句則 NEW 欄留空；繁體中文輸出`;
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────
@@ -308,12 +356,13 @@ function parseOutline(text: string): Section[] {
         h3s: [],
         content: '',
         generating: false,
-        promptStyle: 'info', // 暫定，解析完後統一套用 detectStyle
+        promptStyle: 'info',
         generateTable: /比較|差異|優缺點|選購指南|推薦/.test(h2text),
         isEditing: false,
         revisePrompt: '',
         reviseQuotes: [],
         contentDepth: 'standard',
+        h3Depths: [],
       };
     } else if (h3 && cur) {
       cur.h3s.push(h3[1].trim());
@@ -321,7 +370,11 @@ function parseOutline(text: string): Section[] {
   }
   if (cur) sections.push(cur);
   const total = sections.length;
-  return sections.map((s, i) => ({ ...s, promptStyle: detectStyle(s.h2, i, total) }));
+  return sections.map((s, i) => ({
+    ...s,
+    promptStyle: detectStyle(s.h2, i, total),
+    h3Depths: s.h3s.map(() => 'standard' as ContentDepth),
+  }));
 }
 
 // ── Stream ────────────────────────────────────────────────────────────
@@ -683,12 +736,10 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
     setSearching(true);
     setSearchPage(0);
     try {
-      const r = await fetch(`/api/writer/search?keyword=${encodeURIComponent(keyword)}`);
-      if (r.ok) {
-        const refs = ((await r.json()) as { results?: SearchResult[] }).results ?? [];
-        setSearchResults(refs);
-        return refs;
-      }
+      const res = await fetch(`/api/writer/search?keyword=${encodeURIComponent(keyword)}`);
+      const refs = res.ok ? ((await res.json()) as { results?: SearchResult[] }).results ?? [] : [];
+      setSearchResults(refs);
+      return refs;
     } catch { /* 不阻斷 */ } finally { setSearching(false); }
     return [];
   }
@@ -697,10 +748,20 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
     setResult(''); setError(''); setTitles([]); setSelectedTitle('');
     setSearchResults([]);
 
-    const refs = await fetchSearch();
+    const [refs, brandSiteContent, freshSettings] = await Promise.all([
+      fetchSearch(),
+      brandUrl.trim()
+        ? fetch(`/api/writer/brand-crawl?url=${encodeURIComponent(brandUrl.trim())}`)
+            .then(r => r.json())
+            .then((d: { content?: string }) => d.content ?? '')
+            .catch(() => '')
+        : Promise.resolve(''),
+      fetch('/api/writer/settings').then(r => r.json()).catch(() => ({} as { writing_guide?: string })),
+    ]);
+    const freshGuide = (freshSettings as { writing_guide?: string }).writing_guide ?? '';
 
-    const combinedGuide = [writingGuide, clientWritingRules].filter(Boolean).join('\n\n');
-    const msg = buildAnalyzePrompt(keyword, brandName, brandUrl, refs, brandDescription, combinedGuide, analyzeOverride);
+    const combinedGuide = [freshGuide, clientWritingRules].filter(Boolean).join('\n\n');
+    const msg = buildAnalyzePrompt(keyword, brandName, brandUrl, refs, brandDescription, combinedGuide, analyzeOverride, brandSiteContent);
     analyzeMsg.current = msg;
     setAnalyzing(true);
     try {
@@ -1163,11 +1224,30 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   onNext: (sections: Section[]) => void;
 }) {
   const [sections, setSections] = useState<Section[]>(initSections);
+  const [authorityRefs, setAuthorityRefs] = useState<SearchResult[]>([]);
+  const [refsLoading, setRefsLoading] = useState(true);
+  const [showRefs, setShowRefs] = useState(false);
+  const [refsContent, setRefsContent] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPreview, setShowPreview] = useState(false);
   const [showSectionPromptModal, setShowSectionPromptModal] = useState(false);
   const [showStructure, setShowStructure] = useState(false);
   const [atMenuSecId, setAtMenuSecId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRefsLoading(true);
+    fetch(`/api/writer/search?keyword=${encodeURIComponent(keyword)}&type=authority`)
+      .then(r => r.json())
+      .then((data: { results?: SearchResult[] }) => {
+        const refs = data.results ?? [];
+        setAuthorityRefs(refs);
+        if (refs.length > 0) {
+          setRefsContent(prev => prev || refs.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n'));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRefsLoading(false));
+  }, [keyword]);
 
   function getBlockItems(content: string): { label: string; full: string }[] {
     const items: { label: string; full: string }[] = [];
@@ -1207,6 +1287,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       revisePrompt: '',
       reviseQuotes: [],
       contentDepth: 'standard',
+      h3Depths: [],
     };
     setSections(prev => {
       const next = [...prev];
@@ -1216,7 +1297,9 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   }
 
   const outlineText = sections.map(s => `## ${s.h2}` + (s.h3s.length ? '\n' + s.h3s.map(h => `### ${h}`).join('\n') : '')).join('\n\n');
-  const fullArticle = sections.filter(s => s.content.trim()).map(s => s.content.trim()).join('\n\n');
+  const articleBody = sections.filter(s => s.content.trim()).map(s => s.content.trim()).join('\n\n');
+  const refsBlock = refsContent.trim() ? `\n\n## 參考資料\n\n${refsContent.trim()}` : '';
+  const fullArticle = articleBody ? articleBody + refsBlock : '';
   const doneCount = sections.filter(s => s.content.trim()).length;
   const anyGenerating = sections.some(s => s.generating);
 
@@ -1234,7 +1317,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       const finalPrompt = (sec.generateTable
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
         : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules);
-      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide);
+      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
         ...sysMsg,
@@ -1255,7 +1338,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     const quotes = (sec.reviseQuotes ?? []).filter(q => q.trim());
     const originalContent = sec.content;
     setErrors(prev => ({ ...prev, [id]: '' }));
-    const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide);
+    const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs);
     const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
     const baseMessages = [
       ...sysMsg,
@@ -1378,6 +1461,19 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
             </button>
           )}
           <button
+            onClick={() => setShowRefs(v => !v)}
+            title="查看參考資料與數據來源"
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${showRefs ? 'border-emerald-400 text-emerald-700 bg-emerald-50' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
+          >
+            {refsLoading
+              ? <><Spinner />參考資料</>
+              : <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  參考資料{authorityRefs.length > 0 && ` (${authorityRefs.length})`}
+                </>
+            }
+          </button>
+          <button
             onClick={() => setShowSectionPromptModal(true)}
             title="查看／修改段落寫作規則"
             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${sectionOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
@@ -1390,6 +1486,31 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
           </button>
         </div>
       </div>
+
+      {showRefs && (
+        <div className="border-b border-emerald-100 bg-emerald-50/30 px-6 py-4">
+          <p className="text-xs font-medium text-emerald-700 mb-3">寫手出處參考（AI 寫作時可引用，數據標注請對照以下來源）</p>
+          {authorityRefs.length === 0 && !refsLoading ? (
+            <p className="text-xs text-gray-400">未找到論文或官方資料</p>
+          ) : (
+            <div className="space-y-3">
+              {authorityRefs.map((r, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <span className="flex-shrink-0 w-4 h-4 rounded-full bg-emerald-200 text-emerald-700 text-[10px] font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <a href={r.url} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-emerald-800 hover:underline font-medium block truncate">{r.title}</a>
+                    <p className="text-[10px] text-gray-400 truncate mb-1">{r.url}</p>
+                    {r.content && (
+                      <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-3">{r.content.slice(0, 200)}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showSectionPromptModal && (
         <SystemPromptModal
@@ -1411,50 +1532,59 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               <div className={`flex items-start justify-between gap-4 px-5 py-3.5 ${sec.content.trim() ? 'bg-emerald-50/50' : 'bg-gray-50/50'}`}>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-500">{sec.h2}</p>
-                  {sec.h3s.length > 0 && !sec.content.trim() && (
-                    <p className="text-xs text-gray-400 mt-0.5">{sec.h3s.map(h => `↳ ${h}`).join('   ')}</p>
+                  {/* H3 列表 + per-H3 深度（僅一般段落需要） */}
+                  {sec.h3s.length > 0 && sec.promptStyle === 'info' && (
+                    <div className="mt-1.5 space-y-1">
+                      {sec.h3s.map((h3, hi) => (
+                        <div key={hi} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 truncate max-w-[200px]">↳ {h3}</span>
+                          <select
+                            value={((sec.h3Depths ?? [])[hi] ?? 'standard') as ContentDepth}
+                            onChange={e => setSections(prev => prev.map(s => {
+                              if (s.id !== sec.id) return s;
+                              const next = [...(s.h3Depths ?? s.h3s.map(() => 'standard' as ContentDepth))];
+                              next[hi] = e.target.value as ContentDepth;
+                              return { ...s, h3Depths: next };
+                            }))}
+                            disabled={sec.generating}
+                            className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded bg-white text-gray-500 focus:outline-none disabled:opacity-50 flex-shrink-0"
+                          >
+                            {(Object.keys(DEPTH_LABELS) as ContentDepth[]).map(k => (
+                              <option key={k} value={k}>{DEPTH_LABELS[k]}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                  {/* 風格下拉 */}
-                  <select
-                    value={sec.promptStyle}
-                    onChange={e => {
-                      const newStyle = e.target.value as PromptStyle;
-                      setSections(prev => prev.map(s => s.id === sec.id
-                        ? { ...s, promptStyle: newStyle }
-                        : s));
-                    }}
-                    disabled={sec.generating}
-                    className="text-xs px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-50"
-                  >
-                    {(Object.keys(STYLE_LABELS) as PromptStyle[]).map(k => (
-                      <option key={k} value={k}>{STYLE_LABELS[k]}</option>
-                    ))}
-                  </select>
-                  {/* 深度下拉 */}
-                  <select
-                    value={sec.contentDepth}
-                    onChange={e => setSections(prev => prev.map(s => s.id === sec.id
-                      ? { ...s, contentDepth: e.target.value as ContentDepth }
-                      : s))}
-                    disabled={sec.generating}
-                    className="text-xs px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-50"
-                  >
-                    {(Object.keys(DEPTH_LABELS) as ContentDepth[]).map(k => (
-                      <option key={k} value={k}>{DEPTH_LABELS[k]}</option>
-                    ))}
-                  </select>
+                  {/* 無 H3 的一般段落才顯示 section-level 深度 */}
+                  {sec.h3s.length === 0 && sec.promptStyle === 'info' && (
+                    <select
+                      value={sec.contentDepth}
+                      onChange={e => setSections(prev => prev.map(s => s.id === sec.id
+                        ? { ...s, contentDepth: e.target.value as ContentDepth }
+                        : s))}
+                      disabled={sec.generating}
+                      className="text-xs px-2 py-1.5 border border-gray-300 rounded-lg bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-50"
+                    >
+                      {(Object.keys(DEPTH_LABELS) as ContentDepth[]).map(k => (
+                        <option key={k} value={k}>{DEPTH_LABELS[k]}</option>
+                      ))}
+                    </select>
+                  )}
                   {/* 插入表格 */}
-                  <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={sec.generateTable}
-                      onChange={e => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, generateTable: e.target.checked } : s))}
-                      className="rounded"
-                    />
+                  <button
+                    type="button"
+                    disabled={sec.generating}
+                    onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, generateTable: !s.generateTable } : s))}
+                    title="產生時附加比較表格"
+                    className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded-lg transition-colors disabled:opacity-40 ${sec.generateTable ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
                     表格
-                  </label>
+                  </button>
                   {sec.content.trim() && !sec.generating && (
                     <button
                       onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, isEditing: !s.isEditing } : s))}
@@ -1556,6 +1686,26 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               )}
             </div>
           ))}
+
+          {/* 參考資料區塊（E-E-A-T，計入正文，置於總結後） */}
+          <div className="border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-4 px-5 py-3.5 bg-gray-50/50">
+              <div>
+                <p className="text-sm font-semibold text-gray-500">參考資料</p>
+                <p className="text-xs text-gray-400 mt-0.5">論文、官方資料、政府公告 — 會附在文章總結後，寫手可自行增刪</p>
+              </div>
+              {refsLoading && <span className="flex items-center gap-1 text-xs text-gray-400"><Spinner />搜尋中…</span>}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100">
+              <textarea
+                value={refsContent}
+                onChange={e => setRefsContent(e.target.value)}
+                placeholder={'1. [標題](https://...)\n2. [標題](https://...)'}
+                rows={Math.max(3, (refsContent.match(/\n/g)?.length ?? 0) + 2)}
+                className="w-full text-sm text-gray-700 placeholder-gray-300 resize-none focus:outline-none leading-relaxed font-mono bg-transparent"
+              />
+            </div>
+          </div>
 
           {/* 進入 AI 校稿 */}
           {doneCount > 0 && !anyGenerating && (
@@ -1731,13 +1881,20 @@ function parseSuggestions(text: string): Suggestion[] {
 
     if (old || nw) result.push({ id: Math.random().toString(36).slice(2), section, issue, old, new: nw, status: 'pending' });
   }
-  return result;
+  return result.slice(0, 15);
+}
+
+function stripMd(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1');
 }
 
 function SuggestionCard({ s, onAccept, onReject, onJump }: {
   s: Suggestion; onAccept: () => void; onReject: () => void; onJump: () => void;
 }) {
-  const diff = (s.old || s.new) ? computeDiff(s.old, s.new) : null;
+  const diff = (s.old || s.new) ? computeDiff(stripMd(s.old), stripMd(s.new)) : null;
   return (
     <div className={`border rounded-xl p-4 space-y-2.5 transition-opacity ${s.status !== 'pending' ? 'opacity-50' : 'border-gray-200 bg-white'}`}>
       <div className="flex items-start justify-between gap-2">
@@ -1777,28 +1934,20 @@ function extractOverallEval(raw: string): string {
 }
 
 function buildFinalScorePrompt(article: string, opts: {
-  title: string; keyword: string;
-  writingGuide: string; clientWritingRules: string;
-  sectionOverride: string; brandDescription: string;
+  title: string; keyword: string; initialEval: string;
 }): string {
-  const ruleBlocks = [
-    opts.sectionOverride.trim() && `【使用者指定寫作規則】\n${opts.sectionOverride.trim()}`,
-    opts.clientWritingRules.trim() && `【客戶寫作風格規則】\n${opts.clientWritingRules.trim()}`,
-    `【內容品質規則】\n${QUALITY_RULES}`,
-    opts.writingGuide.trim() && `【全域寫作規則】\n${opts.writingGuide.trim()}`,
-  ].filter(Boolean).join('\n\n');
-  return `你是一位嚴格的 SEO 文章審稿員。請對比以下寫作要求，對修改後的文章給出整體評分。
-
-文章標題：${opts.title}
+  return `文章標題：${opts.title}
 目標關鍵字：${opts.keyword}
 
-寫作要求：
-${ruleBlocks}
+初稿審查結果（供比較參考）：
+${opts.initialEval}
+
+這篇文章已根據上述審查意見修改，請對修改後版本重新評分。評分必須反映改善程度：若問題已修正，分數應比初稿高；若改善有限，說明原因。
 
 修改後文章：
 ${article}
 
-只輸出整體評分與改善說明，格式：整體評分：X/10 — 說明（說明請提及與初稿相比有哪些改善）。繁體中文。`;
+只輸出整體評分與改善說明，格式：整體評分：X/10 — 說明（具體說明哪些問題已改善、哪些仍需注意）。繁體中文。`;
 }
 
 // ── Stage 4 ───────────────────────────────────────────────────────────
@@ -1832,8 +1981,12 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     setOverallEval(''); setSuggestions([]); setFinalScore(''); setError(''); setReviewing(true);
     let buf = '';
     try {
-      const prompt = buildReviewPrompt(articleText, { title, keyword, writingGuide, clientWritingRules, sectionOverride, brandDescription });
-      await streamAPI([{ role: 'user', content: prompt }], chunk => {
+      const sys = buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
+      const prompt = buildReviewPrompt(articleText, { title, keyword });
+      await streamAPI([
+        { role: 'system', content: sys },
+        { role: 'user', content: prompt },
+      ], chunk => {
         if (runIdRef.current !== id) return;
         buf += chunk;
         setOverallEval(extractOverallEval(buf));
@@ -1852,8 +2005,12 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     setFinalScore(''); setFinalScoring(true);
     let buf = '';
     try {
-      const prompt = buildFinalScorePrompt(articleText, { title, keyword, writingGuide, clientWritingRules, sectionOverride, brandDescription });
-      await streamAPI([{ role: 'user', content: prompt }], chunk => {
+      const sys = buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
+      const prompt = buildFinalScorePrompt(articleText, { title, keyword, initialEval: overallEval });
+      await streamAPI([
+        { role: 'system', content: sys },
+        { role: 'user', content: prompt },
+      ], chunk => {
         if (runIdRef.current !== id) return;
         buf += chunk;
         setFinalScore(buf);
@@ -1865,11 +2022,33 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
   function applyChange(suggId: string) {
     const s = suggestions.find(x => x.id === suggId);
     if (!s) return;
-    if (s.old && !articleText.includes(s.old)) {
+
+    if (s.old) {
+      // 1. 精確比對
+      if (articleText.includes(s.old)) {
+        setArticleText(prev => prev.replace(s.old, s.new));
+        setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
+        return;
+      }
+      // 2. 空白彈性比對（允許換行 / 多空格差異）
+      const escaped = s.old.trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\s+/g, '\\s+');
+      try {
+        const regex = new RegExp(escaped);
+        if (regex.test(articleText)) {
+          setArticleText(prev => prev.replace(regex, s.new));
+          setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
+          return;
+        }
+      } catch { /* 正則無效，直接失敗 */ }
+      // 3. 找不到
       setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'error' } : x));
       return;
     }
-    setArticleText(prev => s.old ? prev.replace(s.old, s.new) : prev + (s.new ? '\n\n' + s.new : ''));
+
+    // 無 OLD，直接附加 NEW
+    setArticleText(prev => prev + (s.new ? '\n\n' + s.new : ''));
     setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
   }
 
@@ -1931,77 +2110,91 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
             </div>
           </div>
 
-          {/* 右：總評 + 建議卡片 */}
+          {/* 右：建議流程 / 最終結果 */}
           <div className="flex flex-col overflow-hidden gap-3">
 
-            {/* 上：總評卡片（固定高度） */}
-            <div className="shrink-0">
-              {reviewing && !overallEval && (
-                <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 flex items-center gap-2.5">
-                  <Spinner /><span className="text-sm text-gray-500">AI 正在審查，生成總評…</span>
+            {(finalScore || finalScoring) ? (
+              /* ── 最終評分獨立畫面 ── */
+              <div className="flex-1 overflow-auto space-y-3 pr-0.5">
+                {/* 初稿評分（縮小版） */}
+                <div className="border border-gray-200 rounded-2xl px-4 py-3 bg-gray-50/50">
+                  <p className="text-xs text-gray-400 mb-1">初稿評分</p>
+                  <ReviewMd text={overallEval} />
                 </div>
-              )}
-              {(overallEval || finalScore) && (
-                <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 space-y-2">
-                  {/* 初稿評分 */}
-                  <div>
-                    {finalScore && <p className="text-xs text-gray-400 mb-0.5">初稿</p>}
-                    <ReviewMd text={overallEval} />
+                {/* 修改後評分 */}
+                {finalScoring ? (
+                  <div className="border border-violet-200 rounded-2xl px-5 py-5 flex items-center gap-2.5 bg-violet-50/30">
+                    <Spinner /><span className="text-sm text-gray-500">重新評分中…</span>
                   </div>
-                  {/* 修改後評分 */}
-                  {finalScoring && (
-                    <div className="border-t border-violet-200 pt-2 flex items-center gap-2 text-sm text-gray-500">
-                      <Spinner /><span>重新評分中…</span>
+                ) : (
+                  <div className="border border-emerald-200 rounded-2xl px-5 py-4 bg-emerald-50/30 space-y-1">
+                    <p className="text-xs font-semibold text-emerald-600">修改後評分</p>
+                    <ReviewMd text={finalScore} />
+                    <p className="text-xs text-gray-400 pt-1">共採用 {acceptedCount} 條建議</p>
+                  </div>
+                )}
+                <button
+                  onClick={() => setFinalScore('')}
+                  className="w-full py-2 text-xs border border-gray-200 rounded-xl text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+                >
+                  返回建議列表
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* ── 上：總評卡片 ── */}
+                <div className="shrink-0">
+                  {reviewing && !overallEval && (
+                    <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 flex items-center gap-2.5">
+                      <Spinner /><span className="text-sm text-gray-500">AI 正在審查，生成總評…</span>
                     </div>
                   )}
-                  {finalScore && !finalScoring && (
-                    <div className="border-t border-violet-200 pt-2">
-                      <p className="text-xs text-emerald-600 mb-0.5">修改後</p>
-                      <ReviewMd text={finalScore} />
+                  {overallEval && (
+                    <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 space-y-2 max-h-56 overflow-y-auto">
+                      <ReviewMd text={overallEval} />
+                      {!reviewing && !finalScoring && acceptedCount > 0 && (
+                        <div className="border-t border-violet-100 pt-2">
+                          <button onClick={runFinalScore}
+                            className="w-full py-1.5 text-xs text-violet-600 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors font-medium">
+                            完成修改，取得最終評分
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-                  {/* 取得最終評分按鈕 */}
-                  {!reviewing && !finalScoring && !finalScore && acceptedCount > 0 && (
-                    <div className="border-t border-violet-100 pt-2">
-                      <button onClick={runFinalScore}
-                        className="w-full py-1.5 text-xs text-violet-600 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors font-medium">
-                        完成修改，取得最終評分
-                      </button>
-                    </div>
-                  )}
+                  {error && <Err msg={error} />}
                 </div>
-              )}
-              {error && <Err msg={error} />}
-            </div>
 
-            {/* 下：修改建議卡片（可捲動） */}
-            <div className="flex-1 overflow-auto space-y-2 pr-0.5">
-              {reviewing && overallEval && (
-                <div className="border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-2 text-xs text-gray-400">
-                  <Spinner /><span>繼續解析修改建議…</span>
+                {/* ── 下：修改建議卡片 ── */}
+                <div className="flex-1 overflow-auto space-y-2 pr-0.5">
+                  {reviewing && overallEval && (
+                    <div className="border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-2 text-xs text-gray-400">
+                      <Spinner /><span>繼續解析修改建議…</span>
+                    </div>
+                  )}
+                  {!reviewing && suggestions.length > 0 && (
+                    <>
+                      <p className="text-xs font-medium text-gray-400 px-1">修改建議 · {suggestions.length} 條</p>
+                      {suggestions.map(s => (
+                        <SuggestionCard
+                          key={s.id}
+                          s={s}
+                          onAccept={() => applyChange(s.id)}
+                          onReject={() => setSuggestions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'rejected' } : x))}
+                          onJump={() => jumpToText(s.old)}
+                        />
+                      ))}
+                    </>
+                  )}
+                  {!reviewing && suggestions.length === 0 && overallEval && (
+                    <p className="text-xs text-gray-400 text-center py-4">無具體修改建議</p>
+                  )}
+                  {!reviewing && !overallEval && !error && (
+                    <p className="text-sm text-gray-400 py-8 text-center">點擊「重新校稿」開始</p>
+                  )}
                 </div>
-              )}
-              {!reviewing && suggestions.length > 0 && (
-                <>
-                  <p className="text-xs font-medium text-gray-400 px-1">修改建議 · {suggestions.length} 條</p>
-                  {suggestions.map(s => (
-                    <SuggestionCard
-                      key={s.id}
-                      s={s}
-                      onAccept={() => applyChange(s.id)}
-                      onReject={() => setSuggestions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'rejected' } : x))}
-                      onJump={() => jumpToText(s.old)}
-                    />
-                  ))}
-                </>
-              )}
-              {!reviewing && suggestions.length === 0 && overallEval && (
-                <p className="text-xs text-gray-400 text-center py-4">無具體修改建議</p>
-              )}
-              {!reviewing && !overallEval && !error && (
-                <p className="text-sm text-gray-400 py-8 text-center">點擊「重新校稿」開始</p>
-              )}
-            </div>
+              </>
+            )}
 
           </div>
         </div>
@@ -2076,13 +2269,16 @@ function ComposeInner() {
 
   useEffect(() => {
     setSavedDraft(loadDraft());
-    fetch('/api/writer/settings').then(r => r.json()).then((s: { writing_guide?: string }) => {
-      if (s.writing_guide) setWritingGuide(s.writing_guide);
-    }).catch(() => {});
     fetch('/api/writer/prompt-override').then(r => r.json()).then((overrides: Record<string, string>) => {
       setPromptOverrides(overrides);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch('/api/writer/settings').then(r => r.json()).then((s: { writing_guide?: string }) => {
+      setWritingGuide(s.writing_guide ?? '');
+    }).catch(() => {});
+  }, [stage]);
 
   async function savePromptOverride(stageKey: string, text: string | null) {
     try {
