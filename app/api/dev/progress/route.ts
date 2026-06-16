@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentTasks, getCompletedTasks, addTask, completeTask, deleteCurrentTask, deleteCompletedTask } from '@/lib/devDb';
+import { getCurrentTasks, getCompletedTasks, addTask, completeTask, deleteCurrentTask, deleteCompletedTask, updateCompletedTask } from '@/lib/devDb';
 
 export async function GET() {
   return NextResponse.json({
@@ -21,6 +21,13 @@ export async function PATCH(req: NextRequest) {
   const { id } = await req.json();
   const ok = completeTask(Number(id));
   return NextResponse.json({ ok });
+}
+
+export async function PUT(req: NextRequest) {
+  const { id, title, content, note, completed_at } = await req.json();
+  if (!id || !title?.trim()) return NextResponse.json({ error: '必填欄位缺失' }, { status: 400 });
+  updateCompletedTask(Number(id), title.trim(), (content ?? '').trim(), (note ?? '').trim(), completed_at);
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest) {

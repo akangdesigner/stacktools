@@ -64,3 +64,9 @@ export function deleteCurrentTask(id: number) {
 export function deleteCompletedTask(id: number) {
   db.prepare('DELETE FROM dev_completed_tasks WHERE id = ?').run(id);
 }
+
+export function updateCompletedTask(id: number, title: string, content: string, note: string, completedAt: string) {
+  db.prepare(
+    'UPDATE dev_completed_tasks SET title = ?, content = ?, note = ?, completed_at = ? WHERE id = ?'
+  ).run(title, content, note, completedAt, id);
+}

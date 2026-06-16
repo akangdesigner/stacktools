@@ -2,6 +2,7 @@ import Link from 'next/link';
 import SearchInput from './SearchInput';
 import OwnerFilter from './OwnerFilter';
 import OwnerBadge from './OwnerBadge';
+import ScrollToTodayButton from './ScrollToTodayButton';
 
 const WEBHOOK_URL = 'https://n8n.dg166.com/webhook/monthly-plan';
 
@@ -121,9 +122,8 @@ export default async function MonthlyPlanPage({
     return `/monthly-plan?${p.toString()}${hash ? hash : ''}`;
   }
 
-  const prevHref  = buildHref({ month: shiftMonth(year, month, -1) });
-  const nextHref  = buildHref({ month: shiftMonth(year, month, 1) });
-  const todayHref = buildHref({}, '#today');
+  const prevHref = buildHref({ month: shiftMonth(year, month, -1) });
+  const nextHref = buildHref({ month: shiftMonth(year, month, 1) });
 
   const billCount      = filtered.filter(e => (e.type === 'seo_bill' || e.type === 'monthly') && e.period !== '13').length;
   const renewCount     = filtered.filter(e => ((e.type === 'seo_bill' || e.type === 'monthly') && e.period === '13') || e.type === 'web').length;
@@ -141,9 +141,7 @@ export default async function MonthlyPlanPage({
           </div>
           <div className="flex items-center gap-2 flex-nowrap">
             <SearchInput clients={clients} value={params.search ?? ''} />
-            <Link href={todayHref} className="px-3 py-1.5 rounded-lg border border-blue-200 text-sm text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap shrink-0">
-              跳至今天
-            </Link>
+            <ScrollToTodayButton />
             <Link href={prevHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
               ← 上月
             </Link>
