@@ -239,6 +239,14 @@ export function deletePageChangeLog(id: number): void {
   getDb().prepare('DELETE FROM page_change_logs WHERE id = ?').run(id);
 }
 
+export function updatePageChangeLog(id: number, data: { title: string | null; description: string; change_date: string; page_url: string }): PageChangeLog | null {
+  const db = getDb();
+  db.prepare(
+    'UPDATE page_change_logs SET title = ?, description = ?, change_date = ?, page_url = ? WHERE id = ?'
+  ).run(data.title, data.description, data.change_date, data.page_url, id);
+  return db.prepare('SELECT * FROM page_change_logs WHERE id = ?').get(id) as PageChangeLog | null;
+}
+
 export function getPageChangeLogById(id: number): PageChangeLog | null {
   return getDb().prepare('SELECT * FROM page_change_logs WHERE id = ?').get(id) as PageChangeLog | null;
 }

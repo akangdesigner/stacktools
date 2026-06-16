@@ -120,6 +120,32 @@ export default function ClientPageTracker() {
     title: '', page_url: '', change_date: today, gsc_date: defaultGscDate, description: '',
   });
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm] = useState({ title: '', page_url: '', change_date: '', description: '' });
+
+  function startEdit(log: ChangeLog) {
+    setEditingId(log.id);
+    setEditForm({ title: log.title ?? '', page_url: log.page_url, change_date: log.change_date, description: log.description });
+  }
+
+  async function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    setEditSaving(true);
+    const res = await fetch('/api/page-tracker', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editingId, ...editForm }),
+    });
+    const updated = await res.json();
+    if (res.ok) {
+      setLogs(prev => prev.map(l => l.id === editingId ? { ...l, ...updated } : l));
+      setEditingId(null);
+    }
+    setEditSaving(false);
+  }
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -320,6 +346,60 @@ export default function ClientPageTracker() {
             return (
               <div key={log.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
+                {/* 編輯表單（inline） */}
+                {editingId === log.id && (
+                  <form onSubmit={handleEditSave} className="px-5 pt-5 pb-4 space-y-3 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-700">編輯紀錄</p>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">標題（選填）</label>
+                      <input
+                        type="text"
+                        value={editForm.title}
+                        onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">頁面 URL</label>
+                      <input
+                        type="url"
+                        value={editForm.page_url}
+                        onChange={e => setEditForm(f => ({ ...f, page_url: e.target.value }))}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">改動日期</label>
+                      <input
+                        type="date"
+                        value={editForm.change_date}
+                        onChange={e => setEditForm(f => ({ ...f, change_date: e.target.value }))}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">改動描述</label>
+                      <textarea
+                        value={editForm.description}
+                        onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                        rows={3}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 resize-none"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={editSaving}
+                        className="px-4 py-2 bg-gray-900 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50">
+                        {editSaving ? '儲存中…' : '儲存'}
+                      </button>
+                      <button type="button" onClick={() => setEditingId(null)}
+                        className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">取消</button>
+                    </div>
+                  </form>
+                )}
+
                 {/* 卡片主體 */}
                 <div className="px-5 pt-5 pb-4">
 
@@ -428,8 +508,12 @@ export default function ClientPageTracker() {
                     className="text-sm text-sky-600 hover:text-sky-800 font-medium transition-colors disabled:opacity-40">
                     {isSnapping ? '取得 GSC 中…' : '+ 記錄快照'}
                   </button>
-                  <button onClick={() => handleDeleteLog(log.id)}
-                    className="text-xs text-gray-300 hover:text-red-400 transition-colors">刪除改動</button>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => startEdit(log)}
+                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors">編輯</button>
+                    <button onClick={() => handleDeleteLog(log.id)}
+                      className="text-xs text-gray-300 hover:text-red-400 transition-colors">刪除改動</button>
+                  </div>
                 </div>
               </div>
             );

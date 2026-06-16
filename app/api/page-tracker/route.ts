@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listPageChangeLogs, createPageChangeLog, deletePageChangeLog, listClients } from '@/lib/gscDb';
+import { listPageChangeLogs, createPageChangeLog, deletePageChangeLog, updatePageChangeLog, listClients } from '@/lib/gscDb';
 import { getAccessToken } from '@/lib/gscAuth';
 
 const GSC_API = 'https://searchconsole.googleapis.com/webmasters/v3/sites';
@@ -87,6 +87,24 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(log);
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const { id, title, description, change_date, page_url } = await req.json();
+    if (!id || !description?.trim() || !change_date || !page_url?.trim()) {
+      return NextResponse.json({ error: '必填欄位缺失' }, { status: 400 });
+    }
+    const updated = updatePageChangeLog(Number(id), {
+      title: title?.trim() || null,
+      description: description.trim(),
+      change_date,
+      page_url: page_url.trim(),
+    });
+    return NextResponse.json(updated);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
