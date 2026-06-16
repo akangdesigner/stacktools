@@ -182,7 +182,7 @@ const extraItems: { href: string; label: string; inDev?: boolean; suspended?: bo
     ),
   },
   {
-    href: '#',
+    href: '/silver',
     label: '銀髮 LINE 機器人',
     inDev: true,
     icon: (

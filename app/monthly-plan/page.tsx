@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import SearchInput from './SearchInput';
+import OwnerFilter from './OwnerFilter';
+import OwnerBadge from './OwnerBadge';
 
 const WEBHOOK_URL = 'https://n8n.dg166.com/webhook/monthly-plan';
 
@@ -14,6 +16,22 @@ type PlanEvent = {
   contract_end: string;
   label: string;
 };
+
+
+const SEO_OWNERS: Record<string, string[]> = {
+  '1':['Amy','Selina'],'7':['Amy','Selina'],'14':['Amy','Selina'],
+  '21':['Amy','Selina'],'28':['Amy','Selina'],'30':['Emma'],
+  '35':['Amy','Selina'],'42':['Amy','Selina'],'49':['Amy','Selina'],
+  '56':['Amy','Selina'],'60':['Emma'],'63':['Amy','Selina'],'70':['Emma'],
+};
+
+function getOwners(type: EventType, period: string | null): string[] {
+  if (type === 'seo') return SEO_OWNERS[period ?? ''] ?? [];
+  if (type === 'seo_bill') return period === '13' ? ['Mike'] : period === '6' ? ['Mike','Selina','Steven'] : ['Mike','Selina','Steven','Jena'];
+  if (type === 'monthly') return period === '13' ? ['Mike'] : ['Mike','Selina','Steven','Jena'];
+  if (type === 'web') return ['Mike'];
+  return [];
+}
 
 const BASE_TYPE_CONFIG: Record<EventType, { tag: string; tagColor: string }> = {
   seo:      { tag: 'SEO 里程碑', tagColor: 'bg-teal-100 text-teal-700 border-teal-200' },
@@ -65,11 +83,12 @@ function shiftMonth(year: number, month: number, delta: number): string {
 export default async function MonthlyPlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; search?: string }>;
+  searchParams: Promise<{ month?: string; search?: string; owner?: string }>;
 }) {
   const params = await searchParams;
   const { year, month } = parseMonth(params.month);
   const search = (params.search ?? '').trim().toLowerCase();
+  const ownerFilter = params.owner ?? '';
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const startDate = `${year}-${pad(month)}-01`;
@@ -80,7 +99,8 @@ export default async function MonthlyPlanPage({
   const clients = [...new Set(allData.map(e => e.channel_name))].sort();
   const filtered = allData.filter(e =>
     e.date && e.date >= startDate && e.date <= endDate &&
-    (!search || e.channel_name === params.search)
+    (!search || e.channel_name === params.search) &&
+    (!ownerFilter || getOwners(e.type, e.period).includes(ownerFilter))
   );
 
   const grouped = new Map<string, PlanEvent[]>();
@@ -92,8 +112,18 @@ export default async function MonthlyPlanPage({
   const sortedDates = [...grouped.keys()].sort();
 
   const todayStr  = new Date().toISOString().split('T')[0];
-  const prevHref  = `/monthly-plan?month=${shiftMonth(year, month, -1)}`;
-  const nextHref  = `/monthly-plan?month=${shiftMonth(year, month, 1)}`;
+
+  function buildHref(overrides: Record<string, string>, hash?: string) {
+    const p = new URLSearchParams();
+    if (params.search) p.set('search', params.search);
+    if (ownerFilter)   p.set('owner', ownerFilter);
+    Object.entries(overrides).forEach(([k, v]) => p.set(k, v));
+    return `/monthly-plan?${p.toString()}${hash ? hash : ''}`;
+  }
+
+  const prevHref  = buildHref({ month: shiftMonth(year, month, -1) });
+  const nextHref  = buildHref({ month: shiftMonth(year, month, 1) });
+  const todayHref = buildHref({}, '#today');
 
   const billCount      = filtered.filter(e => (e.type === 'seo_bill' || e.type === 'monthly') && e.period !== '13').length;
   const renewCount     = filtered.filter(e => ((e.type === 'seo_bill' || e.type === 'monthly') && e.period === '13') || e.type === 'web').length;
@@ -103,25 +133,31 @@ export default async function MonthlyPlanPage({
     <div className="p-8 max-w-3xl">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">客戶進度追蹤</h1>
-          <p className="text-sm text-gray-500 mt-0.5">合約里程碑、請款與續約提醒</p>
+      <div className="flex flex-col gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">客戶進度追蹤</h1>
+            <p className="text-sm text-gray-500 mt-0.5">合約里程碑、請款與續約提醒</p>
+          </div>
+          <div className="flex items-center gap-2 flex-nowrap">
+            <SearchInput clients={clients} value={params.search ?? ''} />
+            <Link href={todayHref} className="px-3 py-1.5 rounded-lg border border-blue-200 text-sm text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap shrink-0">
+              跳至今天
+            </Link>
+            <Link href={prevHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
+              ← 上月
+            </Link>
+            <span className="text-sm font-semibold text-gray-900 min-w-24 text-center shrink-0">
+              {year} 年 {month} 月
+            </span>
+            <Link href={nextHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
+              下月 →
+            </Link>
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-nowrap">
-          <SearchInput clients={clients} value={params.search ?? ''} />
-          <Link href="/monthly-plan#today" className="px-3 py-1.5 rounded-lg border border-blue-200 text-sm text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap shrink-0">
-            跳至今天
-          </Link>
-          <Link href={prevHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
-            ← 上月
-          </Link>
-          <span className="text-sm font-semibold text-gray-900 min-w-24 text-center shrink-0">
-            {year} 年 {month} 月
-          </span>
-          <Link href={nextHref} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors shrink-0">
-            下月 →
-          </Link>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400 shrink-0">負責人篩選</span>
+          <OwnerFilter value={ownerFilter} />
         </div>
       </div>
 
@@ -183,7 +219,10 @@ export default async function MonthlyPlanPage({
                           {tc.tag}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{e.channel_name}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-medium text-gray-900">{e.channel_name}</p>
+                            <OwnerBadge owners={getOwners(e.type, e.period)} activeOwner={ownerFilter} />
+                          </div>
                           <p className="text-xs text-gray-500 mt-0.5">{e.label}</p>
                         </div>
                         <p className="text-xs text-gray-400 shrink-0 pt-0.5">到期 {e.contract_end}</p>

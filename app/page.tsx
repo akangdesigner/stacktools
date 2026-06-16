@@ -154,7 +154,7 @@ const externalTools: Tool[] = [
     suspended: true,
   },
   {
-    href: "#",
+    href: "/silver",
     title: "銀髮 LINE 機器人",
     description: "專為銀髮族設計的 LINE 智慧助理，提供健康資訊、提醒服務與親情互動功能。",
     icon: "🤖",
