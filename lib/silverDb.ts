@@ -23,6 +23,15 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now', 'localtime')),
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS silver_users (
+    userId TEXT PRIMARY KEY,
+    nickname TEXT,
+    age INTEGER,
+    gender TEXT,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime')),
+    updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 export interface NewsPreference {
@@ -88,4 +97,35 @@ export function resolveUserSymptoms(userId: string): void {
     UPDATE health_events SET resolved = 1, updatedAt = datetime('now', 'localtime')
     WHERE userId = ? AND type = 'symptom' AND resolved = 0
   `).run(userId);
+}
+
+// ── Silver Users ────────────────────────────────────────────────────────────
+
+export interface SilverUser {
+  userId: string;
+  nickname: string | null;
+  age: number | null;
+  gender: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function getUser(userId: string): SilverUser | null {
+  return (db.prepare('SELECT * FROM silver_users WHERE userId = ?').get(userId) as SilverUser) ?? null;
+}
+
+export function getAllUsers(): SilverUser[] {
+  return db.prepare('SELECT * FROM silver_users ORDER BY updatedAt DESC').all() as SilverUser[];
+}
+
+export function upsertUser(userId: string, nickname: string | null, age: number | null, gender: string | null): void {
+  db.prepare(`
+    INSERT INTO silver_users (userId, nickname, age, gender, updatedAt)
+    VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(userId) DO UPDATE SET
+      nickname = excluded.nickname,
+      age = excluded.age,
+      gender = excluded.gender,
+      updatedAt = excluded.updatedAt
+  `).run(userId, nickname, age, gender);
 }
