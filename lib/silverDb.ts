@@ -123,9 +123,9 @@ export function upsertUser(userId: string, nickname: string | null, age: number 
     INSERT INTO silver_users (userId, nickname, age, gender, updatedAt)
     VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
     ON CONFLICT(userId) DO UPDATE SET
-      nickname = excluded.nickname,
-      age = excluded.age,
-      gender = excluded.gender,
+      nickname = COALESCE(excluded.nickname, silver_users.nickname),
+      age = COALESCE(excluded.age, silver_users.age),
+      gender = COALESCE(excluded.gender, silver_users.gender),
       updatedAt = excluded.updatedAt
   `).run(userId, nickname, age, gender);
 }
