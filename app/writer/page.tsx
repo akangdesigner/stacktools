@@ -766,15 +766,17 @@ function SkeletonTable() {
 // ── Client Settings Tab ───────────────────────────────────────────────
 
 type GscClient = { id: number; name: string };
-type BrandProfile = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string };
+type BrandProfile = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string; banned_words: string };
 
 function ClientSettingsTab() {
   const [clients, setClients] = useState<GscClient[]>([]);
   const [profiles, setProfiles] = useState<Record<number, BrandProfile>>({});
   const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState<{ brand_url: string; brand_description: string; writing_rules: string }>({ brand_url: '', brand_description: '', writing_rules: '' });
+  const [draft, setDraft] = useState<{ brand_url: string; brand_description: string; writing_rules: string; banned_words: string }>({ brand_url: '', brand_description: '', writing_rules: '', banned_words: '' });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -789,8 +791,9 @@ function ClientSettingsTab() {
   }, []);
 
   function startEdit(clientId: number) {
-    const p = profiles[clientId] ?? { gsc_client_id: clientId, brand_url: '', brand_description: '', writing_rules: '' };
-    setDraft({ brand_url: p.brand_url, brand_description: p.brand_description, writing_rules: p.writing_rules ?? '' });
+    const p = profiles[clientId] ?? { gsc_client_id: clientId, brand_url: '', brand_description: '', writing_rules: '', banned_words: '' };
+    setDraft({ brand_url: p.brand_url, brand_description: p.brand_description, writing_rules: p.writing_rules ?? '', banned_words: p.banned_words ?? '' });
+    setExtractError('');
     setEditing(clientId);
   }
 
@@ -802,10 +805,32 @@ function ClientSettingsTab() {
       body: JSON.stringify({ gsc_client_id: clientId, ...draft }),
     });
     if (res.ok) {
-      setProfiles(prev => ({ ...prev, [clientId]: { gsc_client_id: clientId, ...draft, writing_rules: draft.writing_rules } }));
+      setProfiles(prev => ({ ...prev, [clientId]: { gsc_client_id: clientId, ...draft } }));
       setEditing(null);
     }
     setSaving(false);
+  }
+
+  async function extractFromPdf(file: File) {
+    setExtracting(true);
+    setExtractError('');
+    const body = new FormData();
+    body.append('file', file);
+    try {
+      const res = await fetch('/api/writer/brand-profile/extract-pdf', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) { setExtractError(data.error ?? '辨識失敗，請重試'); return; }
+      setDraft(d => ({
+        brand_url: d.brand_url,
+        brand_description: data.brand_description || d.brand_description,
+        writing_rules: data.writing_rules || d.writing_rules,
+        banned_words: data.banned_words || d.banned_words,
+      }));
+    } catch {
+      setExtractError('辨識失敗，請重試');
+    } finally {
+      setExtracting(false);
+    }
   }
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400';
@@ -830,6 +855,14 @@ function ClientSettingsTab() {
           <div key={c.id} className="border border-blue-300 rounded-xl p-4 space-y-3 bg-blue-50">
             <p className="text-sm font-semibold text-blue-900">{c.name}</p>
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">上傳 PDF 自動辨識</label>
+              <input type="file" accept="application/pdf" disabled={extracting}
+                onChange={e => { const f = e.target.files?.[0]; if (f) extractFromPdf(f); e.target.value = ''; }}
+                className="block w-full text-xs text-gray-500 disabled:opacity-50" />
+              {extracting && <p className="text-xs text-blue-500 mt-1">AI 辨識中，請稍候…</p>}
+              {extractError && <p className="text-xs text-red-500 mt-1">{extractError}</p>}
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">品牌網址</label>
               <input className={inputCls} placeholder="https://example.com" value={draft.brand_url}
                 onChange={e => setDraft(d => ({ ...d, brand_url: e.target.value }))} />
@@ -847,6 +880,13 @@ function ClientSettingsTab() {
                 placeholder={"此客戶的寫文限制與規範，AI 每次撰寫段落都會遵守，例如：\n・語氣偏向…\n・禁止提及…\n・品牌 CTA 固定寫法…"}
                 value={draft.writing_rules}
                 onChange={e => setDraft(d => ({ ...d, writing_rules: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">禁詞</label>
+              <textarea className={`${inputCls} h-20 resize-none text-xs leading-relaxed`}
+                placeholder={"此客戶禁止使用的詞彙，一行一個"}
+                value={draft.banned_words}
+                onChange={e => setDraft(d => ({ ...d, banned_words: e.target.value }))} />
             </div>
             <div className="flex gap-2">
               <button onClick={() => saveProfile(c.id)} disabled={saving}

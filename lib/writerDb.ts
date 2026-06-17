@@ -48,10 +48,12 @@ function db() {
         brand_url TEXT NOT NULL DEFAULT '',
         brand_description TEXT NOT NULL DEFAULT '',
         writing_rules TEXT NOT NULL DEFAULT '',
+        banned_words TEXT NOT NULL DEFAULT '',
         updated_at TEXT
       );
     `);
     try { _db.exec(`ALTER TABLE writer_brand_profiles ADD COLUMN writing_rules TEXT NOT NULL DEFAULT ''`); } catch { /* 欄位已存在 */ }
+    try { _db.exec(`ALTER TABLE writer_brand_profiles ADD COLUMN banned_words TEXT NOT NULL DEFAULT ''`); } catch { /* 欄位已存在 */ }
   }
   return _db;
 }
@@ -179,6 +181,7 @@ export type BrandProfile = {
   brand_url: string;
   brand_description: string;
   writing_rules: string;
+  banned_words: string;
   updated_at: string;
 };
 
@@ -207,14 +210,15 @@ export function deleteUserPromptOverride(userEmail: string, stage: string): void
   db().prepare('DELETE FROM user_prompt_overrides WHERE user_email = ? AND stage = ?').run(userEmail, stage);
 }
 
-export function upsertBrandProfile(gscClientId: number, brandUrl: string, brandDescription: string, writingRules: string): void {
+export function upsertBrandProfile(gscClientId: number, brandUrl: string, brandDescription: string, writingRules: string, bannedWords: string): void {
   db().prepare(
-    `INSERT INTO writer_brand_profiles (gsc_client_id, brand_url, brand_description, writing_rules, updated_at)
-     VALUES (?, ?, ?, ?, datetime('now'))
+    `INSERT INTO writer_brand_profiles (gsc_client_id, brand_url, brand_description, writing_rules, banned_words, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(gsc_client_id) DO UPDATE SET
        brand_url = excluded.brand_url,
        brand_description = excluded.brand_description,
        writing_rules = excluded.writing_rules,
+       banned_words = excluded.banned_words,
        updated_at = excluded.updated_at`
-  ).run(gscClientId, brandUrl, brandDescription, writingRules);
+  ).run(gscClientId, brandUrl, brandDescription, writingRules, bannedWords);
 }

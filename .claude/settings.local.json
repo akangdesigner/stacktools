@@ -139,7 +139,13 @@
       "mcp__supabase__list_projects",
       "mcp__supabase__execute_sql",
       "mcp__n8n-mcp__n8n_manage_datatable",
-      "WebFetch(domain:n8n.dg166.com)"
+      "WebFetch(domain:n8n.dg166.com)",
+      "Bash(jobs -l)",
+      "Bash(kill 8730)",
+      "Bash(kill 6503 6504)",
+      "Bash(disown)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npx eslint *)"
     ]
   }
 }
