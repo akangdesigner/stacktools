@@ -145,7 +145,32 @@
       "Bash(kill 6503 6504)",
       "Bash(disown)",
       "Bash(pkill -f \"next dev\")",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "mcp__n8n__n8n_list_workflows",
+      "mcp__n8n__n8n_get_workflow",
+      "Bash(ps *)",
+      "Skill(run)",
+      "Bash(command -v chromium-cli)",
+      "Bash(xargs -I{} echo {})",
+      "mcp__n8n__tools_documentation",
+      "mcp__n8n__n8n_update_partial_workflow",
+      "Read(//Users/kc/Downloads/**)",
+      "mcp__n8n__n8n_validate_workflow",
+      "Bash(kill 2419 2420)",
+      "Bash(env)",
+      "Bash(pkill -f \"next dev -H 0.0.0.0 -p 3001\")",
+      "Bash(sed -i.bak 's#./lib/html-cleaner#/Users/kc/stacktools/lib/html-cleaner#' /tmp/toctest.ts)",
+      "Bash(npx tsx *)",
+      "Bash(npm --version)",
+      "Bash(npm help *)",
+      "Bash(npm approve-scripts *)",
+      "Bash(npm view *)",
+      "Bash(npx -y npm@latest approve-scripts --allow-scripts-pending)",
+      "Bash(npx *)",
+      "Bash(grep -o '參考文獻[^<]*\\\\\\(<[^>]*>[^<]*\\\\\\)\\\\{0,5\\\\}' /tmp/yardley.html)",
+      "Bash(grep -o '<a[^>]*0066cc[^>]*>.\\\\{0,200\\\\}' /tmp/yardley.html)",
+      "mcp__n8n__get_node",
+      "Bash(grep *)"
     ]
   }
 }
