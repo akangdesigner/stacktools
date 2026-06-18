@@ -101,21 +101,12 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   walkHeadings(root);
 
   // ── 3. p > span (font-size / color / line-height)
-  // Skip spans that are inside <a> to avoid overriding link color
+  // Skip spans that are inside <a>，顏色統一交給第 5 步的 <a> 清理邏輯處理
   root.querySelectorAll("p").forEach((p) => {
     const spans = p.querySelectorAll("span");
     if (spans.length > 0) {
       spans.forEach((span) => {
-        if (span.closest("a")) {
-          // 移除 span 上的 color，讓顏色繼承自 <a> 的設定
-          const existing = span.getAttribute("style") || "";
-          const styleMap = parseStyleString(existing);
-          styleMap.delete("color");
-          const cleaned = serializeStyleMap(styleMap);
-          if (cleaned) span.setAttribute("style", cleaned);
-          else span.removeAttribute("style");
-          return;
-        }
+        if (span.closest("a")) return;
         const existing = span.getAttribute("style") || "";
         span.setAttribute("style", mergeStyles(existing, {
           "font-size": client.paragraphFontSize,
@@ -127,18 +118,10 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   });
 
   // ── 4. li > span
-  // 跳過 <a> 內部的 span，避免蓋掉連結顏色
+  // 跳過 <a> 內部的 span，顏色統一交給第 5 步的 <a> 清理邏輯處理
   root.querySelectorAll("li").forEach((li) => {
     li.querySelectorAll("span").forEach((span) => {
-      if (span.closest("a")) {
-        const existing = span.getAttribute("style") || "";
-        const styleMap = parseStyleString(existing);
-        styleMap.delete("color");
-        const cleaned = serializeStyleMap(styleMap);
-        if (cleaned) span.setAttribute("style", cleaned);
-        else span.removeAttribute("style");
-        return;
-      }
+      if (span.closest("a")) return;
       const existing = span.getAttribute("style") || "";
       span.setAttribute("style", mergeStyles(existing, {
         "font-size": client.paragraphFontSize,
@@ -173,6 +156,17 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         "text-decoration": client.linkTextDecoration,
         "font-weight": client.linkFontWeight,
       }));
+      // 移除內部元素（span、strong...）上殘留的 color，避免蓋掉連結顏色
+      a.querySelectorAll("*").forEach((node) => {
+        const nodeStyle = node.getAttribute("style") || "";
+        if (!nodeStyle) return;
+        const nodeMap = parseStyleString(nodeStyle);
+        if (!nodeMap.has("color")) return;
+        nodeMap.delete("color");
+        const cleanedNode = serializeStyleMap(nodeMap);
+        if (cleanedNode) node.setAttribute("style", cleanedNode);
+        else node.removeAttribute("style");
+      });
     }
   });
 
