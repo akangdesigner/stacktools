@@ -58,6 +58,8 @@ type Section = {
   reviseQuotes: string[];
   contentDepth: ContentDepth;
   h3Depths: ContentDepth[];
+  h3Tables: boolean[];
+  h3Lists: boolean[];
 };
 
 // ── Prompt Defaults（可被個人化覆蓋的靜態指令）────────────────────────
@@ -142,8 +144,21 @@ ${body}${guideBlock}
 }
 
 function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, completedContext = ''): string {
+  const h3Tables = sec.h3Tables ?? sec.h3s.map(() => false);
+  const h3Lists = sec.h3Lists ?? sec.h3s.map(() => false);
+  const showH3FormatHints = style === 'info';
   const h3Block = sec.h3s.length > 0
-    ? `\n\n此段落必須依序包含以下 H3 子節，每個 H3 請使用 ### 標題格式獨立成一小節，不可省略或合併：\n${sec.h3s.map(h => `- ### ${h}`).join('\n')}`
+    ? `\n\n這個 H2 小節開頭可以先用 1–2 句話簡短帶出「${sec.h2}」這個小節本身要討論什麼，這只是這個小節自己的開場破題，不是整篇文章的前言（文章的前言是另一個獨立的 H2，已經寫過了，這裡不要用導言語氣、不要重複前言說過的內容，也不要再帶讀者進入整篇文章）。開場之後依序包含以下 H3 子節，每個 H3 請使用 ### 標題格式獨立成一小節，不可省略或合併：\n${sec.h3s.map((h, i) => {
+        const hints: string[] = [];
+        if (showH3FormatHints && h3Tables[i]) hints.push('需加入一個 Markdown 表格整理重點資訊');
+        if (showH3FormatHints && h3Lists[i]) hints.push('改用 Markdown 條列格式呈現，每一點獨立一行並以 "- " 開頭（例如：- **粗體名稱**：一句說明），不要寫成大段散文');
+        return `- ### ${h}${hints.length > 0 ? `（${hints.join('；')}）` : ''}`;
+      }).join('\n')}`
+    : '';
+  const tableTitles = showH3FormatHints ? sec.h3s.filter((_, i) => h3Tables[i]) : [];
+  const listTitles = showH3FormatHints ? sec.h3s.filter((_, i) => h3Lists[i]) : [];
+  const formatReminder = (tableTitles.length > 0 || listTitles.length > 0)
+    ? `\n\n格式提醒（務必逐一檢查，不可遺漏）：${tableTitles.length > 0 ? `\n・以下每個 H3 子節都必須各自包含一個獨立的 Markdown 表格，不可只在其中一個出現：${tableTitles.map(t => `「${t}」`).join('、')}` : ''}${listTitles.length > 0 ? `\n・以下每個 H3 子節都必須改用 Markdown 條列格式（每一點獨立一行並以 "- " 開頭），不可寫成散文段落：${listTitles.map(t => `「${t}」`).join('、')}` : ''}`
     : '';
   const prevBlock = completedContext.trim()
     ? `【已完成段落參考 — 避免重複說明相同內容，據此調整切入角度】\n${completedContext.trim()}\n\n`
@@ -154,8 +169,8 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
     ? `\n\n各 H3 子節篇幅要求（依序對應，各自獨立）：\n${sec.h3s.map((h, i) => {
         const d = h3Depths[i] ?? 'standard';
         return `・### ${h}：${DEPTH_LABELS[d]}\n${DEPTH_INSTRUCTIONS[d].split('\n').slice(1).join('\n')}`;
-      }).join('\n\n')}`
-    : `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}`;
+      }).join('\n\n')}${formatReminder}`
+    : `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}${formatReminder}`;
   const h3FormatReminder = sec.h3s.length > 0 ? '，H3 子節一律使用 ### 標題格式' : '';
   const header = `${prevBlock}完整文章架構如下：\n${outlineText}\n\n現在請只撰寫「${sec.h2}」這個段落的正文內容。${h3Block}\n\n`;
   const footer = `${depthBlock}\n\n從 ## 標題開始輸出${h3FormatReminder}，只輸出該段落正文，不要加任何說明或備註。`;
@@ -193,13 +208,13 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   // 預設 info 風格
   return `${header}這個段落要提供清楚、實用的資訊，讓讀者讀完真的有收穫。
 
-寫法要求：以散文段落寫作為主。若需要條列，格式必須是「**粗體名稱**：一句說明」，不要用普通的 - 條列符號。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。繁體中文，風格清楚自然。${footer}`;
+寫法要求：以散文段落寫作為主。若需要條列，格式必須是「**粗體名稱**：一句說明」，不要用普通的 - 條列符號${listTitles.length > 0 ? `（但以下被標記為條列格式的 H3 子節例外，必須改用 "- " 開頭的 Markdown 條列：${listTitles.map(t => `「${t}」`).join('、')}）` : ''}。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。繁體中文，風格清楚自然。${footer}`;
 }
 
 const QUALITY_RULES = `內容品質規則（每句都要符合）：
 - 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
 - 禁用「先否定再肯定」句型：不是A而是B、不只是A更是B、不應該A而應該B。
-- 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。`;
+- 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。若該段落的具體指示明確要求改用 "- " 開頭的 Markdown 條列格式，則以該指示為準，不適用本條的粗體項目符號慣例。`;
 
 function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string, authorityRefs: SearchResult[] = []): string {
   const parts: string[] = [];
@@ -228,12 +243,17 @@ function buildSystemMessage(sectionOverride: string, brandDescription: string, c
 }
 
 // 小模型在長對話下會忽略 system message 的風格規則，必須把規則原文重申在最後一則訊息結尾
-function buildPriorityReminder(sectionOverride: string, clientWritingRules: string): string {
-  if (!sectionOverride.trim() && !clientWritingRules.trim()) return '';
-  const parts = ['【寫作規則重申 — 直接輸出，不得提問或列選項】'];
-  if (clientWritingRules.trim()) parts.push(`客戶寫作風格：\n${clientWritingRules.trim()}`);
-  if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（盡量融入其精神，難以執行時自行判斷最合理的方式）：\n${sectionOverride.trim()}`);
-  return '\n\n' + parts.join('\n\n');
+function buildPriorityReminder(sectionOverride: string, clientWritingRules: string, authorityRefs: SearchResult[] = []): string {
+  const parts: string[] = [];
+  if (sectionOverride.trim() || clientWritingRules.trim()) {
+    parts.push('【寫作規則重申 — 直接輸出，不得提問或列選項】');
+    if (clientWritingRules.trim()) parts.push(`客戶寫作風格：\n${clientWritingRules.trim()}`);
+    if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（盡量融入其精神，難以執行時自行判斷最合理的方式）：\n${sectionOverride.trim()}`);
+  }
+  if (authorityRefs.length > 0) {
+    parts.push(`【引用來源提醒 — 務必執行，不是可選】這個段落如果提到具體數據、研究結論、統計數字或專業判斷依據，必須挑至少 1 處用 Markdown 超連結格式標注來源，不可整段毫無連結。可用來源：\n${authorityRefs.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n')}`);
+  }
+  return parts.length > 0 ? '\n\n' + parts.join('\n\n') : '';
 }
 
 // CommonMark 不解析「**注意：**內容」這種粗體內含結尾標點又緊接文字的寫法（** 會原樣顯示），把標點移出粗體
@@ -273,6 +293,46 @@ function buildReviewSystemMessage(opts: {
   if (opts.sectionOverride.trim())
     parts.push(`【使用者指定寫作規則 — 最高優先】\n${opts.sectionOverride.trim()}`);
   return parts.join('\n\n');
+}
+
+function buildViolationReviewSystemMessage(opts: {
+  clientWritingRules: string; brandDescription: string; bannedWords: string;
+}): string {
+  const parts: string[] = [];
+  parts.push(`你是一位專業的廣告合規審稿員，專門檢查繁體中文內容行銷文章是否違反客戶禁用詞、寫文規範或品牌宣稱範圍。只挑出明確違規的地方，不要對文字品質、語氣、結構、SEO 等非違規問題提供建議。`);
+  if (opts.bannedWords.trim())
+    parts.push(`【禁止使用的詞彙或宣稱 — 文章中若出現以下詞彙、或語意相近的宣稱，一律視為違規】\n${opts.bannedWords.trim()}`);
+  if (opts.clientWritingRules.trim())
+    parts.push(`【寫文規範 — 違反視為違規】\n${opts.clientWritingRules.trim()}`);
+  if (opts.brandDescription.trim())
+    parts.push(`【品牌背景資訊 — 宣稱不得超出此範圍，超出視為違規】\n${opts.brandDescription.trim()}`);
+  return parts.join('\n\n');
+}
+
+function buildViolationReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
+  return `文章標題：${opts.title}
+目標關鍵字：${opts.keyword}
+
+待審稿文章：
+
+${article}
+
+---
+
+請逐字檢查文章，找出所有違反禁用詞、寫文規範或品牌背景範圍的地方，不可遺漏。若完全沒有違規，請只輸出「整體評分：10/10 — 未發現違規」，不要輸出任何建議區塊。否則請先輸出「整體評分：X/10 — 說明」（依違規嚴重程度與數量評分），再逐條列出違規，每條格式如下：
+
+---SUGGESTION---
+SECTION: （問題所在的 H2 段落名稱）
+ISSUE: （違反了哪一條禁詞或規範，具體說明）
+OLD: （從文章中精確複製違規的詞句本身，不擴大範圍到上下文；必須與文章一字不差）
+NEW: （建議替換的安全用詞；若整句都需要刪除則此欄完全空白）
+---END---
+
+重要規定（違反則建議無效）：
+1. OLD 只複製真正違規的詞句本身，不要包含不相關的上下文
+2. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
+3. 只挑出真正違規的地方，不要報告文字品質、語氣、結構等非違規問題
+4. 繁體中文輸出`;
 }
 
 function buildReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
@@ -363,6 +423,8 @@ function parseOutline(text: string): Section[] {
         reviseQuotes: [],
         contentDepth: 'standard',
         h3Depths: [],
+        h3Tables: [],
+        h3Lists: [],
       };
     } else if (h3 && cur) {
       cur.h3s.push(h3[1].trim());
@@ -374,6 +436,8 @@ function parseOutline(text: string): Section[] {
     ...s,
     promptStyle: detectStyle(s.h2, i, total),
     h3Depths: s.h3s.map(() => 'standard' as ContentDepth),
+    h3Tables: s.h3s.map(() => s.generateTable),
+    h3Lists: s.h3s.map(() => false),
   }));
 }
 
@@ -682,7 +746,7 @@ function TitleSelector({ titles, value, onChange }: { titles: string[]; value: s
 }
 
 type GscClientOption = { id: number; name: string };
-type BrandProfileOption = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string };
+type BrandProfileOption = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string; banned_words: string };
 
 // ── Stage 1 ───────────────────────────────────────────────────────────
 
@@ -690,12 +754,13 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
   keyword: string; vendor: string; writingGuide: string;
   analyzeOverride: string;
   onSaveAnalyzeOverride: (text: string | null) => void;
-  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string, brandDescription: string) => void;
+  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string, brandDescription: string, bannedWords: string) => void;
 }) {
   const [brandName, setBrandName] = useState(vendor);
   const [brandUrl, setBrandUrl] = useState('');
   const [brandDescription, setBrandDescription] = useState('');
   const [clientWritingRules, setClientWritingRules] = useState('');
+  const [bannedWords, setBannedWords] = useState('');
   const [gscClients, setGscClients] = useState<GscClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
@@ -717,7 +782,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
 
   function handleClientChange(id: number | null) {
     setSelectedClientId(id);
-    if (id === null) { setBrandName(vendor); setBrandUrl(''); setBrandDescription(''); setClientWritingRules(''); return; }
+    if (id === null) { setBrandName(vendor); setBrandUrl(''); setBrandDescription(''); setClientWritingRules(''); setBannedWords(''); return; }
     const c = gscClients.find(x => x.id === id);
     if (c) {
       setBrandName(c.name);
@@ -727,6 +792,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
           setBrandUrl(p.brand_url ?? '');
           setBrandDescription(p.brand_description ?? '');
           setClientWritingRules(p.writing_rules ?? '');
+          setBannedWords(p.banned_words ?? '');
         })
         .catch(() => {});
     }
@@ -908,7 +974,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
           <label className="block text-sm font-semibold text-gray-800">選擇 SEO 標題</label>
           <TitleSelector titles={titles} value={selectedTitle} onChange={setSelectedTitle} />
           {selectedTitle && (
-            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules, brandDescription)}
+            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules, brandDescription, bannedWords)}
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 transition-colors">
               確認標題，進入架構規劃 →
             </button>
@@ -1211,13 +1277,14 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
 
 // ── Stage 3 ───────────────────────────────────────────────────────────
 
-function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, sectionOverride, onSaveSectionOverride, onBack, onNext }: {
+function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, onSaveSectionOverride, onBack, onNext }: {
   title: string; keyword: string;
   analyzeMsg: string; analysisResult: string;
   outlineMsg: string; outlineResult: string;
   initSections: Section[]; writingGuide: string;
   clientWritingRules: string;
   brandDescription: string;
+  bannedWords: string;
   sectionOverride: string;
   onSaveSectionOverride: (text: string | null) => void;
   onBack: () => void;
@@ -1248,6 +1315,14 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       .catch(() => {})
       .finally(() => setRefsLoading(false));
   }, [keyword]);
+
+  // 撰寫過程持續存草稿，避免在這個階段重新整理就把已產生的段落內容弄丟
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveDraft({ keyword, selectedTitle: title, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections, clientWritingRules, brandDescription, bannedWords });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [sections, keyword, title, analyzeMsg, analysisResult, outlineMsg, outlineResult, clientWritingRules, brandDescription, bannedWords]);
 
   function getBlockItems(content: string): { label: string; full: string }[] {
     const items: { label: string; full: string }[] = [];
@@ -1288,6 +1363,8 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       reviseQuotes: [],
       contentDepth: 'standard',
       h3Depths: [],
+      h3Tables: [],
+      h3Lists: [],
     };
     setSections(prev => {
       const next = [...prev];
@@ -1314,9 +1391,10 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
         .map(s => `## ${s.h2}\n${s.content.trim().slice(0, 400)}`)
         .join('\n\n---\n\n');
       const basePrompt = buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, completedContext);
-      const finalPrompt = (sec.generateTable
+      const usesPerH3Table = sec.h3s.length > 0 && sec.promptStyle === 'info';
+      const finalPrompt = (sec.generateTable && !usesPerH3Table
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
-        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules);
+        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs);
       const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
@@ -1363,7 +1441,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
           let replacement = '';
           await streamAPI([
             ...baseMessages,
-            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules)}` },
+            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs)}` },
           ], chunk => {
             replacement += chunk;
             const partial = currentContent.includes(quote)
@@ -1397,7 +1475,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       try {
         await streamAPI([
           ...baseMessages,
-          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules)}` },
+          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs)}` },
         ], chunk => {
           streamed += chunk;
           setSections(prev => prev.map(s => s.id === id ? { ...s, content: streamed } : s));
@@ -1553,6 +1631,36 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                               <option key={k} value={k}>{DEPTH_LABELS[k]}</option>
                             ))}
                           </select>
+                          <button
+                            type="button"
+                            disabled={sec.generating}
+                            onClick={() => setSections(prev => prev.map(s => {
+                              if (s.id !== sec.id) return s;
+                              const next = [...(s.h3Tables ?? s.h3s.map(() => false))];
+                              next[hi] = !next[hi];
+                              return { ...s, h3Tables: next };
+                            }))}
+                            title="這個子節加入比較表格"
+                            className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 border rounded transition-colors disabled:opacity-50 flex-shrink-0 ${(sec.h3Tables ?? [])[hi] ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                            表格
+                          </button>
+                          <button
+                            type="button"
+                            disabled={sec.generating}
+                            onClick={() => setSections(prev => prev.map(s => {
+                              if (s.id !== sec.id) return s;
+                              const next = [...(s.h3Lists ?? s.h3s.map(() => false))];
+                              next[hi] = !next[hi];
+                              return { ...s, h3Lists: next };
+                            }))}
+                            title="這個子節改用條列清單格式"
+                            className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 border rounded transition-colors disabled:opacity-50 flex-shrink-0 ${(sec.h3Lists ?? [])[hi] ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                            列點
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1574,7 +1682,8 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                       ))}
                     </select>
                   )}
-                  {/* 插入表格 */}
+                  {/* 插入表格（有 H3 的一般段落已改成逐個 H3 控制，這裡不重複顯示） */}
+                  {!(sec.h3s.length > 0 && sec.promptStyle === 'info') && (
                   <button
                     type="button"
                     disabled={sec.generating}
@@ -1585,6 +1694,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
                     表格
                   </button>
+                  )}
                   {sec.content.trim() && !sec.generating && (
                     <button
                       onClick={() => setSections(prev => prev.map(s => s.id === sec.id ? { ...s, isEditing: !s.isEditing } : s))}
@@ -1952,13 +2062,16 @@ ${article}
 
 // ── Stage 4 ───────────────────────────────────────────────────────────
 
-function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, sectionOverride, onBack }: {
+type ReviewMode = 'quality' | 'violation';
+
+function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, onBack }: {
   title: string; keyword: string;
   sections: Section[];
   writingGuide: string; clientWritingRules: string;
-  brandDescription: string; sectionOverride: string;
+  brandDescription: string; bannedWords: string; sectionOverride: string;
   onBack: () => void;
 }) {
+  const [reviewMode, setReviewMode] = useState<ReviewMode>('quality');
   const [reviewing, setReviewing] = useState(false);
   const [overallEval, setOverallEval] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -1981,8 +2094,12 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     setOverallEval(''); setSuggestions([]); setFinalScore(''); setError(''); setReviewing(true);
     let buf = '';
     try {
-      const sys = buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
-      const prompt = buildReviewPrompt(articleText, { title, keyword });
+      const sys = reviewMode === 'violation'
+        ? buildViolationReviewSystemMessage({ clientWritingRules, brandDescription, bannedWords })
+        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
+      const prompt = reviewMode === 'violation'
+        ? buildViolationReviewPrompt(articleText, { title, keyword })
+        : buildReviewPrompt(articleText, { title, keyword });
       await streamAPI([
         { role: 'system', content: sys },
         { role: 'user', content: prompt },
@@ -2005,7 +2122,9 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     setFinalScore(''); setFinalScoring(true);
     let buf = '';
     try {
-      const sys = buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
+      const sys = reviewMode === 'violation'
+        ? buildViolationReviewSystemMessage({ clientWritingRules, brandDescription, bannedWords })
+        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
       const prompt = buildFinalScorePrompt(articleText, { title, keyword, initialEval: overallEval });
       await streamAPI([
         { role: 'system', content: sys },
@@ -2052,27 +2171,42 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
   }
 
-  function jumpToText(text: string) {
+  function jumpToText(text: string, section?: string) {
     if (!text) return;
     const panel = document.getElementById('article-panel');
     if (!panel) return;
-    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
     const search = text.slice(0, 15);
-    let node = walker.nextNode();
-    while (node) {
-      const content = node.textContent ?? '';
-      const idx = content.indexOf(search);
-      if (idx >= 0) {
-        const range = document.createRange();
-        range.setStart(node, idx);
-        range.setEnd(node, Math.min(idx + text.length, content.length));
-        window.getSelection()?.removeAllRanges();
-        window.getSelection()?.addRange(range);
-        (node.parentElement as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
+
+    function searchFrom(startNode: Node | null): boolean {
+      const walker = document.createTreeWalker(panel as Node, NodeFilter.SHOW_TEXT);
+      if (startNode) walker.currentNode = startNode;
+      let node = walker.nextNode();
+      while (node) {
+        const content = node.textContent ?? '';
+        const idx = content.indexOf(search);
+        if (idx >= 0) {
+          const range = document.createRange();
+          range.setStart(node, idx);
+          range.setEnd(node, Math.min(idx + text.length, content.length));
+          window.getSelection()?.removeAllRanges();
+          window.getSelection()?.addRange(range);
+          (node.parentElement as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return true;
+        }
+        node = walker.nextNode();
       }
-      node = walker.nextNode();
+      return false;
     }
+
+    // 違規詞通常很短，整篇文章可能重複出現多次；若知道所在的 H2 段落，
+    // 先定位到該標題之後才開始找，避免跳到不相關段落裡同樣的字詞
+    const sectionName = section?.trim();
+    if (sectionName) {
+      const heading = Array.from(panel.querySelectorAll('h2'))
+        .find(h => (h.textContent ?? '').trim() === sectionName);
+      if (heading && searchFrom(heading)) return;
+    }
+    searchFrom(null);
   }
 
   const pendingCount = suggestions.filter(s => s.status === 'pending').length;
@@ -2087,7 +2221,17 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
-          <p className="text-xs text-gray-400">AI 校稿 · 先看總評，再逐條處理</p>
+          <p className="text-xs text-gray-400">{reviewMode === 'violation' ? '違規詞校驗 · 檢查禁詞與品牌宣稱範圍' : 'AI 校稿 · 先看總評，再逐條處理'}</p>
+        </div>
+        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 text-xs shrink-0">
+          <button onClick={() => setReviewMode('quality')} disabled={reviewing || finalScoring}
+            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'quality' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+            內容校稿
+          </button>
+          <button onClick={() => setReviewMode('violation')} disabled={reviewing || finalScoring}
+            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'violation' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+            違規詞校驗
+          </button>
         </div>
         {suggestions.length > 0 && !reviewing && (
           <span className="text-xs text-violet-500 font-medium shrink-0">
@@ -2096,7 +2240,7 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
         )}
         <button onClick={runReview} disabled={reviewing || finalScoring || !articleText.trim()}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 shrink-0">
-          {reviewing && <Spinner />}{reviewing ? '校稿中…' : '重新校稿'}
+          {reviewing && <Spinner />}{reviewing ? (reviewMode === 'violation' ? '檢查中…' : '校稿中…') : (reviewMode === 'violation' ? '開始檢查' : '重新校稿')}
         </button>
       </div>
 
@@ -2144,6 +2288,11 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
               <>
                 {/* ── 上：總評卡片 ── */}
                 <div className="shrink-0">
+                  {reviewMode === 'violation' && !bannedWords.trim() && !overallEval && !reviewing && (
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2">
+                      這個客戶尚未設定禁詞清單，仍會依寫文規範與品牌描述範圍檢查，但建議先到客戶設定補上禁詞。
+                    </p>
+                  )}
                   {reviewing && !overallEval && (
                     <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 flex items-center gap-2.5">
                       <Spinner /><span className="text-sm text-gray-500">AI 正在審查，生成總評…</span>
@@ -2181,16 +2330,16 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
                           s={s}
                           onAccept={() => applyChange(s.id)}
                           onReject={() => setSuggestions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'rejected' } : x))}
-                          onJump={() => jumpToText(s.old)}
+                          onJump={() => jumpToText(s.old, s.section)}
                         />
                       ))}
                     </>
                   )}
                   {!reviewing && suggestions.length === 0 && overallEval && (
-                    <p className="text-xs text-gray-400 text-center py-4">無具體修改建議</p>
+                    <p className="text-xs text-gray-400 text-center py-4">{reviewMode === 'violation' ? '未發現違規' : '無具體修改建議'}</p>
                   )}
                   {!reviewing && !overallEval && !error && (
-                    <p className="text-sm text-gray-400 py-8 text-center">點擊「重新校稿」開始</p>
+                    <p className="text-sm text-gray-400 py-8 text-center">點擊「{reviewMode === 'violation' ? '開始檢查' : '重新校稿'}」開始</p>
                   )}
                 </div>
               </>
@@ -2217,6 +2366,7 @@ type Draft = {
   sections: Section[];
   clientWritingRules: string;
   brandDescription: string;
+  bannedWords?: string;
   savedAt: number;
 };
 
@@ -2241,6 +2391,7 @@ function ComposeInner() {
   const [writingGuide, setWritingGuide] = useState('');
   const [clientWritingRules, setClientWritingRules] = useState('');
   const [brandDescription, setBrandDescriptionGlobal] = useState('');
+  const [bannedWords, setBannedWords] = useState('');
   const [promptOverrides, setPromptOverrides] = useState<Record<string, string>>({});
 
   // Cross-stage context
@@ -2259,6 +2410,7 @@ function ComposeInner() {
     setSelectedTitle(d.selectedTitle);
     setClientWritingRules(d.clientWritingRules);
     setBrandDescriptionGlobal(d.brandDescription);
+    setBannedWords(d.bannedWords ?? '');
     setOutlineMsg(d.outlineMsg);
     setOutlineResult(d.outlineResult);
     setSections(d.sections);
@@ -2340,12 +2492,13 @@ function ComposeInner() {
             writingGuide={writingGuide}
             analyzeOverride={promptOverrides.analyze ?? ''}
             onSaveAnalyzeOverride={text => savePromptOverride('analyze', text)}
-            onDone={(msg, result, title, rules, brandDesc) => {
+            onDone={(msg, result, title, rules, brandDesc, banned) => {
               setAnalyzeMsg(msg);
               setAnalysisResult(result);
               setSelectedTitle(title);
               setClientWritingRules(rules);
               setBrandDescriptionGlobal(brandDesc);
+              setBannedWords(banned);
               setStage('outline');
             }}
           />
@@ -2364,7 +2517,7 @@ function ComposeInner() {
               setOutlineResult(oResult);
               setSections(secs);
               setReviewSections([]);
-              saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg: oMsg, outlineResult: oResult, sections: secs, clientWritingRules, brandDescription });
+              saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg: oMsg, outlineResult: oResult, sections: secs, clientWritingRules, brandDescription, bannedWords });
               setStage('write');
             }}
           />
@@ -2381,10 +2534,11 @@ function ComposeInner() {
             writingGuide={writingGuide}
             clientWritingRules={clientWritingRules}
             brandDescription={brandDescription}
+            bannedWords={bannedWords}
             sectionOverride={promptOverrides.section ?? ''}
             onSaveSectionOverride={text => savePromptOverride('section', text)}
             onBack={() => setStage('outline')}
-            onNext={secs => { setReviewSections(secs); saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections: secs, clientWritingRules, brandDescription }); setStage('review'); }}
+            onNext={secs => { setReviewSections(secs); saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections: secs, clientWritingRules, brandDescription, bannedWords }); setStage('review'); }}
           />
         )}
         {stage === 'review' && (
@@ -2395,6 +2549,7 @@ function ComposeInner() {
             writingGuide={writingGuide}
             clientWritingRules={clientWritingRules}
             brandDescription={brandDescription}
+            bannedWords={bannedWords}
             sectionOverride={promptOverrides.section ?? ''}
             onBack={() => setStage('write')}
           />

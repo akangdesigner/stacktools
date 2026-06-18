@@ -10,14 +10,15 @@ function uid() { return Math.random().toString(36).slice(2); }
 type H3Item    = { kind: 'h3';    id: string; heading: string; body: string };
 type ImageItem = { kind: 'image'; id: string; alt: string; src: string; raw: string };
 type LinkItem  = { kind: 'link';  id: string; label: string; url: string; raw: string };
-type ContentItem = H3Item | ImageItem | LinkItem;
+type TextItem  = { kind: 'text';  id: string; body: string };
+type ContentItem = H3Item | ImageItem | LinkItem | TextItem;
 
-function parseContent(md: string): { preamble: string; items: ContentItem[] } {
+function parseContent(md: string): { items: ContentItem[] } {
   const lines = md.split('\n');
   const items: ContentItem[] = [];
-  const preambleLines: string[] = [];
   let h3Heading: string | null = null;
   let h3BodyLines: string[] = [];
+  let textLines: string[] = [];
 
   function pushH3() {
     if (h3Heading === null) return;
@@ -26,32 +27,44 @@ function parseContent(md: string): { preamble: string; items: ContentItem[] } {
     h3BodyLines = [];
   }
 
+  function pushText() {
+    const body = textLines.join('\n').trim();
+    textLines = [];
+    if (body) items.push({ kind: 'text', id: uid(), body });
+  }
+
+  // 在開始新項目（H3／圖片／連結）前，把目前累積的內容收尾成一個項目
+  function flush() {
+    if (h3Heading !== null) pushH3();
+    else pushText();
+  }
+
   for (const line of lines) {
     const trimmed = line.trim();
 
     if (!trimmed) {
       if (h3Heading !== null) h3BodyLines.push(line);
-      else if (preambleLines.length) preambleLines.push(line);
+      else textLines.push(line);
       continue;
     }
 
     // H1/H2: stays in current context
     if (/^#{1,2}\s/.test(trimmed)) {
       if (h3Heading !== null) h3BodyLines.push(line);
-      else preambleLines.push(line);
+      else textLines.push(line);
       continue;
     }
 
     // H3: flush previous, start new
     if (/^###\s+/.test(trimmed)) {
-      pushH3();
+      flush();
       h3Heading = trimmed.replace(/^###\s+/, '').trim();
       continue;
     }
 
     // Image: always standalone
     if (/^!\[/.test(trimmed)) {
-      pushH3();
+      flush();
       const m = trimmed.match(/^!\[([^\]]*)\]\(([^)]*)\)/);
       items.push({ kind: 'image', id: uid(), alt: m?.[1] ?? '圖片', src: m?.[2] ?? '', raw: line });
       continue;
@@ -59,7 +72,7 @@ function parseContent(md: string): { preamble: string; items: ContentItem[] } {
 
     // Extended reading link: always standalone
     if (/\*\*延伸閱讀/.test(trimmed)) {
-      pushH3();
+      flush();
       const m = trimmed.match(/\[([^\]]+)\]\(([^)]+)\)/);
       items.push({ kind: 'link', id: uid(), label: m?.[1] ?? '延伸閱讀', url: m?.[2] ?? '', raw: line });
       continue;
@@ -67,19 +80,20 @@ function parseContent(md: string): { preamble: string; items: ContentItem[] } {
 
     // Regular content
     if (h3Heading !== null) h3BodyLines.push(line);
-    else preambleLines.push(line);
+    else textLines.push(line);
   }
 
-  pushH3();
-  return { preamble: preambleLines.join('\n').trimEnd(), items };
+  flush();
+  return { items };
 }
 
-function serializeContent(preamble: string, items: ContentItem[]): string {
+function serializeContent(items: ContentItem[]): string {
   const parts: string[] = [];
-  if (preamble.trim()) parts.push(preamble.trim());
   for (const item of items) {
     if (item.kind === 'h3') {
       parts.push(`### ${item.heading}${item.body.trim() ? '\n\n' + item.body.trim() : ''}`);
+    } else if (item.kind === 'text') {
+      parts.push(item.body.trim());
     } else {
       parts.push(item.raw);
     }
@@ -105,7 +119,7 @@ function parseInserted(md: string): ContentItem[] {
     const m = trimmed.match(/\[([^\]]+)\]\(([^)]+)\)/);
     return [{ kind: 'link', id: uid(), label: m?.[1] ?? '延伸閱讀', url: m?.[2] ?? '', raw: trimmed }];
   }
-  return [];
+  return [{ kind: 'text', id: uid(), body: trimmed }];
 }
 
 // ── ImageCard ─────────────────────────────────────────────────────────
@@ -348,6 +362,13 @@ function InsertDivider({ onInsert, onInsertH2 }: { onInsert: (md: string) => voi
               </div>
               <div className="flex p-1.5 pt-0 gap-1 border-t border-gray-100 mt-0">
                 <button type="button"
+                  onClick={() => { onInsert('（請在這裡輸入文字段落，放在 H2 標題正下方時可作為這個小節的導言）'); setOpen(false); }}
+                  className="flex-1 px-2 py-2.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <span className="px-1 py-0.5 bg-emerald-50 text-emerald-600 text-xs font-bold rounded shrink-0">Aa</span>
+                  文字段落
+                </button>
+                <button type="button"
                   onClick={() => { onInsert('### 新小節\n\n'); setOpen(false); }}
                   className="flex-1 px-2 py-2.5 text-xs text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-2 transition-colors"
                 >
@@ -414,48 +435,45 @@ export default function SectionBlockEditor({ value, onChange, editable = false, 
   editable?: boolean;
   onInsertH2?: () => void;
 }) {
-  const [preamble, setPreamble] = useState('');
   const [items, setItems] = useState<ContentItem[]>([]);
   const lastSer = useRef<string | null>(null);
 
   useEffect(() => {
     if (value !== lastSer.current) {
       const parsed = parseContent(value);
-      setPreamble(parsed.preamble);
       setItems(parsed.items);
       lastSer.current = value;
     }
   }, [value]);
 
-  function applyChange(newPreamble: string, newItems: ContentItem[]) {
-    const serialized = serializeContent(newPreamble, newItems);
+  function applyChange(newItems: ContentItem[]) {
+    const serialized = serializeContent(newItems);
     lastSer.current = serialized;
-    setPreamble(newPreamble);
     setItems(newItems);
     onChange(serialized);
   }
 
   function deleteItem(itemId: string) {
-    applyChange(preamble, items.filter(it => it.id !== itemId));
+    applyChange(items.filter(it => it.id !== itemId));
   }
 
   function updateItem(itemId: string, raw: string) {
     const parsed = parseInserted(raw);
     if (!parsed.length) return;
-    applyChange(preamble, items.map(it => it.id === itemId ? { ...parsed[0], id: itemId } : it));
+    applyChange(items.map(it => it.id === itemId ? { ...parsed[0], id: itemId } : it));
   }
 
   function insertAfterItem(itemId: string | null, md: string) {
     const newItems = parseInserted(md);
     if (!newItems.length) return;
     if (itemId === null) {
-      // 插入到 preamble 之後、所有 items 之前
-      applyChange(preamble, [...newItems, ...items]);
+      // 插入到所有 items 之前（緊接在 H2 標題下方）
+      applyChange([...newItems, ...items]);
     } else {
       const idx = items.findIndex(it => it.id === itemId);
       const next = [...items];
       next.splice(idx + 1, 0, ...newItems);
-      applyChange(preamble, next);
+      applyChange(next);
     }
   }
 
@@ -472,21 +490,19 @@ export default function SectionBlockEditor({ value, onChange, editable = false, 
     );
   }
 
-  const displayPreamble = preamble.trim();
-
   return (
     <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-      {displayPreamble && (
-        <div className="px-4 py-3 border-b border-gray-100">
-          <RichEditor value={displayPreamble} onChange={() => {}} editable={false} minHeight="auto" />
-        </div>
-      )}
-
       {/* H2 下方 InsertDivider */}
       <InsertDivider onInsert={md => insertAfterItem(null, md)} onInsertH2={onInsertH2} />
 
       {items.map(item => (
         <div key={item.id} className="border-b border-gray-100 last:border-b-0">
+
+          {item.kind === 'text' && (
+            <div className="px-4 py-3">
+              <RichEditor value={item.body} onChange={() => {}} editable={false} minHeight="auto" />
+            </div>
+          )}
 
           {item.kind === 'h3' && (
             <div className="px-4 pt-3 pb-1">
@@ -519,7 +535,7 @@ export default function SectionBlockEditor({ value, onChange, editable = false, 
         </div>
       ))}
 
-      {items.length === 0 && !displayPreamble && (
+      {items.length === 0 && (
         <div className="px-4 py-6 text-center text-xs text-gray-300">尚無內容</div>
       )}
     </div>
