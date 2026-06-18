@@ -40,13 +40,13 @@ function hexToRgba(color: string, opacityPercent: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, tocBgColor: string, tocBgOpacity: number, articleUrl?: string): string {
+function generateTocHtml(items: { id: string; text: string }[], linkColor: string, tocTitle: string, tocBgColor: string, tocBgOpacity: number, fontSize: string, articleUrl?: string): string {
   const base = articleUrl ? articleUrl.replace(/#.*$/, "") : ".";
   const links = items
-    .map((item) => `<li><a href="${base}#${item.id}" target="_self" style="color: ${linkColor}; text-decoration: underline; font-weight: 400;">${item.text}</a></li>`)
+    .map((item) => `<li><a href="${base}#${item.id}" target="_self" style="color: ${linkColor}; text-decoration: underline; font-weight: 400; font-size: ${fontSize};">${item.text}</a></li>`)
     .join("");
   const bgStyle = tocBgColor ? `background-color: ${hexToRgba(tocBgColor, tocBgOpacity)}; ` : "background-color: transparent; ";
-  return `<div class="catalog-box" style="${bgStyle}padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: 20px; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
+  return `<div class="catalog-box" style="${bgStyle}padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: ${fontSize}; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
 }
 
 export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: string): string {
@@ -127,8 +127,18 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   });
 
   // ── 4. li > span
+  // 跳過 <a> 內部的 span，避免蓋掉連結顏色
   root.querySelectorAll("li").forEach((li) => {
     li.querySelectorAll("span").forEach((span) => {
+      if (span.closest("a")) {
+        const existing = span.getAttribute("style") || "";
+        const styleMap = parseStyleString(existing);
+        styleMap.delete("color");
+        const cleaned = serializeStyleMap(styleMap);
+        if (cleaned) span.setAttribute("style", cleaned);
+        else span.removeAttribute("style");
+        return;
+      }
       const existing = span.getAttribute("style") || "";
       span.setAttribute("style", mergeStyles(existing, {
         "font-size": client.paragraphFontSize,
@@ -223,6 +233,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         client.tocTitle,
         client.tocBgColor ?? "#f9f9f9",
         client.tocBgOpacity ?? 100,
+        client.paragraphFontSize,
         articleUrl
       ) + "\n";
       result = result.slice(0, firstH2Match.index) + toc + result.slice(firstH2Match.index);
