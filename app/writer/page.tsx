@@ -855,11 +855,14 @@ function ClientSettingsTab() {
           <div key={c.id} className="border border-blue-300 rounded-xl p-4 space-y-3 bg-blue-50">
             <p className="text-sm font-semibold text-blue-900">{c.name}</p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">上傳 PDF 自動辨識</label>
-              <input type="file" accept="application/pdf" disabled={extracting}
-                onChange={e => { const f = e.target.files?.[0]; if (f) extractFromPdf(f); e.target.value = ''; }}
-                className="block w-full text-xs text-gray-500 disabled:opacity-50" />
-              {extracting && <p className="text-xs text-blue-500 mt-1">AI 辨識中，請稍候…</p>}
+              <label className={`flex items-center justify-center gap-2 border border-dashed rounded-lg px-3 py-3 text-xs cursor-pointer transition-colors ${extracting ? 'opacity-50 pointer-events-none border-gray-300 text-gray-400' : 'border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-50'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12" /><path d="M7 8l5-5 5 5" /><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+                </svg>
+                <span>{extracting ? 'AI 辨識中，請稍候…' : '點擊上傳 PDF，自動帶入品牌描述／寫文規範／禁詞'}</span>
+                <input type="file" accept="application/pdf" disabled={extracting} className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) extractFromPdf(f); e.target.value = ''; }} />
+              </label>
               {extractError && <p className="text-xs text-red-500 mt-1">{extractError}</p>}
             </div>
             <div>
