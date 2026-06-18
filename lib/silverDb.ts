@@ -40,6 +40,12 @@ db.exec(`
     content TEXT NOT NULL,
     createdAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS user_state (
+    userId TEXT PRIMARY KEY,
+    pendingAction TEXT,
+    updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 export interface NewsPreference {
@@ -162,4 +168,23 @@ export function getUserNotes(userId: string): UserNote[] {
 
 export function getAllUserNotes(): UserNote[] {
   return db.prepare('SELECT * FROM user_notes ORDER BY createdAt DESC').all() as UserNote[];
+}
+
+// ── User State（暫存使用者目前的等待動作，例如等待語音做祝福圖）──────────────
+
+export function getPendingAction(userId: string): string | null {
+  const row = db.prepare('SELECT pendingAction FROM user_state WHERE userId = ?').get(userId) as
+    | { pendingAction: string | null }
+    | undefined;
+  return row?.pendingAction ?? null;
+}
+
+export function setPendingAction(userId: string, action: string | null): void {
+  db.prepare(`
+    INSERT INTO user_state (userId, pendingAction, updatedAt)
+    VALUES (?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(userId) DO UPDATE SET
+      pendingAction = excluded.pendingAction,
+      updatedAt = excluded.updatedAt
+  `).run(userId, action);
 }
