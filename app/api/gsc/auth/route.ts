@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? 'https://stacktools.zeabur.app/api/gsc/callback';
+  const host = req.headers.get('host') ?? 'localhost:3001';
+  const proto = host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https';
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${proto}://${host}/api/gsc/callback`;
 
   if (!clientId) {
     return NextResponse.json({ error: '未設定 GOOGLE_CLIENT_ID' }, { status: 500 });

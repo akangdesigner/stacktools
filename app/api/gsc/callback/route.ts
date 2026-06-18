@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${baseUrl}/gsc?error=access_denied`);
   }
 
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? 'https://stacktools.zeabur.app/api/gsc/callback';
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${baseUrl}/api/gsc/callback`;
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
