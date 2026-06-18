@@ -11,6 +11,14 @@ interface SilverUser {
   updatedAt: string;
 }
 
+interface UserNote {
+  id: number;
+  userId: string;
+  category: string;
+  content: string;
+  createdAt: string;
+}
+
 const GENDER_LABEL: Record<string, string> = {
   male: '男',
   female: '女',
@@ -18,12 +26,22 @@ const GENDER_LABEL: Record<string, string> = {
 
 export default function SilverUsersPage() {
   const [users, setUsers] = useState<SilverUser[]>([]);
+  const [notesByUser, setNotesByUser] = useState<Record<string, UserNote[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/silver/users')
-      .then((res) => res.json())
-      .then((data) => setUsers(data.users ?? []))
+    Promise.all([
+      fetch('/api/silver/users').then((res) => res.json()),
+      fetch('/api/silver/notes').then((res) => res.json()),
+    ])
+      .then(([usersData, notesData]) => {
+        setUsers(usersData.users ?? []);
+        const grouped: Record<string, UserNote[]> = {};
+        for (const note of (notesData.notes ?? []) as UserNote[]) {
+          (grouped[note.userId] ??= []).push(note);
+        }
+        setNotesByUser(grouped);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -47,6 +65,7 @@ export default function SilverUsersPage() {
                 <th className="px-4 py-3 font-medium">年齡</th>
                 <th className="px-4 py-3 font-medium">性別</th>
                 <th className="px-4 py-3 font-medium">LINE userId</th>
+                <th className="px-4 py-3 font-medium">額外備註</th>
                 <th className="px-4 py-3 font-medium">最後更新</th>
               </tr>
             </thead>
@@ -57,6 +76,23 @@ export default function SilverUsersPage() {
                   <td className="px-4 py-3 text-gray-600">{u.age ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{(u.gender && GENDER_LABEL[u.gender]) || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 font-mono text-xs">{u.userId}</td>
+                  <td className="px-4 py-3">
+                    {notesByUser[u.userId]?.length ? (
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {notesByUser[u.userId].map((n) => (
+                          <span
+                            key={n.id}
+                            title={n.createdAt}
+                            className="text-xs px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-full"
+                          >
+                            {n.category}：{n.content}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-400">{u.updatedAt}</td>
                 </tr>
               ))}

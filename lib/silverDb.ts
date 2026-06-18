@@ -32,6 +32,14 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now', 'localtime')),
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS user_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL,
+    category TEXT NOT NULL,
+    content TEXT NOT NULL,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 export interface NewsPreference {
@@ -128,4 +136,30 @@ export function upsertUser(userId: string, nickname: string | null, age: number 
       gender = COALESCE(excluded.gender, silver_users.gender),
       updatedAt = excluded.updatedAt
   `).run(userId, nickname, age, gender);
+}
+
+// ── User Notes（聊天中偵測到的額外資訊，多筆累加，不覆蓋既有欄位）────────────
+
+export interface UserNote {
+  id: number;
+  userId: string;
+  category: string;
+  content: string;
+  createdAt: string;
+}
+
+export function createUserNote(userId: string, category: string, content: string): number {
+  const result = db.prepare(`
+    INSERT INTO user_notes (userId, category, content)
+    VALUES (?, ?, ?)
+  `).run(userId, category, content);
+  return result.lastInsertRowid as number;
+}
+
+export function getUserNotes(userId: string): UserNote[] {
+  return db.prepare('SELECT * FROM user_notes WHERE userId = ? ORDER BY createdAt DESC').all(userId) as UserNote[];
+}
+
+export function getAllUserNotes(): UserNote[] {
+  return db.prepare('SELECT * FROM user_notes ORDER BY createdAt DESC').all() as UserNote[];
 }
