@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 const FEATURES_LIVE = [
   {
@@ -67,9 +68,17 @@ export default function SilverPage() {
   return (
     <div className="p-8 max-w-3xl space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">銀髮陪伴機器人</h1>
-        <p className="text-sm text-gray-500 mt-1">LINE 智慧陪伴服務 — 合作說明與體驗指南</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">銀髮陪伴機器人</h1>
+          <p className="text-sm text-gray-500 mt-1">LINE 智慧陪伴服務 — 合作說明與體驗指南</p>
+        </div>
+        <Link
+          href="/silver/users"
+          className="shrink-0 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+        >
+          使用者管理 →
+        </Link>
       </div>
 
       {/* QR + CTA */}
