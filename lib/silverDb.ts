@@ -170,6 +170,10 @@ export function getAllUserNotes(): UserNote[] {
   return db.prepare('SELECT * FROM user_notes ORDER BY createdAt DESC').all() as UserNote[];
 }
 
+export function deleteUserNote(id: number): void {
+  db.prepare('DELETE FROM user_notes WHERE id = ?').run(id);
+}
+
 // ── User State（暫存使用者目前的等待動作，例如等待語音做祝福圖）──────────────
 
 export function getPendingAction(userId: string): string | null {

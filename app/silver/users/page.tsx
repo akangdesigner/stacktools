@@ -69,6 +69,20 @@ export default function SilverUsersPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  function removeNote(userId: string, id: number) {
+    setNotesByUser((prev) => ({ ...prev, [userId]: (prev[userId] ?? []).filter((n) => n.id !== id) }));
+    fetch(`/api/silver/notes?id=${id}`, { method: 'DELETE' });
+  }
+
+  function resolveEvent(userId: string, id: number) {
+    setHealthByUser((prev) => ({ ...prev, [userId]: (prev[userId] ?? []).filter((e) => e.id !== id) }));
+    fetch('/api/silver/health-events', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action: 'resolve' }),
+    });
+  }
+
   return (
     <div className="p-8 space-y-6">
       <div>
@@ -112,8 +126,15 @@ export default function SilverUsersPage() {
                     {notes.length ? (
                       <div className="flex flex-wrap gap-1">
                         {notes.map((n) => (
-                          <span key={n.id} title={n.createdAt} className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-full">
+                          <span key={n.id} title={n.createdAt} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 rounded-full">
                             {NOTE_CATEGORY_LABEL[n.category] || n.category}：{n.content}
+                            <button
+                              onClick={() => removeNote(u.userId, n.id)}
+                              className="text-blue-400 hover:text-blue-700 leading-none"
+                              title="刪除"
+                            >
+                              ×
+                            </button>
                           </span>
                         ))}
                       </div>
@@ -126,8 +147,15 @@ export default function SilverUsersPage() {
                     {pendingEvents.length ? (
                       <div className="flex flex-wrap gap-1">
                         {pendingEvents.map((e) => (
-                          <span key={e.id} className="px-2 py-0.5 bg-orange-50 border border-orange-100 text-orange-700 rounded-full">
+                          <span key={e.id} className="flex items-center gap-1 px-2 py-0.5 bg-orange-50 border border-orange-100 text-orange-700 rounded-full">
                             {e.description}
+                            <button
+                              onClick={() => resolveEvent(u.userId, e.id)}
+                              className="text-orange-400 hover:text-orange-700 leading-none"
+                              title="解除"
+                            >
+                              ×
+                            </button>
                           </span>
                         ))}
                       </div>

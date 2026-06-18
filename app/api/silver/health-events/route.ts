@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHealthEvent, getUserPendingEvents, resolveUserSymptoms } from '@/lib/silverDb';
+import { createHealthEvent, getUserPendingEvents, resolveUserSymptoms, resolveHealthEvent } from '@/lib/silverDb';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +20,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { userId, action } = await req.json();
+  const { id, userId, action } = await req.json();
+  if (action === 'resolve' && id) {
+    resolveHealthEvent(Number(id));
+    return NextResponse.json({ ok: true });
+  }
   if (!userId) return NextResponse.json({ error: 'missing userId' }, { status: 400 });
   if (action === 'resolve_symptoms') {
     resolveUserSymptoms(userId);

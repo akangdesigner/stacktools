@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createUserNote, getUserNotes, getAllUserNotes } from '@/lib/silverDb';
+import { createUserNote, getUserNotes, getAllUserNotes, deleteUserNote } from '@/lib/silverDb';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,4 +18,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ notes: getUserNotes(userId) });
   }
   return NextResponse.json({ notes: getAllUserNotes() });
+}
+
+export async function DELETE(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
+  deleteUserNote(Number(id));
+  return NextResponse.json({ ok: true });
 }
