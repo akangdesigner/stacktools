@@ -106,10 +106,17 @@ export function resolveHealthEvent(id: number): void {
   `).run(id);
 }
 
-export function resolveUserSymptoms(userId: string): void {
+export function resolveUserHealthEvents(userId: string, type?: 'symptom' | 'medication'): void {
+  if (type) {
+    db.prepare(`
+      UPDATE health_events SET resolved = 1, updatedAt = datetime('now', 'localtime')
+      WHERE userId = ? AND type = ? AND resolved = 0
+    `).run(userId, type);
+    return;
+  }
   db.prepare(`
     UPDATE health_events SET resolved = 1, updatedAt = datetime('now', 'localtime')
-    WHERE userId = ? AND type = 'symptom' AND resolved = 0
+    WHERE userId = ? AND resolved = 0
   `).run(userId);
 }
 
