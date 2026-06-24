@@ -22,13 +22,6 @@ type WriterSettings = {
   writing_guide: string;
 };
 
-type UserClient = {
-  id: number;
-  name: string;
-  brand_url: string;
-  brand_description: string;
-};
-
 const TABS: { key: Tab; label: string }[] = [
   { key: 'schedule', label: '每日排程' },
   { key: 'progress', label: '進度登記' },
@@ -1029,16 +1022,6 @@ function SettingsModal({ initial, onClose, onSave }: {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  // user clients
-  const [userClients, setUserClients] = useState<UserClient[]>([]);
-  const [newClient, setNewClient] = useState({ name: '', brand_url: '', brand_description: '' });
-  const [clientSaving, setClientSaving] = useState(false);
-  const [editingClient, setEditingClient] = useState<UserClient | null>(null);
-
-  useEffect(() => {
-    fetch('/api/writer/user-clients').then(r => r.json()).then(setUserClients).catch(() => {});
-  }, []);
-
   function set(k: keyof WriterSettings, v: string) { setForm(f => ({ ...f, [k]: v })); }
 
   async function handleSave() {
@@ -1048,41 +1031,6 @@ function SettingsModal({ initial, onClose, onSave }: {
     });
     if (!res.ok) { setErr('儲存失敗'); setSaving(false); return; }
     onSave(form); onClose();
-  }
-
-  async function addUserClient() {
-    if (!newClient.name.trim()) return;
-    setClientSaving(true);
-    const res = await fetch('/api/writer/user-clients', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newClient),
-    });
-    if (res.ok) {
-      const created = await res.json() as UserClient;
-      setUserClients(prev => [...prev, created]);
-      setNewClient({ name: '', brand_url: '', brand_description: '' });
-    }
-    setClientSaving(false);
-  }
-
-  async function saveEditClient() {
-    if (!editingClient) return;
-    setClientSaving(true);
-    const res = await fetch('/api/writer/user-clients', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editingClient),
-    });
-    if (res.ok) {
-      const updated = await res.json() as UserClient;
-      setUserClients(prev => prev.map(c => c.id === updated.id ? updated : c));
-      setEditingClient(null);
-    }
-    setClientSaving(false);
-  }
-
-  async function deleteUserClient(id: number) {
-    const res = await fetch('/api/writer/user-clients', {
-      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
-    });
-    if (res.ok) setUserClients(prev => prev.filter(c => c.id !== id));
   }
 
   const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400";
@@ -1102,59 +1050,6 @@ function SettingsModal({ initial, onClose, onSave }: {
             value={form.writing_guide}
             onChange={e => set('writing_guide', e.target.value)}
           />
-        </fieldset>
-
-        {/* 我的客戶 */}
-        <fieldset className="space-y-3">
-          <legend className="text-sm font-semibold text-gray-700">我的客戶</legend>
-          <p className="text-xs text-gray-400">在 Compose 頁面選擇客戶後，會自動帶入品牌資訊供 AI 參考。</p>
-
-          {userClients.length > 0 && (
-            <div className="space-y-2">
-              {userClients.map(c => (
-                editingClient?.id === c.id ? (
-                  <div key={c.id} className="border border-blue-300 rounded-lg p-3 space-y-2 bg-blue-50">
-                    <input className={inputCls} placeholder="客戶名稱" value={editingClient.name}
-                      onChange={e => setEditingClient({ ...editingClient, name: e.target.value })} />
-                    <input className={inputCls} placeholder="品牌網址（選填）" value={editingClient.brand_url}
-                      onChange={e => setEditingClient({ ...editingClient, brand_url: e.target.value })} />
-                    <textarea className={`${inputCls} h-16 resize-none text-xs`} placeholder="品牌描述（選填）" value={editingClient.brand_description}
-                      onChange={e => setEditingClient({ ...editingClient, brand_description: e.target.value })} />
-                    <div className="flex gap-2">
-                      <button onClick={saveEditClient} disabled={clientSaving}
-                        className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                        {clientSaving ? '儲存中…' : '確認'}
-                      </button>
-                      <button onClick={() => setEditingClient(null)} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700">取消</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={c.id} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 group">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{c.name}</p>
-                      {c.brand_url && <p className="text-xs text-gray-400 truncate">{c.brand_url}</p>}
-                    </div>
-                    <button onClick={() => setEditingClient(c)} className="text-xs text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity px-1">編輯</button>
-                    <button onClick={() => deleteUserClient(c.id)} className="text-xs text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity px-1">✕</button>
-                  </div>
-                )
-              ))}
-            </div>
-          )}
-
-          <div className="border border-dashed border-gray-300 rounded-lg p-3 space-y-2">
-            <p className="text-xs font-medium text-gray-500">新增客戶</p>
-            <input className={inputCls} placeholder="客戶名稱 *" value={newClient.name}
-              onChange={e => setNewClient({ ...newClient, name: e.target.value })} />
-            <input className={inputCls} placeholder="品牌網址（選填）" value={newClient.brand_url}
-              onChange={e => setNewClient({ ...newClient, brand_url: e.target.value })} />
-            <textarea className={`${inputCls} h-16 resize-none text-xs`} placeholder="品牌描述（選填）：服務、特色、目標客群…" value={newClient.brand_description}
-              onChange={e => setNewClient({ ...newClient, brand_description: e.target.value })} />
-            <button onClick={addUserClient} disabled={clientSaving || !newClient.name.trim()}
-              className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-40">
-              {clientSaving ? '新增中…' : '新增'}
-            </button>
-          </div>
         </fieldset>
 
         <fieldset className="space-y-2">
