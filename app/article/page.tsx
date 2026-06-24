@@ -32,16 +32,33 @@ function ElementorClientDashboard({
   const [form, setForm] = useState({ ...emptyForm });
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(ELEMENTOR_KEY);
-      if (raw) setClients(JSON.parse(raw));
-    } catch {}
+    fetch("/api/elementor-clients")
+      .then((r) => r.json())
+      .then(async (data: ElementorClient[]) => {
+        // 一次性搬移：把舊版瀏覽器 localStorage 裡還沒同步過的客戶資料補進伺服器
+        if (data.length === 0) {
+          try {
+            const raw = localStorage.getItem(ELEMENTOR_KEY);
+            const legacy: ElementorClient[] = raw ? JSON.parse(raw) : [];
+            if (legacy.length > 0) {
+              await Promise.all(
+                legacy.map((c) =>
+                  fetch("/api/elementor-clients", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(c),
+                  })
+                )
+              );
+              localStorage.removeItem(ELEMENTOR_KEY);
+              data = legacy;
+            }
+          } catch {}
+        }
+        setClients(data);
+      })
+      .catch(() => {});
   }, []);
-
-  function persist(list: ElementorClient[]) {
-    setClients(list);
-    localStorage.setItem(ELEMENTOR_KEY, JSON.stringify(list));
-  }
 
   function showToast(msg: string) {
     setToast(msg);
@@ -75,17 +92,23 @@ function ElementorClientDashboard({
 
   function handleSave() {
     if (!form.name.trim() || !form.url.trim()) return;
-    if (editTarget) {
-      persist(clients.map((c) => (c.id === editTarget.id ? { ...editTarget, ...form } : c)));
-    } else {
-      persist([...clients, { id: Date.now().toString(), ...form }]);
-    }
+    const profile: ElementorClient = editTarget ? { ...editTarget, ...form } : { id: Date.now().toString(), ...form };
+    setClients((prev) =>
+      editTarget ? prev.map((c) => (c.id === profile.id ? profile : c)) : [...prev, profile]
+    );
+    fetch("/api/elementor-clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    }).catch(console.error);
     setShowModal(false);
   }
 
   function handleDelete() {
     if (!editTarget) return;
-    persist(clients.filter((c) => c.id !== editTarget.id));
+    const id = editTarget.id;
+    setClients((prev) => prev.filter((c) => c.id !== id));
+    fetch(`/api/elementor-clients/${id}`, { method: "DELETE" }).catch(console.error);
     setShowModal(false);
   }
 
