@@ -44,3 +44,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code local settings
+.claude/settings.local.json
+
+# blog drafts (local working files)
+/blog-drafts/
