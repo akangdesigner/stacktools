@@ -32,18 +32,25 @@ const DEPTH_LABELS: Record<ContentDepth, string> = {
 
 const DEPTH_INSTRUCTIONS: Record<ContentDepth, string> = {
   brief:    `篇幅精簡：
-・每個 H3 只寫 1 段，3–4 句，約 80–100 字
-・說核心結論 + 一個最重要的判斷依據，不展開細節、不加條列
-・整個段落（含所有 H3）總字數控制在 250 字以內`,
+・每個 H3 寫 1 段，3–4 句，約 100–130 字
+・只給核心結論 + 一個最重要的判斷依據，不展開細節、不舉例
+・整個段落（含所有 H3）總字數控制在 350 字以內`,
   standard: `篇幅標準：
-・每個 H3 寫 1 段，3–4 句，約 80–120 字
-・說明核心概念 + 一個具體判斷依據或常見情境
-・不必加條列，自然段落即可`,
+・每個 H3 寫 1 段，5–6 句，約 180–220 字
+・核心概念之外，至少加 1 個具體判斷依據或情境舉例，內容要比精簡版本更完整
+・自然段落書寫`,
   detailed: `篇幅深度：
-・每個 H3 寫 2–3 段或搭配條列，約 150–250 字
+・每個 H3 寫 2–3 段，約 300–400 字
 ・必須包含：具體數字或研究結論、操作步驟或情境範例、常見錯誤或注意事項至少其中兩項
 ・內容要讓讀者讀完即可判斷或操作，不能只是概念說明`,
 };
+
+// 不論篇幅深度，是否使用條列只由各 H3 的「列點」勾選決定，深度指示本身不應暗示或允許自行加條列
+const NO_AUTO_LIST_REMINDER = '・除非這個 H3 另外被標記為條列格式，否則一律寫成自然段落，不要自行轉成條列或項目符號';
+
+// 表格內容不計入篇幅字數要求，否則 AI 會把字數要求灌進表格裡，導致精簡/標準/深度三個等級看起來沒有差異；
+// 只講「文字仍要寫滿」AI 還是會把表格當主角、前後文字隨便帶過，所以要明確要求表格前後都要有實質段落
+const TABLE_WORDCOUNT_REMINDER = '・表格只是文字說明以外「額外」的補充整理，不能取代文字內容，也不能只用一兩句話帶過表格就結束。寫法：表格前先完整說明這個主題的背景、原因或判斷依據；表格後再寫一段延伸補充（表格沒列出的細節、例外情況或具體案例），不是隨口收尾。上面的字數要求只算這些表格以外的文字，且前後兩段加總仍要完整達到該字數，不可因為有表格就把文字內容寫短';
 
 type Section = {
   id: string;
@@ -143,14 +150,14 @@ ${body}${guideBlock}
 請直接輸出架構，格式為 ## H2 和 ### H3，第一行從 ## 開始，不要有任何前言或說明。`;
 }
 
-function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, completedContext = ''): string {
+function buildSectionPromptByStyle(sec: Section, outlineText: string, style: PromptStyle, completedContext = '', keyword = ''): string {
   const h3Tables = sec.h3Tables ?? sec.h3s.map(() => false);
   const h3Lists = sec.h3Lists ?? sec.h3s.map(() => false);
   const showH3FormatHints = style === 'info';
   const h3Block = sec.h3s.length > 0
     ? `\n\n這個 H2 小節開頭可以先用 1–2 句話簡短帶出「${sec.h2}」這個小節本身要討論什麼，這只是這個小節自己的開場破題，不是整篇文章的前言（文章的前言是另一個獨立的 H2，已經寫過了，這裡不要用導言語氣、不要重複前言說過的內容，也不要再帶讀者進入整篇文章）。開場之後依序包含以下 H3 子節，每個 H3 請使用 ### 標題格式獨立成一小節，不可省略或合併：\n${sec.h3s.map((h, i) => {
         const hints: string[] = [];
-        if (showH3FormatHints && h3Tables[i]) hints.push('需加入一個 Markdown 表格整理重點資訊');
+        if (showH3FormatHints && h3Tables[i]) hints.push('需加入一個 Markdown 表格整理重點資訊，表格是額外補充，文字說明仍要依篇幅要求完整撰寫');
         if (showH3FormatHints && h3Lists[i]) hints.push('改用 Markdown 條列格式呈現，每一點獨立一行並以 "- " 開頭（例如：- **粗體名稱**：一句說明），不要寫成大段散文');
         return `- ### ${h}${hints.length > 0 ? `（${hints.join('；')}）` : ''}`;
       }).join('\n')}`
@@ -168,7 +175,9 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   const depthBlock = hasPerH3Depth
     ? `\n\n各 H3 子節篇幅要求（依序對應，各自獨立）：\n${sec.h3s.map((h, i) => {
         const d = h3Depths[i] ?? 'standard';
-        return `・### ${h}：${DEPTH_LABELS[d]}\n${DEPTH_INSTRUCTIONS[d].split('\n').slice(1).join('\n')}`;
+        const listReminder = showH3FormatHints && !h3Lists[i] ? `\n${NO_AUTO_LIST_REMINDER}` : '';
+        const tableReminder = showH3FormatHints && h3Tables[i] ? `\n${TABLE_WORDCOUNT_REMINDER}` : '';
+        return `・### ${h}：${DEPTH_LABELS[d]}\n${DEPTH_INSTRUCTIONS[d].split('\n').slice(1).join('\n')}${listReminder}${tableReminder}`;
       }).join('\n\n')}${formatReminder}`
     : `\n\n篇幅要求：${DEPTH_INSTRUCTIONS[sec.contentDepth]}${formatReminder}`;
   const h3FormatReminder = sec.h3s.length > 0 ? '，H3 子節一律使用 ### 標題格式' : '';
@@ -178,7 +187,7 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   if (style === 'scene') {
     return `${header}這是文章的「前言」，需要快速破題、簡潔有力。
 
-寫法要求：全段只有連續段落，不分 H3，不加條列。長度嚴格控制在 100–150 字以內（3–5 句話）。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。必須自然帶到文章的主要關鍵字，關鍵字融入語意脈絡，不要硬塞。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。\n\n從 ## 標題開始輸出，只輸出前言正文，不要加任何說明或備註。`;
+寫法要求：全段只有連續段落，不分 H3，不加條列。長度嚴格控制在 100–150 字以內（3–5 句話）。第一句直接破題，點出讀者的核心需求或問題，不要用故事感或情境感開場。文章關鍵字是「${keyword}」，必須讓全部關鍵字都自然出現在這段裡，不必連在一起組成完整詞組——例如關鍵字「皮膚保養」可以拆開寫成「皮膚...保養很重要」，只要語意上涵蓋到每個關鍵字即可，不要硬塞。語氣直接通順，不說廢話。繁體中文，語氣簡潔專業。\n\n從 ## 標題開始輸出，只輸出前言正文，不要加任何說明或備註。`;
   }
 
   if (style === 'faq') {
@@ -202,7 +211,7 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   if (style === 'conclusion') {
     return `${header}這個段落是文章總結，幫助讀者回顧核心重點並做出決策。
 
-寫法要求：2–4 句話整合全文核心重點，不重複前面已詳細說明的內容，不要只是條列各段標題。若有品牌，可自然引導讀者下一步（如：諮詢、了解更多），語氣收尾有力但不強推。繁體中文，簡潔有力。${footer}`;
+寫法要求：2–4 句話整合全文核心重點，不重複前面已詳細說明的內容，不要只是條列各段標題。文章關鍵字是「${keyword}」，必須讓全部關鍵字都自然出現在這段裡，不必連在一起組成完整詞組，只要語意上涵蓋到每個關鍵字即可，不要硬塞。若有品牌，可自然引導讀者下一步（如：諮詢、了解更多），語氣收尾有力但不強推。繁體中文，簡潔有力。${footer}`;
   }
 
   // 預設 info 風格
@@ -324,15 +333,16 @@ ${article}
 ---SUGGESTION---
 SECTION: （問題所在的 H2 段落名稱）
 ISSUE: （違反了哪一條禁詞或規範，具體說明）
-OLD: （從文章中精確複製違規的詞句本身，不擴大範圍到上下文；必須與文章一字不差）
-NEW: （建議替換的安全用詞；若整句都需要刪除則此欄完全空白）
+OLD: （從文章中精確複製違規的詞句本身；若是局部刪除（不是整句刪除），必須把刪掉後會變得多餘或斷裂的相鄰標點符號、連接詞一併包含進來，例如前後的「、」「，」「和」「以及」「並」等，不可只複製違規詞本身；必須與文章一字不差）
+NEW: （建議替換的安全用詞或調整後的銜接文字，確保替換或刪除後語句仍然通順完整、不留斷裂標點；若整句都需要刪除則此欄完全空白）
 ---END---
 
 重要規定（違反則建議無效）：
-1. OLD 只複製真正違規的詞句本身，不要包含不相關的上下文
+1. OLD 只複製真正違規的詞句本身，不要包含不相關的上下文；但若是局部刪除，必須照上面規則把多餘標點、連接詞也納入 OLD 範圍
 2. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
 3. 只挑出真正違規的地方，不要報告文字品質、語氣、結構等非違規問題
-4. 繁體中文輸出`;
+4. 局部刪除違規詞時，務必確認刪除/替換後語句通順，不留下多餘或斷裂的標點符號
+5. 繁體中文輸出`;
 }
 
 function buildReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
@@ -1390,10 +1400,10 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
         .filter(s => s.id !== id && s.content.trim())
         .map(s => `## ${s.h2}\n${s.content.trim().slice(0, 400)}`)
         .join('\n\n---\n\n');
-      const basePrompt = buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, completedContext);
+      const basePrompt = buildSectionPromptByStyle(sec, outlineText, sec.promptStyle, completedContext, keyword);
       const usesPerH3Table = sec.h3s.length > 0 && sec.promptStyle === 'info';
       const finalPrompt = (sec.generateTable && !usesPerH3Table
-        ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。`
+        ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。${TABLE_WORDCOUNT_REMINDER}`
         : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs);
       const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
@@ -1982,7 +1992,8 @@ function parseSuggestions(text: string): Suggestion[] {
       if (km) { cur = km[1]; fields[cur] = [km[2]]; }
       else if (cur && line.trim()) fields[cur].push(line);
     }
-    const get = (k: string) => (fields[k] ?? []).join('\n').trim().replace(/^[「『【]|[」』】]$/g, '');
+    // 把前後包著的引號／括號去掉，否則 AI 輸出 "違規詞" 這種帶引號的格式會跟文章原文比對不到
+    const get = (k: string) => (fields[k] ?? []).join('\n').trim().replace(/^[「『【"“'']+/, '').replace(/[」』】"”'']+$/, '');
 
     const section = get('SECTION'), issue = get('ISSUE'), old = get('OLD');
     let nw = get('NEW');
@@ -2087,6 +2098,14 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
   const [articleText, setArticleText] = useState(initArticle);
 
   useEffect(() => { if (articleText.trim()) runReview(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 切換內容校稿／違規詞校驗模式時，上一個模式留下的總評跟建議要清掉，
+  // 否則畫面看起來毫無變化（只有 tab 跟按鈕文字換了），像是切換沒反應
+  function switchReviewMode(mode: ReviewMode) {
+    if (mode === reviewMode) return;
+    setReviewMode(mode);
+    setOverallEval(''); setSuggestions([]); setFinalScore(''); setError('');
+  }
 
   async function runReview() {
     if (!articleText.trim()) return;
@@ -2224,11 +2243,11 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
           <p className="text-xs text-gray-400">{reviewMode === 'violation' ? '違規詞校驗 · 檢查禁詞與品牌宣稱範圍' : 'AI 校稿 · 先看總評，再逐條處理'}</p>
         </div>
         <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 text-xs shrink-0">
-          <button onClick={() => setReviewMode('quality')} disabled={reviewing || finalScoring}
+          <button onClick={() => switchReviewMode('quality')} disabled={reviewing || finalScoring}
             className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'quality' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
             內容校稿
           </button>
-          <button onClick={() => setReviewMode('violation')} disabled={reviewing || finalScoring}
+          <button onClick={() => switchReviewMode('violation')} disabled={reviewing || finalScoring}
             className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'violation' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
             違規詞校驗
           </button>
