@@ -178,7 +178,10 @@
       "Bash(mkdir -p ~/.claude/skills/dev-diary)",
       "Bash(cp /Users/kc/Downloads/SKILL.md ~/.claude/skills/dev-diary/SKILL.md)",
       "Bash(mkdir -p ~/.claude/skills/_shared)",
-      "Bash(cp /Users/kc/Downloads/anti-ai-style.md ~/.claude/skills/_shared/anti-ai-style.md)"
+      "Bash(cp /Users/kc/Downloads/anti-ai-style.md ~/.claude/skills/_shared/anti-ai-style.md)",
+      "WebFetch(domain:aiqkangber.com)",
+      "Bash(lsof -ti:3001)",
+      "Bash(xargs kill -9)"
     ]
   }
 }
