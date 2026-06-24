@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { parseContent, serializeContent, type ContentItem } from './SectionBlockEditor';
 
 type SectionBase = {
   id: string;
@@ -17,133 +17,47 @@ type Props<S extends SectionBase> = {
   onUpdate: (sections: S[]) => void;
 };
 
-// ── Block types ────────────────────────────────────────────────────────
-
-type Block =
-  | { type: 'h3';        text: string; raw: string }
-  | { type: 'paragraph'; preview: string; raw: string }
-  | { type: 'image';     alt: string;  raw: string }
-  | { type: 'table';     raw: string }
-  | { type: 'link';      label: string; raw: string };
-
-function parseBlocks(content: string): Block[] {
-  const blocks: Block[] = [];
-  const lines = content.split('\n');
-  let tableBuf: string[] = [];
-  let paraBuf: string[] = [];
-
-  function flushPara() {
-    if (!paraBuf.length) return;
-    const raw = paraBuf.join('\n');
-    const preview = paraBuf.find(l => l.trim())?.trim().slice(0, 45) ?? '';
-    if (preview) blocks.push({ type: 'paragraph', preview, raw });
-    paraBuf = [];
-  }
-
-  function flushTable() {
-    if (!tableBuf.length) return;
-    blocks.push({ type: 'table', raw: tableBuf.join('\n') });
-    tableBuf = [];
-  }
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Skip H1 / H2 (section title handled elsewhere)
-    if (/^#{1,2}\s/.test(trimmed)) continue;
-
-    // H3 heading
-    if (/^###\s+/.test(trimmed)) {
-      flushPara(); flushTable();
-      blocks.push({ type: 'h3', text: trimmed.replace(/^###\s+/, ''), raw: line });
-      continue;
-    }
-
-    // Table row
-    if (/^\|.+\|/.test(trimmed)) {
-      flushPara();
-      tableBuf.push(line);
-      continue;
-    }
-
-    // Non-table line → flush any accumulated table first
-    flushTable();
-
-    if (!trimmed) { flushPara(); continue; }
-
-    // Image
-    if (/^!\[/.test(trimmed)) {
-      flushPara();
-      const m = trimmed.match(/^!\[([^\]]*)\]/);
-      blocks.push({ type: 'image', alt: m?.[1] || '圖片', raw: line });
-      continue;
-    }
-
-    // Extended reading link
-    if (/\*\*延伸閱讀/.test(trimmed)) {
-      flushPara();
-      const m = trimmed.match(/\[([^\]]+)\]/);
-      blocks.push({ type: 'link', label: m?.[1] ?? '延伸閱讀', raw: line });
-      continue;
-    }
-
-    // Regular paragraph text
-    paraBuf.push(line);
-  }
-
-  flushPara();
-  flushTable();
-  return blocks;
-}
-
-function removeBlock(content: string, raw: string): string {
-  const cleaned = raw.includes('\n')
-    ? content.replace(raw, '')
-    : content.split('\n').filter(l => l !== raw).join('\n');
-  return cleaned.replace(/\n{3,}/g, '\n\n').trim();
-}
+// 與 SectionBlockEditor 共用同一套 parseContent/serializeContent，
+// 確保這裡顯示的結構跟編輯區實際的段落結構完全對齊，刪除也是刪同一個 item。
 
 // ── Icons ─────────────────────────────────────────────────────────────
 
-const BLOCK_COLOR: Record<Block['type'], string> = {
-  h3:        'text-blue-400',
-  paragraph: 'text-gray-300',
-  image:     'text-violet-400',
-  table:     'text-emerald-400',
-  link:      'text-amber-400',
+const ITEM_COLOR: Record<ContentItem['kind'], string> = {
+  h3:    'text-blue-400',
+  text:  'text-gray-300',
+  image: 'text-violet-400',
+  link:  'text-amber-400',
 };
 
-function BlockIcon({ type }: { type: Block['type'] }) {
-  const cls = `text-xs font-bold shrink-0 w-4 text-center ${BLOCK_COLOR[type]}`;
-  if (type === 'h3')        return <span className={cls}>H3</span>;
-  if (type === 'paragraph') return <span className={cls}>¶</span>;
-  if (type === 'image')     return <span className={cls}>🖼</span>;
-  if (type === 'table')     return <span className={cls}>▦</span>;
-  if (type === 'link')      return <span className={cls}>🔗</span>;
+function ItemIcon({ kind }: { kind: ContentItem['kind'] }) {
+  const cls = `text-xs font-bold shrink-0 w-4 text-center ${ITEM_COLOR[kind]}`;
+  if (kind === 'h3')    return <span className={cls}>H3</span>;
+  if (kind === 'text')  return <span className={cls}>¶</span>;
+  if (kind === 'image') return <span className={cls}>🖼</span>;
+  if (kind === 'link')  return <span className={cls}>🔗</span>;
   return null;
 }
 
-function blockLabel(block: Block): string {
-  if (block.type === 'h3')        return block.text;
-  if (block.type === 'paragraph') return block.preview + (block.preview.length >= 45 ? '…' : '');
-  if (block.type === 'image')     return block.alt || '圖片';
-  if (block.type === 'table')     return '表格';
-  if (block.type === 'link')      return block.label;
+function itemLabel(item: ContentItem): string {
+  if (item.kind === 'h3')    return item.heading;
+  if (item.kind === 'text')  return item.body.slice(0, 45) + (item.body.length > 45 ? '…' : '');
+  if (item.kind === 'image') return item.alt || '圖片';
+  if (item.kind === 'link')  return item.label;
   return '';
 }
 
 // ── Component ─────────────────────────────────────────────────────────
 
-function jumpToBlock(secId: string, block: Block) {
+function jumpToItem(secId: string, item: ContentItem) {
   const secEl = document.getElementById(`sec-${secId}`);
   // 搜尋文字時只在內文區域（排除 section header 的灰色小字）
   const contentEl = document.getElementById(`sec-content-${secId}`) ?? secEl;
   if (!secEl) return;
 
   let searchText = '';
-  if (block.type === 'h3')        searchText = block.text;
-  if (block.type === 'paragraph') searchText = block.preview.slice(0, 20);
-  if (block.type === 'link')      searchText = block.label.slice(0, 20);
+  if (item.kind === 'h3')   searchText = item.heading;
+  if (item.kind === 'text') searchText = item.body.slice(0, 20);
+  if (item.kind === 'link') searchText = item.label.slice(0, 20);
 
   // 先捲到段落頂部
   secEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -184,14 +98,15 @@ export default function StructurePanel<S extends SectionBase>({ open, onClose, s
     onUpdate(sections.filter(s => s.id !== id));
   }
 
-  function deleteBlock(secId: string, block: Block) {
+  function deleteItem(secId: string, items: ContentItem[], itemIdx: number) {
     onUpdate(sections.map(s => {
       if (s.id !== secId) return s;
-      const newContent = removeBlock(s.content, block.raw);
-      const newH3s = block.type === 'h3'
-        ? s.h3s.filter(h => h !== block.text)
+      const removed = items[itemIdx];
+      const remaining = items.filter((_, idx) => idx !== itemIdx);
+      const newH3s = removed.kind === 'h3'
+        ? s.h3s.filter(h => h !== removed.heading)
         : s.h3s;
-      return { ...s, content: newContent, h3s: newH3s };
+      return { ...s, content: serializeContent(remaining), h3s: newH3s };
     }));
   }
 
@@ -212,7 +127,7 @@ export default function StructurePanel<S extends SectionBase>({ open, onClose, s
         {/* Section list */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
           {sections.map((sec, i) => {
-            const blocks = parseBlocks(sec.content);
+            const items = parseContent(sec.content).items;
             return (
               <div key={sec.id}
                 className={`rounded-xl border overflow-hidden ${sec.generating ? 'border-blue-200' : sec.content ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200'}`}
@@ -238,21 +153,21 @@ export default function StructurePanel<S extends SectionBase>({ open, onClose, s
                   </div>
                 </div>
 
-                {/* Blocks in order */}
-                {blocks.length > 0 && (
+                {/* Items in order — 跟編輯區的段落結構一致 */}
+                {items.length > 0 && (
                   <div className="border-t border-gray-100">
-                    {blocks.map((block, j) => (
+                    {items.map((item, j) => (
                       <div key={j}
-                        onClick={() => jumpToBlock(sec.id, block)}
-                        className={`flex items-center gap-2 px-3 py-1.5 group/block hover:bg-blue-50 cursor-pointer transition-colors ${block.type === 'h3' ? 'pl-4' : 'pl-5'}`}
+                        onClick={() => jumpToItem(sec.id, item)}
+                        className={`flex items-center gap-2 px-3 py-1.5 group/block hover:bg-blue-50 cursor-pointer transition-colors ${item.kind === 'h3' ? 'pl-4' : 'pl-5'}`}
                       >
-                        <BlockIcon type={block.type} />
-                        <span className={`flex-1 text-xs truncate min-w-0 ${block.type === 'h3' ? 'text-gray-600 font-medium' : 'text-gray-400'}`}
-                          title={blockLabel(block)}>
-                          {blockLabel(block)}
+                        <ItemIcon kind={item.kind} />
+                        <span className={`flex-1 text-xs truncate min-w-0 ${item.kind === 'h3' ? 'text-gray-600 font-medium' : 'text-gray-400'}`}
+                          title={itemLabel(item)}>
+                          {itemLabel(item)}
                         </span>
                         <button type="button"
-                          onClick={e => { e.stopPropagation(); deleteBlock(sec.id, block); }}
+                          onClick={e => { e.stopPropagation(); deleteItem(sec.id, items, j); }}
                           className="w-4 h-4 flex items-center justify-center rounded text-gray-300 hover:text-red-400 opacity-0 group-hover/block:opacity-100 transition-all text-xs shrink-0">×</button>
                       </div>
                     ))}

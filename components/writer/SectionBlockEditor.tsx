@@ -6,19 +6,23 @@ import RichEditor from './RichEditor';
 function uid() { return Math.random().toString(36).slice(2); }
 
 // ── ContentItem types ─────────────────────────────────────────────────
+// 與 StructurePanel 共用，確保兩邊看到的段落結構完全一致
 
-type H3Item    = { kind: 'h3';    id: string; heading: string; body: string };
-type ImageItem = { kind: 'image'; id: string; alt: string; src: string; raw: string };
-type LinkItem  = { kind: 'link';  id: string; label: string; url: string; raw: string };
-type TextItem  = { kind: 'text';  id: string; body: string };
-type ContentItem = H3Item | ImageItem | LinkItem | TextItem;
+export type H3Item    = { kind: 'h3';    id: string; heading: string; body: string };
+export type ImageItem = { kind: 'image'; id: string; alt: string; src: string; raw: string };
+export type LinkItem  = { kind: 'link';  id: string; label: string; url: string; raw: string };
+export type TextItem  = { kind: 'text';  id: string; body: string };
+export type ContentItem = H3Item | ImageItem | LinkItem | TextItem;
 
-function parseContent(md: string): { items: ContentItem[] } {
+export function parseContent(md: string): { items: ContentItem[] } {
   const lines = md.split('\n');
   const items: ContentItem[] = [];
   let h3Heading: string | null = null;
   let h3BodyLines: string[] = [];
   let textLines: string[] = [];
+  // 純 H1/H2 標題行（例如生成內容固定以「## 段落標題」開頭）不算「有內容」，
+  // 避免標題後的空行把標題自己切成一個獨立、可刪除的 item（跟整段刪除重複）
+  let textHasContent = false;
 
   function pushH3() {
     if (h3Heading === null) return;
@@ -30,6 +34,7 @@ function parseContent(md: string): { items: ContentItem[] } {
   function pushText() {
     const body = textLines.join('\n').trim();
     textLines = [];
+    textHasContent = false;
     if (body) items.push({ kind: 'text', id: uid(), body });
   }
 
@@ -42,9 +47,13 @@ function parseContent(md: string): { items: ContentItem[] } {
   for (const line of lines) {
     const trimmed = line.trim();
 
+    // 空行：H3 內的段落間距維持原樣；H3 外的純文字則用空行切成獨立 item，
+    // 否則序列化後重新解析會跟相鄰的純文字段落黏成同一個 item，造成結構面板對不上、刪不掉
+    // 但累積內容若還只是標題行（尚無正文），不可在此切斷，否則標題會自己變成獨立 item
     if (!trimmed) {
       if (h3Heading !== null) h3BodyLines.push(line);
-      else textLines.push(line);
+      else if (textHasContent) pushText();
+      else if (textLines.length > 0) textLines.push(line);
       continue;
     }
 
@@ -80,14 +89,14 @@ function parseContent(md: string): { items: ContentItem[] } {
 
     // Regular content
     if (h3Heading !== null) h3BodyLines.push(line);
-    else textLines.push(line);
+    else { textLines.push(line); textHasContent = true; }
   }
 
   flush();
   return { items };
 }
 
-function serializeContent(items: ContentItem[]): string {
+export function serializeContent(items: ContentItem[]): string {
   const parts: string[] = [];
   for (const item of items) {
     if (item.kind === 'h3') {
