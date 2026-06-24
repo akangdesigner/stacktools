@@ -4,11 +4,11 @@ import { createUserNote, getUserNotes, getAllUserNotes, deleteUserNote } from '@
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const { userId, category, content } = await req.json();
+  const { userId, category, content, importance } = await req.json();
   if (!userId || !category || !content) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
   }
-  const id = createUserNote(userId, category, content);
+  const id = createUserNote(userId, category, content, importance === 'long_term' ? 'long_term' : 'short_term');
   return NextResponse.json({ id });
 }
 

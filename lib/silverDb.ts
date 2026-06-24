@@ -38,6 +38,7 @@ db.exec(`
     userId TEXT NOT NULL,
     category TEXT NOT NULL,
     content TEXT NOT NULL,
+    importance TEXT NOT NULL DEFAULT 'short_term',
     createdAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
 
@@ -47,6 +48,14 @@ db.exec(`
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
 `);
+
+// user_notes 舊資料庫可能還沒有 importance 欄位，補上去
+const userNotesColumns = db.prepare("PRAGMA table_info(user_notes)").all() as { name: string }[];
+if (!userNotesColumns.some((c) => c.name === 'importance')) {
+  db.exec("ALTER TABLE user_notes ADD COLUMN importance TEXT NOT NULL DEFAULT 'short_term'");
+}
+
+const SHORT_TERM_NOTE_LIMIT = 20;
 
 export interface NewsPreference {
   userId: string;
@@ -158,14 +167,34 @@ export interface UserNote {
   userId: string;
   category: string;
   content: string;
+  importance: 'long_term' | 'short_term';
   createdAt: string;
 }
 
-export function createUserNote(userId: string, category: string, content: string): number {
+export function createUserNote(
+  userId: string,
+  category: string,
+  content: string,
+  importance: 'long_term' | 'short_term' = 'short_term'
+): number {
   const result = db.prepare(`
-    INSERT INTO user_notes (userId, category, content)
-    VALUES (?, ?, ?)
-  `).run(userId, category, content);
+    INSERT INTO user_notes (userId, category, content, importance)
+    VALUES (?, ?, ?, ?)
+  `).run(userId, category, content, importance);
+
+  if (importance === 'short_term') {
+    const excess = db.prepare(`
+      SELECT id FROM user_notes
+      WHERE userId = ? AND importance = 'short_term'
+      ORDER BY createdAt DESC
+      LIMIT -1 OFFSET ?
+    `).all(userId, SHORT_TERM_NOTE_LIMIT) as { id: number }[];
+    if (excess.length > 0) {
+      const ids = excess.map((row) => row.id);
+      db.prepare(`DELETE FROM user_notes WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
+    }
+  }
+
   return result.lastInsertRowid as number;
 }
 
