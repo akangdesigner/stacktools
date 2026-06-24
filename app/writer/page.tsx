@@ -773,6 +773,12 @@ function ClientSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualDraft, setManualDraft] = useState({ title: '', brand_description: '', writing_rules: '', banned_words: '' });
+  const [manualSaving, setManualSaving] = useState(false);
+  const [editingLegacy, setEditingLegacy] = useState(false);
+  const [legacyDraft, setLegacyDraft] = useState({ brand_description: '', writing_rules: '', banned_words: '' });
+  const [legacySaving, setLegacySaving] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -800,6 +806,9 @@ function ClientSettingsTab() {
     setDraft({ brand_url: p?.brand_url ?? '' });
     setExtractError('');
     setEditing(clientId);
+    setShowManualForm(false);
+    setManualDraft({ title: '', brand_description: '', writing_rules: '', banned_words: '' });
+    setEditingLegacy(false);
     setSourcesLoading(true);
     fetch(`/api/writer/brand-profile/pdf-sources?clientId=${clientId}`)
       .then(r => r.json())
@@ -850,6 +859,39 @@ function ClientSettingsTab() {
     await refreshClientData(editing);
   }
 
+  async function addManualSource() {
+    if (editing == null) return;
+    if (!manualDraft.brand_description.trim() && !manualDraft.writing_rules.trim() && !manualDraft.banned_words.trim()) return;
+    setManualSaving(true);
+    await fetch('/api/writer/brand-profile/pdf-sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gsc_client_id: editing, ...manualDraft }),
+    });
+    await refreshClientData(editing);
+    setManualDraft({ title: '', brand_description: '', writing_rules: '', banned_words: '' });
+    setShowManualForm(false);
+    setManualSaving(false);
+  }
+
+  function startEditLegacy(source: BrandPdfSource) {
+    setLegacyDraft({ brand_description: source.brand_description, writing_rules: source.writing_rules, banned_words: source.banned_words });
+    setEditingLegacy(true);
+  }
+
+  async function saveLegacySource() {
+    if (editing == null) return;
+    setLegacySaving(true);
+    await fetch(`/api/writer/brand-profile/pdf-sources/0?clientId=${editing}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(legacyDraft),
+    });
+    await refreshClientData(editing);
+    setEditingLegacy(false);
+    setLegacySaving(false);
+  }
+
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400';
 
   if (loading) return (
@@ -867,7 +909,7 @@ function ClientSettingsTab() {
       <p className="text-xs text-gray-400">這裡填寫的品牌資訊供所有人共用，會自動帶入 Compose 頁的 AI 分析。</p>
       {clients.map(c => {
         const p = profiles[c.id];
-        const hasProfile = p && (p.brand_url || p.brand_description);
+        const hasProfile = p && (p.brand_url || p.brand_description || p.writing_rules || p.banned_words);
         return editing === c.id ? (
           <div key={c.id} className="border border-blue-300 rounded-xl p-4 space-y-3 bg-blue-50">
             <p className="text-sm font-semibold text-blue-900">{c.name}</p>
@@ -896,15 +938,64 @@ function ClientSettingsTab() {
               ) : (
                 <ul className="space-y-1">
                   {sources.map(s => (
-                    <li key={s.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
-                      <span className="flex-1 text-xs text-gray-700 truncate">{s.title || '（未命名文件）'}</span>
-                      <button onClick={() => deleteSource(s.id)}
-                        className="text-xs text-gray-400 hover:text-red-500 shrink-0">移除</button>
-                    </li>
+                    s.id === 0 && editingLegacy ? (
+                      <li key={s.id} className="border border-blue-200 rounded-lg p-2 space-y-2 bg-white">
+                        <textarea className={`${inputCls} h-16 resize-none text-xs leading-relaxed`} placeholder="品牌描述"
+                          value={legacyDraft.brand_description}
+                          onChange={e => setLegacyDraft(d => ({ ...d, brand_description: e.target.value }))} />
+                        <textarea className={`${inputCls} h-20 resize-none text-xs leading-relaxed`} placeholder="寫文規範"
+                          value={legacyDraft.writing_rules}
+                          onChange={e => setLegacyDraft(d => ({ ...d, writing_rules: e.target.value }))} />
+                        <textarea className={`${inputCls} h-16 resize-none text-xs leading-relaxed`} placeholder="禁詞"
+                          value={legacyDraft.banned_words}
+                          onChange={e => setLegacyDraft(d => ({ ...d, banned_words: e.target.value }))} />
+                        <div className="flex gap-2">
+                          <button onClick={saveLegacySource} disabled={legacySaving}
+                            className="text-xs px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                            {legacySaving ? '儲存中…' : '儲存'}
+                          </button>
+                          <button onClick={() => setEditingLegacy(false)} className="text-xs px-3 py-1 text-gray-500 hover:text-gray-700">取消</button>
+                        </div>
+                      </li>
+                    ) : (
+                      <li key={s.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                        <span className="flex-1 text-xs text-gray-700 truncate">{s.title || '（未命名文件）'}</span>
+                        {s.id === 0 && (
+                          <button onClick={() => startEditLegacy(s)}
+                            className="text-xs text-gray-400 hover:text-blue-600 shrink-0">編輯</button>
+                        )}
+                        <button onClick={() => deleteSource(s.id)}
+                          className="text-xs text-gray-400 hover:text-red-500 shrink-0">移除</button>
+                      </li>
+                    )
                   ))}
                 </ul>
               )}
-              <p className="text-xs text-gray-400 mt-1">下方三個欄位是依目前所有 PDF 來源自動合併產生的結果，無法手動編輯；要調整內容請上傳或移除對應的 PDF。</p>
+
+              {showManualForm ? (
+                <div className="border border-dashed border-gray-300 rounded-lg p-3 space-y-2 mt-2">
+                  <input className={inputCls} placeholder="標題（選填，例如：補充規範）" value={manualDraft.title}
+                    onChange={e => setManualDraft(d => ({ ...d, title: e.target.value }))} />
+                  <textarea className={`${inputCls} h-16 resize-none text-xs`} placeholder="品牌描述（選填）" value={manualDraft.brand_description}
+                    onChange={e => setManualDraft(d => ({ ...d, brand_description: e.target.value }))} />
+                  <textarea className={`${inputCls} h-20 resize-none text-xs`} placeholder="寫文規範（選填）" value={manualDraft.writing_rules}
+                    onChange={e => setManualDraft(d => ({ ...d, writing_rules: e.target.value }))} />
+                  <textarea className={`${inputCls} h-16 resize-none text-xs`} placeholder="禁詞（選填）" value={manualDraft.banned_words}
+                    onChange={e => setManualDraft(d => ({ ...d, banned_words: e.target.value }))} />
+                  <div className="flex gap-2">
+                    <button onClick={addManualSource} disabled={manualSaving}
+                      className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50">
+                      {manualSaving ? '新增中…' : '新增'}
+                    </button>
+                    <button onClick={() => setShowManualForm(false)} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700">取消</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowManualForm(true)}
+                  className="text-xs text-blue-600 hover:text-blue-700 mt-2">+ 手動新增來源</button>
+              )}
+
+              <p className="text-xs text-gray-400 mt-1">下方三個欄位是依目前所有來源自動合併產生的結果，無法手動編輯；要調整內容請上傳 PDF、手動新增，或編輯／移除對應的來源。</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">品牌描述（自動合併，唯讀）</label>
@@ -937,7 +1028,7 @@ function ClientSettingsTab() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800">{c.name}</p>
               {hasProfile ? (
-                <p className="text-xs text-gray-400 truncate mt-0.5">{p.brand_url || p.brand_description.slice(0, 60)}</p>
+                <p className="text-xs text-gray-400 truncate mt-0.5">{p.brand_url || p.brand_description.slice(0, 60) || p.writing_rules.slice(0, 60) || p.banned_words.slice(0, 60)}</p>
               ) : (
                 <p className="text-xs text-gray-300 mt-0.5">尚未填寫品牌資訊</p>
               )}

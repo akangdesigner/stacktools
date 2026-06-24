@@ -215,6 +215,13 @@ export function deleteBrandPdfSource(gscClientId: number, id: number): void {
   db().prepare('DELETE FROM writer_brand_pdf_sources WHERE id = ? AND gsc_client_id = ?').run(id, gscClientId);
 }
 
+// 只給「舊版資料」(id=0) 這一筆專用：標題固定顯示「舊版資料」，不存資料庫、不可改
+export function updateLegacyBrandSource(gscClientId: number, brandDescription: string, writingRules: string, bannedWords: string): void {
+  db().prepare(
+    `UPDATE writer_brand_profiles SET brand_description = ?, writing_rules = ?, banned_words = ? WHERE gsc_client_id = ?`
+  ).run(brandDescription, writingRules, bannedWords, gscClientId);
+}
+
 export function listBrandProfiles(): BrandProfile[] {
   const rows = db().prepare('SELECT gsc_client_id, brand_url, updated_at FROM writer_brand_profiles').all() as Pick<BrandProfile, 'gsc_client_id' | 'brand_url' | 'updated_at'>[];
   return rows.map(row => ({ ...row, ...mergeSources(listBrandPdfSources(row.gsc_client_id)) }));
