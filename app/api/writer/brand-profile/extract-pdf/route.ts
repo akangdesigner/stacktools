@@ -10,6 +10,7 @@ const SYSTEM_PROMPT = `你是品牌寫文助手的資料整理員。使用者會
 
 請「只」回傳一個 JSON 物件，不要加任何說明文字或 markdown 標記：
 {
+  "title": "用 4-10 個字描述這份文件的用途，讓人一看就知道這是哪種文件，例如『品牌簡介』『廣告法規宣稱詞例示表』『寫文 SOP』，不要照抄檔名",
   "brand_description": "品牌服務範圍、目標客群、特色等描述，找不到就回空字串",
   "writing_rules": "給文案撰寫者的具體指示，要讓人看完就知道實際可以怎麼下筆、又要避開什麼，不要只寫空泛的原則。如果文件是法規或合法宣稱詞句範例表，請用『可以寫：...（依產品類別整合出重要、具代表性的具體詞句，不必窮舉每一條，但要保留真正能直接套用的用詞）』加上『但要注意：...（限制、條件、禁止事項，例如不可宣稱醫療效能、哪些詞句需要科學佐證才能使用）』的方式整理，依產品類別分段列出；如果不是法規類文件，就用一般的語氣、結構、用詞限制等具體指示來寫，找不到就回空字串",
   "banned_words": "完全不能使用的具體詞彙或宣稱類型，一行一個，例如『醫療效能』『治療』『治癒』。注意：『需要科學佐證才能使用』的詞句（例如標註*1*2的『美白』『抗菌』『有機』『天然』等）不算禁詞，那是有條件允許，請寫進 writing_rules 的注意事項裡，不要放進這個欄位；這個欄位只放完全不能講的詞，找不到就回空字串"
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
   try {
     const parsed = JSON.parse(match[0]);
     return NextResponse.json({
+      title: toText(parsed.title),
       brand_description: toText(parsed.brand_description),
       writing_rules: toText(parsed.writing_rules),
       banned_words: toText(parsed.banned_words),

@@ -51,6 +51,15 @@ function db() {
         banned_words TEXT NOT NULL DEFAULT '',
         updated_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS writer_brand_pdf_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        gsc_client_id INTEGER NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        brand_description TEXT NOT NULL DEFAULT '',
+        writing_rules TEXT NOT NULL DEFAULT '',
+        banned_words TEXT NOT NULL DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+      );
     `);
     try { _db.exec(`ALTER TABLE writer_brand_profiles ADD COLUMN writing_rules TEXT NOT NULL DEFAULT ''`); } catch { /* 欄位已存在 */ }
     try { _db.exec(`ALTER TABLE writer_brand_profiles ADD COLUMN banned_words TEXT NOT NULL DEFAULT ''`); } catch { /* 欄位已存在 */ }
@@ -141,39 +150,6 @@ export function setUserWritingGuide(userEmail: string, guide: string): void {
   ).run(userEmail, guide);
 }
 
-// ── User Clients（per login account）─────────────────────────────────
-
-export type UserClient = {
-  id: number;
-  user_email: string;
-  name: string;
-  brand_url: string;
-  brand_description: string;
-  created_at: string;
-};
-
-export function listUserClients(userEmail: string): UserClient[] {
-  return db().prepare('SELECT * FROM user_clients WHERE user_email = ? ORDER BY name').all(userEmail) as UserClient[];
-}
-
-export function upsertUserClient(userEmail: string, id: number | null, name: string, brandUrl: string, brandDescription: string): UserClient {
-  if (id) {
-    db().prepare(
-      'UPDATE user_clients SET name = ?, brand_url = ?, brand_description = ? WHERE id = ? AND user_email = ?'
-    ).run(name, brandUrl, brandDescription, id, userEmail);
-    return db().prepare('SELECT * FROM user_clients WHERE id = ?').get(id) as UserClient;
-  } else {
-    const result = db().prepare(
-      'INSERT INTO user_clients (user_email, name, brand_url, brand_description) VALUES (?, ?, ?, ?)'
-    ).run(userEmail, name, brandUrl, brandDescription);
-    return db().prepare('SELECT * FROM user_clients WHERE id = ?').get(result.lastInsertRowid) as UserClient;
-  }
-}
-
-export function deleteUserClient(userEmail: string, id: number): void {
-  db().prepare('DELETE FROM user_clients WHERE id = ? AND user_email = ?').run(id, userEmail);
-}
-
 // ── Brand Profiles（共用，以 GSC client ID 為鍵）─────────────────────
 
 export type BrandProfile = {
@@ -185,12 +161,70 @@ export type BrandProfile = {
   updated_at: string;
 };
 
+// id = 0 是「舊版資料」的虛擬來源：搬遷這個功能之前，使用者已經手動填寫或上傳過的內容
+// 直接留在 writer_brand_profiles 三個欄位裡，不額外搬資料，只是讀取/合併/刪除時一併當作一筆來源處理
+export type BrandPdfSource = {
+  id: number;
+  gsc_client_id: number;
+  title: string;
+  brand_description: string;
+  writing_rules: string;
+  banned_words: string;
+  created_at: string;
+};
+
+function mergeSources(sources: { title: string; brand_description: string; writing_rules: string; banned_words: string }[]) {
+  function mergeField(field: 'brand_description' | 'writing_rules' | 'banned_words'): string {
+    return sources
+      .filter(s => s[field].trim())
+      .map(s => s.title.trim() ? `【${s.title.trim()}】\n${s[field].trim()}` : s[field].trim())
+      .join('\n\n');
+  }
+  return {
+    brand_description: mergeField('brand_description'),
+    writing_rules: mergeField('writing_rules'),
+    banned_words: mergeField('banned_words'),
+  };
+}
+
+export function listBrandPdfSources(gscClientId: number): BrandPdfSource[] {
+  const baseRow = db().prepare('SELECT brand_description, writing_rules, banned_words FROM writer_brand_profiles WHERE gsc_client_id = ?')
+    .get(gscClientId) as { brand_description: string; writing_rules: string; banned_words: string } | undefined;
+  const legacy: BrandPdfSource[] = baseRow && (baseRow.brand_description || baseRow.writing_rules || baseRow.banned_words)
+    ? [{ id: 0, gsc_client_id: gscClientId, title: '舊版資料', ...baseRow, created_at: '' }]
+    : [];
+  const rows = db().prepare('SELECT * FROM writer_brand_pdf_sources WHERE gsc_client_id = ? ORDER BY created_at ASC, id ASC')
+    .all(gscClientId) as BrandPdfSource[];
+  return [...legacy, ...rows];
+}
+
+export function addBrandPdfSource(gscClientId: number, title: string, brandDescription: string, writingRules: string, bannedWords: string): BrandPdfSource {
+  // 確保 writer_brand_profiles 已有這個客戶的基底列（存 brand_url），否則只存在 PDF 來源表的客戶不會出現在 listBrandProfiles()
+  db().prepare('INSERT INTO writer_brand_profiles (gsc_client_id) VALUES (?) ON CONFLICT(gsc_client_id) DO NOTHING').run(gscClientId);
+  const result = db().prepare(
+    'INSERT INTO writer_brand_pdf_sources (gsc_client_id, title, brand_description, writing_rules, banned_words) VALUES (?, ?, ?, ?, ?)'
+  ).run(gscClientId, title, brandDescription, writingRules, bannedWords);
+  return db().prepare('SELECT * FROM writer_brand_pdf_sources WHERE id = ?').get(result.lastInsertRowid) as BrandPdfSource;
+}
+
+export function deleteBrandPdfSource(gscClientId: number, id: number): void {
+  if (id === 0) {
+    db().prepare(`UPDATE writer_brand_profiles SET brand_description = '', writing_rules = '', banned_words = '' WHERE gsc_client_id = ?`).run(gscClientId);
+    return;
+  }
+  db().prepare('DELETE FROM writer_brand_pdf_sources WHERE id = ? AND gsc_client_id = ?').run(id, gscClientId);
+}
+
 export function listBrandProfiles(): BrandProfile[] {
-  return db().prepare('SELECT * FROM writer_brand_profiles').all() as BrandProfile[];
+  const rows = db().prepare('SELECT gsc_client_id, brand_url, updated_at FROM writer_brand_profiles').all() as Pick<BrandProfile, 'gsc_client_id' | 'brand_url' | 'updated_at'>[];
+  return rows.map(row => ({ ...row, ...mergeSources(listBrandPdfSources(row.gsc_client_id)) }));
 }
 
 export function getBrandProfile(gscClientId: number): BrandProfile | null {
-  return db().prepare('SELECT * FROM writer_brand_profiles WHERE gsc_client_id = ?').get(gscClientId) as BrandProfile | null;
+  const row = db().prepare('SELECT gsc_client_id, brand_url, updated_at FROM writer_brand_profiles WHERE gsc_client_id = ?')
+    .get(gscClientId) as Pick<BrandProfile, 'gsc_client_id' | 'brand_url' | 'updated_at'> | undefined;
+  if (!row) return null;
+  return { ...row, ...mergeSources(listBrandPdfSources(gscClientId)) };
 }
 
 export function getUserPromptOverrides(userEmail: string): Record<string, string> {
@@ -210,15 +244,13 @@ export function deleteUserPromptOverride(userEmail: string, stage: string): void
   db().prepare('DELETE FROM user_prompt_overrides WHERE user_email = ? AND stage = ?').run(userEmail, stage);
 }
 
-export function upsertBrandProfile(gscClientId: number, brandUrl: string, brandDescription: string, writingRules: string, bannedWords: string): void {
+// 品牌描述／寫文規範／禁詞改由 PDF 來源（見 BrandPdfSource）自動合併產生，這裡只負責手動填寫的品牌網址
+export function upsertBrandProfile(gscClientId: number, brandUrl: string): void {
   db().prepare(
-    `INSERT INTO writer_brand_profiles (gsc_client_id, brand_url, brand_description, writing_rules, banned_words, updated_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'))
+    `INSERT INTO writer_brand_profiles (gsc_client_id, brand_url, updated_at)
+     VALUES (?, ?, datetime('now'))
      ON CONFLICT(gsc_client_id) DO UPDATE SET
        brand_url = excluded.brand_url,
-       brand_description = excluded.brand_description,
-       writing_rules = excluded.writing_rules,
-       banned_words = excluded.banned_words,
        updated_at = excluded.updated_at`
-  ).run(gscClientId, brandUrl, brandDescription, writingRules, bannedWords);
+  ).run(gscClientId, brandUrl);
 }

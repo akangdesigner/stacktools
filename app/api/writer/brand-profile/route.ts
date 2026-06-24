@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { gsc_client_id, brand_url, brand_description, writing_rules, banned_words } = await req.json();
+  const { gsc_client_id, brand_url } = await req.json();
   if (!gsc_client_id) return NextResponse.json({ error: 'gsc_client_id required' }, { status: 400 });
-  upsertBrandProfile(Number(gsc_client_id), brand_url ?? '', brand_description ?? '', writing_rules ?? '', banned_words ?? '');
+  upsertBrandProfile(Number(gsc_client_id), brand_url ?? '');
   return NextResponse.json({ ok: true });
 }

@@ -767,12 +767,15 @@ function SkeletonTable() {
 
 type GscClient = { id: number; name: string };
 type BrandProfile = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string; banned_words: string };
+type BrandPdfSource = { id: number; gsc_client_id: number; title: string; brand_description: string; writing_rules: string; banned_words: string; created_at: string };
 
 function ClientSettingsTab() {
   const [clients, setClients] = useState<GscClient[]>([]);
   const [profiles, setProfiles] = useState<Record<number, BrandProfile>>({});
   const [editing, setEditing] = useState<number | null>(null);
-  const [draft, setDraft] = useState<{ brand_url: string; brand_description: string; writing_rules: string; banned_words: string }>({ brand_url: '', brand_description: '', writing_rules: '', banned_words: '' });
+  const [draft, setDraft] = useState<{ brand_url: string }>({ brand_url: '' });
+  const [sources, setSources] = useState<BrandPdfSource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
@@ -790,11 +793,25 @@ function ClientSettingsTab() {
     }).finally(() => setLoading(false));
   }, []);
 
+  async function refreshClientData(clientId: number) {
+    const [profile, sourceList] = await Promise.all([
+      fetch(`/api/writer/brand-profile?clientId=${clientId}`).then(r => r.json()) as Promise<BrandProfile>,
+      fetch(`/api/writer/brand-profile/pdf-sources?clientId=${clientId}`).then(r => r.json()) as Promise<BrandPdfSource[]>,
+    ]);
+    setProfiles(prev => ({ ...prev, [clientId]: profile }));
+    setSources(sourceList);
+  }
+
   function startEdit(clientId: number) {
-    const p = profiles[clientId] ?? { gsc_client_id: clientId, brand_url: '', brand_description: '', writing_rules: '', banned_words: '' };
-    setDraft({ brand_url: p.brand_url, brand_description: p.brand_description, writing_rules: p.writing_rules ?? '', banned_words: p.banned_words ?? '' });
+    const p = profiles[clientId];
+    setDraft({ brand_url: p?.brand_url ?? '' });
     setExtractError('');
     setEditing(clientId);
+    setSourcesLoading(true);
+    fetch(`/api/writer/brand-profile/pdf-sources?clientId=${clientId}`)
+      .then(r => r.json())
+      .then((list: BrandPdfSource[]) => setSources(list))
+      .finally(() => setSourcesLoading(false));
   }
 
   async function saveProfile(clientId: number) {
@@ -802,16 +819,17 @@ function ClientSettingsTab() {
     const res = await fetch('/api/writer/brand-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gsc_client_id: clientId, ...draft }),
+      body: JSON.stringify({ gsc_client_id: clientId, brand_url: draft.brand_url }),
     });
     if (res.ok) {
-      setProfiles(prev => ({ ...prev, [clientId]: { gsc_client_id: clientId, ...draft } }));
+      setProfiles(prev => ({ ...prev, [clientId]: { ...prev[clientId], gsc_client_id: clientId, brand_url: draft.brand_url } }));
       setEditing(null);
     }
     setSaving(false);
   }
 
   async function extractFromPdf(file: File) {
+    if (editing == null) return;
     setExtracting(true);
     setExtractError('');
     const body = new FormData();
@@ -820,17 +838,23 @@ function ClientSettingsTab() {
       const res = await fetch('/api/writer/brand-profile/extract-pdf', { method: 'POST', body });
       const data = await res.json();
       if (!res.ok) { setExtractError(data.error ?? '辨識失敗，請重試'); return; }
-      setDraft(d => ({
-        brand_url: d.brand_url,
-        brand_description: data.brand_description || d.brand_description,
-        writing_rules: data.writing_rules || d.writing_rules,
-        banned_words: data.banned_words || d.banned_words,
-      }));
+      await fetch('/api/writer/brand-profile/pdf-sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gsc_client_id: editing, title: data.title, brand_description: data.brand_description, writing_rules: data.writing_rules, banned_words: data.banned_words }),
+      });
+      await refreshClientData(editing);
     } catch {
       setExtractError('辨識失敗，請重試');
     } finally {
       setExtracting(false);
     }
+  }
+
+  async function deleteSource(id: number) {
+    if (editing == null) return;
+    await fetch(`/api/writer/brand-profile/pdf-sources/${id}?clientId=${editing}`, { method: 'DELETE' });
+    await refreshClientData(editing);
   }
 
   const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400';
@@ -859,7 +883,7 @@ function ClientSettingsTab() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 3v12" /><path d="M7 8l5-5 5 5" /><path d="M4 17v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
                 </svg>
-                <span>{extracting ? 'AI 辨識中，請稍候…' : '點擊上傳 PDF，自動帶入品牌描述／寫文規範／禁詞'}</span>
+                <span>{extracting ? 'AI 辨識中，請稍候…' : '點擊上傳 PDF，自動辨識用途並帶入品牌描述／寫文規範／禁詞'}</span>
                 <input type="file" accept="application/pdf" disabled={extracting} className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) extractFromPdf(f); e.target.value = ''; }} />
               </label>
@@ -871,25 +895,41 @@ function ClientSettingsTab() {
                 onChange={e => setDraft(d => ({ ...d, brand_url: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">品牌描述</label>
-              <textarea className={`${inputCls} h-20 resize-none text-xs leading-relaxed`}
-                placeholder="說明品牌服務範圍、目標客群、特色等，AI 會在分析時參考這段描述…"
-                value={draft.brand_description}
-                onChange={e => setDraft(d => ({ ...d, brand_description: e.target.value }))} />
+              <label className="block text-xs font-medium text-gray-600 mb-1">已上傳的 PDF 來源</label>
+              {sourcesLoading ? (
+                <p className="text-xs text-gray-400">載入中…</p>
+              ) : sources.length === 0 ? (
+                <p className="text-xs text-gray-400">尚未上傳任何 PDF</p>
+              ) : (
+                <ul className="space-y-1">
+                  {sources.map(s => (
+                    <li key={s.id} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                      <span className="flex-1 text-xs text-gray-700 truncate">{s.title || '（未命名文件）'}</span>
+                      <button onClick={() => deleteSource(s.id)}
+                        className="text-xs text-gray-400 hover:text-red-500 shrink-0">移除</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-gray-400 mt-1">下方三個欄位是依目前所有 PDF 來源自動合併產生的結果，無法手動編輯；要調整內容請上傳或移除對應的 PDF。</p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">寫文規範</label>
-              <textarea className={`${inputCls} h-28 resize-none text-xs leading-relaxed`}
-                placeholder={"此客戶的寫文限制與規範，AI 每次撰寫段落都會遵守，例如：\n・語氣偏向…\n・禁止提及…\n・品牌 CTA 固定寫法…"}
-                value={draft.writing_rules}
-                onChange={e => setDraft(d => ({ ...d, writing_rules: e.target.value }))} />
+              <label className="block text-xs font-medium text-gray-600 mb-1">品牌描述（自動合併，唯讀）</label>
+              <textarea className={`${inputCls} h-20 resize-none text-xs leading-relaxed bg-gray-50 text-gray-500`}
+                placeholder="尚無內容，請上傳 PDF"
+                value={profiles[c.id]?.brand_description ?? ''} readOnly />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">禁詞</label>
-              <textarea className={`${inputCls} h-20 resize-none text-xs leading-relaxed`}
-                placeholder={"此客戶禁止使用的詞彙，一行一個"}
-                value={draft.banned_words}
-                onChange={e => setDraft(d => ({ ...d, banned_words: e.target.value }))} />
+              <label className="block text-xs font-medium text-gray-600 mb-1">寫文規範（自動合併，唯讀）</label>
+              <textarea className={`${inputCls} h-28 resize-none text-xs leading-relaxed bg-gray-50 text-gray-500`}
+                placeholder="尚無內容，請上傳 PDF"
+                value={profiles[c.id]?.writing_rules ?? ''} readOnly />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">禁詞（自動合併，唯讀）</label>
+              <textarea className={`${inputCls} h-20 resize-none text-xs leading-relaxed bg-gray-50 text-gray-500`}
+                placeholder="尚無內容，請上傳 PDF"
+                value={profiles[c.id]?.banned_words ?? ''} readOnly />
             </div>
             <div className="flex gap-2">
               <button onClick={() => saveProfile(c.id)} disabled={saving}
