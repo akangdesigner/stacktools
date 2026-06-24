@@ -156,8 +156,10 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         "text-decoration": client.linkTextDecoration,
         "font-weight": client.linkFontWeight,
       }));
-      // 移除內部元素（span、strong...）上殘留的 color，避免蓋掉連結顏色
+      // 移除內部元素（span、strong、font...）上殘留的顏色，避免蓋掉連結顏色
       a.querySelectorAll("*").forEach((node) => {
+        // 舊式 <font color="..."> 等 HTML 屬性顏色，會直接蓋掉 <a> 的顏色，需移除
+        if (node.getAttribute("color")) node.removeAttribute("color");
         const nodeStyle = node.getAttribute("style") || "";
         if (!nodeStyle) return;
         const nodeMap = parseStyleString(nodeStyle);
@@ -167,6 +169,9 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         if (cleanedNode) node.setAttribute("style", cleanedNode);
         else node.removeAttribute("style");
       });
+      // 文字外面再包一層帶連結色的 span：部分編輯器（如 Shopline）貼上時會丟棄 <a> 自身的 style，
+      // 改用貼上當下算出的繼承色重新包一層 span，這裡先把正確顏色放進去讓它抓到的就是對的值
+      a.innerHTML = `<span style="color: ${client.linkColor};">${a.innerHTML}</span>`;
     }
   });
 
