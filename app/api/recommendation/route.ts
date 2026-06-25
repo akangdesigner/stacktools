@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRecommendationJob, updateRecommendationJob } from '@/lib/recommendation-jobs';
-import { postN8nWebhook } from '@/lib/n8n-webhook';
+import { postN8nWebhook, buildRecommendationWebhookTarget } from '@/lib/n8n-webhook';
 
 // 第一段：同時觸發「品牌查詢」與「大綱生成」兩個 n8n workflow
 export async function POST(req: NextRequest) {
@@ -33,11 +33,7 @@ export async function POST(req: NextRequest) {
 
     const [brandsResult, outlineResult] = await Promise.all([
       postN8nWebhook(
-        {
-          label: '品牌查詢',
-          url: process.env.N8N_WEBHOOK_BRANDS_URL,
-          testUrl: process.env.N8N_WEBHOOK_BRANDS_TEST_URL,
-        },
+        buildRecommendationWebhookTarget('品牌查詢', 'rec-step1-brands'),
         {
           jobId,
           callbackUrl,
@@ -47,11 +43,7 @@ export async function POST(req: NextRequest) {
         }
       ),
       postN8nWebhook(
-        {
-          label: '大綱生成',
-          url: process.env.N8N_WEBHOOK_OUTLINE_URL,
-          testUrl: process.env.N8N_WEBHOOK_OUTLINE_TEST_URL,
-        },
+        buildRecommendationWebhookTarget('大綱生成', 'rec-step2-outline'),
         {
           jobId,
           callbackUrl,

@@ -12,6 +12,25 @@ export interface WebhookTarget {
   testUrl: string | undefined;
 }
 
+const N8N_BASE_URL = process.env.N8N_BASE_URL || 'https://stack.zeabur.app';
+
+export type RecommendationWebhookPath =
+  | 'rec-step1-brands'
+  | 'rec-step2-outline'
+  | 'rec-step3-generate';
+
+/** 推薦文三段 webhook 路徑固定，不是機密，直接組網址，不用每段各設環境變數 */
+export function buildRecommendationWebhookTarget(
+  label: string,
+  path: RecommendationWebhookPath
+): WebhookTarget {
+  return {
+    label,
+    url: `${N8N_BASE_URL}/webhook/${path}`,
+    testUrl: `${N8N_BASE_URL}/webhook-test/${path}`,
+  };
+}
+
 /**
  * 打 n8n webhook，沿用既有 fallback 規則：
  * - N8N_WEBHOOK_USE_TEST 開啟時直接打測試網址

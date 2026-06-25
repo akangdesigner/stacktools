@@ -4,7 +4,7 @@ import {
   updateRecommendationJob,
   RecommendationBrand,
 } from '@/lib/recommendation-jobs';
-import { postN8nWebhook } from '@/lib/n8n-webhook';
+import { postN8nWebhook, buildRecommendationWebhookTarget } from '@/lib/n8n-webhook';
 
 // 第二段：使用者確認品牌與大綱後，觸發「完整生成」workflow
 export async function POST(req: NextRequest) {
@@ -49,11 +49,7 @@ export async function POST(req: NextRequest) {
   const callbackUrl = `${callbackBaseUrl}/api/recommendation/callback`;
 
   const result = await postN8nWebhook(
-    {
-      label: '完整生成',
-      url: process.env.N8N_WEBHOOK_GENERATE_URL,
-      testUrl: process.env.N8N_WEBHOOK_GENERATE_TEST_URL,
-    },
+    buildRecommendationWebhookTarget('完整生成', 'rec-step3-generate'),
     {
       jobId,
       callbackUrl,
