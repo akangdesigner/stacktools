@@ -15,6 +15,36 @@ interface Brand {
   official_url: string;
 }
 
+interface OutlineSection {
+  id: string;
+  h2: string;
+  h3s: string[];
+}
+
+// 把 n8n 回傳的 "## H2\n### H3" markdown 大綱拆成可逐項編輯的結構
+function parseOutlineText(text: string): OutlineSection[] {
+  const sections: OutlineSection[] = [];
+  let current: OutlineSection | null = null;
+  for (const line of text.split("\n")) {
+    const h2Match = line.match(/^##\s+(.*)/);
+    const h3Match = line.match(/^###\s+(.*)/);
+    if (h2Match) {
+      current = { id: crypto.randomUUID(), h2: h2Match[1].trim(), h3s: [] };
+      sections.push(current);
+    } else if (h3Match && current) {
+      current.h3s.push(h3Match[1].trim());
+    }
+  }
+  return sections;
+}
+
+// 送回後端前轉回 n8n 期待的 markdown 大綱格式
+function serializeOutline(sections: OutlineSection[]): string {
+  return sections
+    .map((s) => `## ${s.h2}` + (s.h3s.length ? "\n" + s.h3s.map((h) => `### ${h}`).join("\n") : ""))
+    .join("\n\n");
+}
+
 type Phase = "idle" | "researching" | "awaiting_confirm" | "generating" | "completed";
 
 export default function RecommendationPage() {
@@ -36,7 +66,7 @@ export default function RecommendationPage() {
 
   // 確認面板的可編輯資料
   const [brands, setBrands] = useState<Brand[]>([]);
-  const [outline, setOutline] = useState("");
+  const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
   const [confirming, setConfirming] = useState(false);
 
   // 完成後的 WordPress 連結
@@ -56,7 +86,7 @@ export default function RecommendationPage() {
     setPhase("idle");
     setStatusMessage("");
     setBrands([]);
-    setOutline("");
+    setOutlineSections([]);
     setWpEditLink("");
     setWpLink("");
   }
@@ -69,7 +99,7 @@ export default function RecommendationPage() {
     setPhase("idle");
     setStatusMessage("");
     setBrands([]);
-    setOutline("");
+    setOutlineSections([]);
     setWpEditLink("");
     setWpLink("");
 
@@ -99,7 +129,7 @@ export default function RecommendationPage() {
       const res = await fetch("/api/recommendation/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, brands, outline }),
+        body: JSON.stringify({ jobId, brands, outline: serializeOutline(outlineSections) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
@@ -124,6 +154,42 @@ export default function RecommendationPage() {
     setBrands((prev) => [...prev, { brand_name: "", official_url: "" }]);
   }
 
+  function addH2Section() {
+    setOutlineSections((prev) => [...prev, { id: crypto.randomUUID(), h2: "", h3s: [] }]);
+  }
+
+  function removeH2Section(index: number) {
+    setOutlineSections((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateH2(index: number, value: string) {
+    setOutlineSections((prev) => prev.map((s, i) => (i === index ? { ...s, h2: value } : s)));
+  }
+
+  function addH3(sectionIndex: number) {
+    setOutlineSections((prev) =>
+      prev.map((s, i) => (i === sectionIndex ? { ...s, h3s: [...s.h3s, ""] } : s))
+    );
+  }
+
+  function updateH3(sectionIndex: number, h3Index: number, value: string) {
+    setOutlineSections((prev) =>
+      prev.map((s, i) =>
+        i === sectionIndex
+          ? { ...s, h3s: s.h3s.map((h, j) => (j === h3Index ? value : h)) }
+          : s
+      )
+    );
+  }
+
+  function removeH3(sectionIndex: number, h3Index: number) {
+    setOutlineSections((prev) =>
+      prev.map((s, i) =>
+        i === sectionIndex ? { ...s, h3s: s.h3s.filter((_, j) => j !== h3Index) } : s
+      )
+    );
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!isWaiting) { setDots("."); return; }
@@ -146,7 +212,9 @@ export default function RecommendationPage() {
         }
         if (data?.status === "awaiting_confirm") {
           setBrands(Array.isArray(data?.data?.brands) ? data.data.brands : []);
-          setOutline(typeof data?.data?.outline === "string" ? data.data.outline : "");
+          setOutlineSections(
+            parseOutlineText(typeof data?.data?.outline === "string" ? data.data.outline : "")
+          );
           setPhase("awaiting_confirm");
         } else if (data?.status === "completed") {
           setWpEditLink(data?.data?.wpEditLink ?? "");
@@ -338,16 +406,80 @@ export default function RecommendationPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  文章大綱（可直接編輯）
-                </label>
-                <textarea
-                  value={outline}
-                  onChange={(e) => setOutline(e.target.value)}
-                  rows={12}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-orange-300"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-600">
+                    文章大綱（H2/H3，可新增、刪除、編輯）
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addH2Section}
+                    className="text-xs font-semibold text-orange-500 hover:text-orange-600"
+                  >
+                    ＋ 新增 H2
+                  </button>
+                </div>
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {outlineSections.map((section, sIdx) => (
+                    <div
+                      key={section.id}
+                      className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50"
+                    >
+                      <div className="flex gap-2 items-center">
+                        <span className="text-xs font-semibold text-gray-400 shrink-0">H2</span>
+                        <input
+                          type="text"
+                          value={section.h2}
+                          onChange={(e) => updateH2(sIdx, e.target.value)}
+                          placeholder="大段標題"
+                          className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeH2Section(sIdx)}
+                          className="text-gray-300 hover:text-red-400 text-lg leading-none px-1"
+                          title="刪除此 H2"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="pl-6 space-y-1.5">
+                        {section.h3s.map((h3, hIdx) => (
+                          <div key={hIdx} className="flex gap-2 items-center">
+                            <span className="text-xs text-gray-400 shrink-0">H3</span>
+                            <input
+                              type="text"
+                              value={h3}
+                              onChange={(e) => updateH3(sIdx, hIdx, e.target.value)}
+                              placeholder="小節標題"
+                              className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-orange-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeH3(sIdx, hIdx)}
+                              className="text-gray-300 hover:text-red-400 text-base leading-none px-1"
+                              title="刪除此 H3"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addH3(sIdx)}
+                          className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                        >
+                          ＋ 新增 H3
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {outlineSections.length === 0 && (
+                    <p className="text-xs text-gray-400 py-2">
+                      沒有大綱，請點「＋ 新增 H2」手動加入
+                    </p>
+                  )}
+                </div>
               </div>
 
               <button
