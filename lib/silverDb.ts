@@ -47,6 +47,14 @@ db.exec(`
     pendingAction TEXT,
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS recurring_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL,
+    description TEXT NOT NULL,
+    daysOfWeek TEXT NOT NULL,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
@@ -127,6 +135,42 @@ export function resolveUserHealthEvents(userId: string, type?: 'symptom' | 'medi
     UPDATE health_events SET resolved = 1, updatedAt = datetime('now', 'localtime')
     WHERE userId = ? AND resolved = 0
   `).run(userId);
+}
+
+// ── Recurring Reminders ────────────────────────────────────────────────────
+
+export interface RecurringReminder {
+  id: number;
+  userId: string;
+  description: string;
+  daysOfWeek: string; // 逗號分隔，0=週日～6=週六，例如 "1,4"
+  createdAt: string;
+}
+
+export function createRecurringReminder(userId: string, description: string, daysOfWeek: number[]): number {
+  const result = db.prepare(`
+    INSERT INTO recurring_reminders (userId, description, daysOfWeek)
+    VALUES (?, ?, ?)
+  `).run(userId, description, daysOfWeek.join(','));
+  return result.lastInsertRowid as number;
+}
+
+export function getUserRecurringReminders(userId: string): RecurringReminder[] {
+  return db.prepare('SELECT * FROM recurring_reminders WHERE userId = ?').all(userId) as RecurringReminder[];
+}
+
+export function deleteRecurringReminder(id: number): void {
+  db.prepare('DELETE FROM recurring_reminders WHERE id = ?').run(id);
+}
+
+export function getAllRecurringReminders(): RecurringReminder[] {
+  return db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[];
+}
+
+export function getRecurringRemindersDueToday(): RecurringReminder[] {
+  const today = String(new Date().getDay());
+  return (db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[])
+    .filter((r) => r.daysOfWeek.split(',').includes(today));
 }
 
 // ── Silver Users ────────────────────────────────────────────────────────────

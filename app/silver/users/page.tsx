@@ -26,6 +26,15 @@ interface HealthEvent {
   description: string;
 }
 
+interface RecurringReminder {
+  id: number;
+  userId: string;
+  description: string;
+  daysOfWeek: string;
+}
+
+const WEEKDAY_LABEL = ['日', '一', '二', '三', '四', '五', '六'];
+
 const GENDER_LABEL: Record<string, string> = {
   male: '男',
   female: '女',
@@ -43,6 +52,7 @@ export default function SilverUsersPage() {
   const [users, setUsers] = useState<SilverUser[]>([]);
   const [notesByUser, setNotesByUser] = useState<Record<string, UserNote[]>>({});
   const [healthByUser, setHealthByUser] = useState<Record<string, HealthEvent[]>>({});
+  const [recurringByUser, setRecurringByUser] = useState<Record<string, RecurringReminder[]>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,8 +60,9 @@ export default function SilverUsersPage() {
       fetch('/api/silver/users').then((res) => res.json()),
       fetch('/api/silver/notes').then((res) => res.json()),
       fetch('/api/silver/health-events/due').then((res) => res.json()),
+      fetch('/api/silver/recurring-reminders').then((res) => res.json()),
     ])
-      .then(([usersData, notesData, healthData]) => {
+      .then(([usersData, notesData, healthData, recurringData]) => {
         setUsers(usersData.users ?? []);
 
         const notesGrouped: Record<string, UserNote[]> = {};
@@ -65,6 +76,12 @@ export default function SilverUsersPage() {
           healthGrouped[entry.userId] = entry.events;
         }
         setHealthByUser(healthGrouped);
+
+        const recurringGrouped: Record<string, RecurringReminder[]> = {};
+        for (const reminder of (recurringData.reminders ?? []) as RecurringReminder[]) {
+          (recurringGrouped[reminder.userId] ??= []).push(reminder);
+        }
+        setRecurringByUser(recurringGrouped);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -83,11 +100,16 @@ export default function SilverUsersPage() {
     });
   }
 
+  function removeRecurring(userId: string, id: number) {
+    setRecurringByUser((prev) => ({ ...prev, [userId]: (prev[userId] ?? []).filter((r) => r.id !== id) }));
+    fetch(`/api/silver/recurring-reminders?id=${id}`, { method: 'DELETE' });
+  }
+
   return (
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">銀髮用戶管理</h1>
-        <p className="text-sm text-gray-500 mt-1">每位 LINE 用戶的基本資料、額外備註與健康提醒一覽</p>
+        <p className="text-sm text-gray-500 mt-1">每位 LINE 用戶的基本資料、額外備註、健康提醒與固定提醒一覽</p>
       </div>
 
       {loading ? (
@@ -101,6 +123,7 @@ export default function SilverUsersPage() {
           {users.map((u) => {
             const notes = notesByUser[u.userId] ?? [];
             const pendingEvents = healthByUser[u.userId] ?? [];
+            const recurring = recurringByUser[u.userId] ?? [];
             return (
               <div
                 key={u.userId}
@@ -153,6 +176,27 @@ export default function SilverUsersPage() {
                               onClick={() => resolveEvent(u.userId, e.id)}
                               className="text-orange-400 hover:text-orange-700 leading-none"
                               title="解除"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 items-start">
+                    <span className="text-gray-400 shrink-0 w-16">固定提醒</span>
+                    {recurring.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {recurring.map((r) => (
+                          <span key={r.id} className="flex items-center gap-1 px-2 py-0.5 bg-purple-50 border border-purple-100 text-purple-700 rounded-full">
+                            每週{r.daysOfWeek.split(',').map((d) => WEEKDAY_LABEL[Number(d)]).join('、')} {r.description}
+                            <button
+                              onClick={() => removeRecurring(u.userId, r.id)}
+                              className="text-purple-400 hover:text-purple-700 leading-none"
+                              title="刪除"
                             >
                               ×
                             </button>
