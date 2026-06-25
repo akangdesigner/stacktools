@@ -5,11 +5,26 @@ export type RecommendationJobStatus =
   | "completed"
   | "failed";
 
-export type RecommendationStage = "brands" | "outline" | "final";
+export type RecommendationStage = "brands" | "outline" | "brand_details" | "final";
 
 export interface RecommendationBrand {
   brand_name: string;
   official_url: string;
+}
+
+export interface RecommendationBrandDetail {
+  brand_name: string;
+  brand_background: string;
+  brand_positioning: string;
+  media_coverage: string;
+  awards_certifications: string;
+  market_features: string;
+  pros: string;
+  cons: string;
+  user_experience: string;
+  discussion_points: string;
+  repurchase_intent: string;
+  reference_links: string;
 }
 
 export interface RecommendationJobInput {
@@ -24,6 +39,7 @@ export interface RecommendationJobData {
   brands?: RecommendationBrand[];
   outline?: string;
   references?: string;
+  brandDetails?: RecommendationBrandDetail[];
   wpLink?: string;
   wpEditLink?: string;
 }
