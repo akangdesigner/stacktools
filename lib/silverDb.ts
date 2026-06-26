@@ -55,6 +55,19 @@ db.exec(`
     daysOfWeek TEXT NOT NULL,
     createdAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS auto_bless_sends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    theme TEXT NOT NULL,
+    content TEXT NOT NULL,
+    driveFileId TEXT,
+    customizeUsed INTEGER DEFAULT 0,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime')),
+    updatedAt TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(userId, slot)
+  );
 `);
 
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
@@ -252,6 +265,74 @@ export function getAllUserNotes(): UserNote[] {
 
 export function deleteUserNote(id: number): void {
   db.prepare('DELETE FROM user_notes WHERE id = ?').run(id);
+}
+
+// ── Auto Bless Sends（每三小時主動推播長輩圖）──────────────────────────────
+
+export interface AutoBlessSend {
+  id: number;
+  userId: string;
+  slot: string; // 'YYYY-MM-DD_HH'，防止同時段重複發送
+  theme: string;
+  content: string;
+  driveFileId: string | null;
+  customizeUsed: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function createAutoBlessSend(
+  userId: string,
+  slot: string,
+  theme: string,
+  content: string
+): { id: number; alreadySent: boolean } {
+  const existing = db.prepare('SELECT id FROM auto_bless_sends WHERE userId = ? AND slot = ?').get(userId, slot) as
+    | { id: number }
+    | undefined;
+  if (existing) return { id: existing.id, alreadySent: true };
+
+  try {
+    const result = db.prepare(`
+      INSERT INTO auto_bless_sends (userId, slot, theme, content)
+      VALUES (?, ?, ?, ?)
+    `).run(userId, slot, theme, content);
+    return { id: result.lastInsertRowid as number, alreadySent: false };
+  } catch (e) {
+    const row = db.prepare('SELECT id FROM auto_bless_sends WHERE userId = ? AND slot = ?').get(userId, slot) as { id: number };
+    return { id: row.id, alreadySent: true };
+  }
+}
+
+export function setAutoBlessSendDriveFile(id: number, driveFileId: string): void {
+  db.prepare(`
+    UPDATE auto_bless_sends SET driveFileId = ?, updatedAt = datetime('now', 'localtime') WHERE id = ?
+  `).run(driveFileId, id);
+}
+
+export function getActiveAutoBlessSend(userId: string): AutoBlessSend | null {
+  return (db.prepare(`
+    SELECT * FROM auto_bless_sends WHERE userId = ? AND customizeUsed = 0 ORDER BY createdAt DESC LIMIT 1
+  `).get(userId) as AutoBlessSend) ?? null;
+}
+
+export function getAutoBlessSendById(id: number): AutoBlessSend | null {
+  return (db.prepare('SELECT * FROM auto_bless_sends WHERE id = ?').get(id) as AutoBlessSend) ?? null;
+}
+
+export function markAutoBlessCustomizeUsed(id: number): void {
+  db.prepare(`
+    UPDATE auto_bless_sends SET customizeUsed = 1, updatedAt = datetime('now', 'localtime') WHERE id = ?
+  `).run(id);
+}
+
+export function getUsersDueForAutoBless(slot: string): SilverUser[] {
+  return db.prepare(`
+    SELECT * FROM silver_users
+    WHERE userId NOT IN (
+      SELECT userId FROM auto_bless_sends WHERE slot = ?
+    )
+  `).all(slot) as SilverUser[];
 }
 
 // ── User State（暫存使用者目前的等待動作，例如等待語音做祝福圖）──────────────
