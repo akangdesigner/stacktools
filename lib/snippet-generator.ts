@@ -18,9 +18,31 @@ export function getConsoleSnippet(): string {
             const decodedFilename = decodeURIComponent(filename.split(/\\#|\\?/)[0]);
             const response = await fetch(url);
             const blob = await response.blob();
+
+            // 一律轉成 JPEG，避免 WebP 等格式難以後製；透明背景自動填白底
+            let outBlob = blob;
+            let downloadName = decodedFilename;
+            try {
+                const bitmap = await createImageBitmap(blob);
+                const canvas = document.createElement("canvas");
+                canvas.width = bitmap.width;
+                canvas.height = bitmap.height;
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(bitmap, 0, 0);
+                const jpegBlob = await new Promise(function(res) { canvas.toBlob(res, "image/jpeg", 0.92); });
+                if (jpegBlob) {
+                    outBlob = jpegBlob;
+                    downloadName = decodedFilename.replace(/\\.[^.]+$/, "") + ".jpg";
+                }
+            } catch (convError) {
+                console.warn("轉檔失敗，改下載原始檔:", url);
+            }
+
             const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = decodedFilename;
+            link.href = URL.createObjectURL(outBlob);
+            link.download = downloadName;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
