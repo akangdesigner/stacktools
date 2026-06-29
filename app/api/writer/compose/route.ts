@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 type Message = { role: string; content: string };
 
 export async function POST(req: NextRequest) {
-  const { messages } = await req.json() as { messages: Message[] };
+  // model 可由前端單次指定（Gemini 出稿 / GPT 審稿），未帶則用全域設定
+  const { messages, model: bodyModel } = await req.json() as { messages: Message[]; model?: string };
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const settings = getSettings();
-  const model = settings.openrouter_model || 'openai/gpt-4o-mini';
+  const model = bodyModel?.trim() || settings.openrouter_model || 'openai/gpt-4o-mini';
 
   const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
