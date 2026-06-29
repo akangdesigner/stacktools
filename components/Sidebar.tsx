@@ -120,6 +120,16 @@ const hrItems: NavItem[] = [
 
 const techItems: NavItem[] = [
   {
+    href: '/diary',
+    label: '開發日記',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      </svg>
+    ),
+  },
+  {
     href: '/monthly-plan',
     label: '客戶進度追蹤',
     icon: (

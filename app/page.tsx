@@ -114,6 +114,15 @@ const techTools: Tool[] = [
     inDev: false,
   },
   {
+    href: "/diary",
+    title: "開發日記",
+    description: "追蹤各工具的開發進度與狀態、待更新功能，並依案子分區塊管理自己的待辦事項。",
+    icon: "📓",
+    color: "bg-amber-50 border-amber-200 hover:border-amber-400",
+    iconBg: "bg-amber-100",
+    inDev: false,
+  },
+  {
     href: "/monthly-plan",
     title: "客戶進度追蹤",
     description: "查看本月合約里程碑、SEO 請款時間、月費請款與網站續約提醒，工程師掌握客戶執行進度與報告週期。",
