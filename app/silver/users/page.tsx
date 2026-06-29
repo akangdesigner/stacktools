@@ -54,6 +54,9 @@ export default function SilverUsersPage() {
   const [healthByUser, setHealthByUser] = useState<Record<string, HealthEvent[]>>({});
   const [recurringByUser, setRecurringByUser] = useState<Record<string, RecurringReminder[]>>({});
   const [loading, setLoading] = useState(true);
+  // 編輯中的用戶 userId（null 代表沒有卡片在編輯）與編輯表單暫存值
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ nickname: string; age: string; gender: string }>({ nickname: '', age: '', gender: '' });
 
   useEffect(() => {
     Promise.all([
@@ -105,6 +108,33 @@ export default function SilverUsersPage() {
     fetch(`/api/silver/recurring-reminders?id=${id}`, { method: 'DELETE' });
   }
 
+  // 開始編輯：把該用戶現有資料載入表單
+  function startEdit(u: SilverUser) {
+    setEditingId(u.userId);
+    setEditForm({ nickname: u.nickname ?? '', age: u.age?.toString() ?? '', gender: u.gender ?? '' });
+  }
+
+  // 儲存編輯：PATCH 到後端並更新畫面
+  async function saveEdit(userId: string) {
+    const nickname = editForm.nickname.trim() || null;
+    const age = editForm.age.trim() ? Number(editForm.age) : null;
+    const gender = editForm.gender || null;
+    await fetch('/api/silver/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, nickname, age, gender }),
+    });
+    setUsers((prev) => prev.map((u) => (u.userId === userId ? { ...u, nickname, age, gender } : u)));
+    setEditingId(null);
+  }
+
+  // 刪除用戶：確認後 DELETE，連同關聯資料一起清掉
+  function removeUser(userId: string, nickname: string | null) {
+    if (!confirm(`確定要刪除用戶「${nickname || '未命名'}」嗎？\n會連同他的額外備註、健康提醒、固定提醒一起刪除，無法復原。`)) return;
+    setUsers((prev) => prev.filter((u) => u.userId !== userId));
+    fetch(`/api/silver/users?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  }
+
   return (
     <div className="p-8 space-y-6">
       <div>
@@ -129,17 +159,60 @@ export default function SilverUsersPage() {
                 key={u.userId}
                 className="p-5 rounded-xl border-2 border-gray-200 bg-white hover:border-green-300 transition-all space-y-3"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-bold text-gray-900 text-base leading-snug">{u.nickname || '未命名'}</span>
-                  <div className="flex gap-1 shrink-0">
-                    {u.age != null && (
-                      <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{u.age} 歲</span>
-                    )}
-                    {u.gender && (
-                      <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{GENDER_LABEL[u.gender] || u.gender}</span>
-                    )}
+                {editingId === u.userId ? (
+                  <div className="space-y-2">
+                    <input
+                      value={editForm.nickname}
+                      onChange={(e) => setEditForm((f) => ({ ...f, nickname: e.target.value }))}
+                      placeholder="暱稱"
+                      className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={editForm.age}
+                        onChange={(e) => setEditForm((f) => ({ ...f, age: e.target.value.replace(/\D/g, '') }))}
+                        placeholder="年齡"
+                        inputMode="numeric"
+                        className="w-20 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300"
+                      />
+                      <select
+                        value={editForm.gender}
+                        onChange={(e) => setEditForm((f) => ({ ...f, gender: e.target.value }))}
+                        className="flex-1 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-300"
+                      >
+                        <option value="">性別未填</option>
+                        <option value="male">男</option>
+                        <option value="female">女</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveEdit(u.userId)}
+                        className="px-3 py-1 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        儲存
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-bold text-gray-900 text-base leading-snug">{u.nickname || '未命名'}</span>
+                    <div className="flex gap-1 shrink-0">
+                      {u.age != null && (
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{u.age} 歲</span>
+                      )}
+                      {u.gender && (
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">{GENDER_LABEL[u.gender] || u.gender}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="text-xs text-gray-400 font-mono truncate" title={u.userId}>{u.userId}</div>
 
@@ -209,7 +282,25 @@ export default function SilverUsersPage() {
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-400 pt-1 border-t border-gray-100">最後更新：{u.updatedAt}</div>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
+                  <span className="text-xs text-gray-400">最後更新：{u.updatedAt}</span>
+                  {editingId !== u.userId && (
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => startEdit(u)}
+                        className="text-xs text-gray-500 hover:text-green-600 transition-colors"
+                      >
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => removeUser(u.userId, u.nickname)}
+                        className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

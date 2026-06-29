@@ -68,6 +68,27 @@ db.exec(`
     updatedAt TEXT DEFAULT (datetime('now', 'localtime')),
     UNIQUE(userId, slot)
   );
+
+  CREATE TABLE IF NOT EXISTS error_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workflowName TEXT,
+    nodeName TEXT,
+    message TEXT,
+    executionUrl TEXT,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS family_recipes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    ingredients TEXT,
+    steps TEXT,
+    tips TEXT,
+    driveFileId TEXT,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime')),
+    updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
@@ -217,6 +238,30 @@ export function upsertUser(userId: string, nickname: string | null, age: number 
   `).run(userId, nickname, age, gender);
 }
 
+// 編輯用戶基本資料：直接覆蓋（允許清空成 null，跟 upsertUser 的 COALESCE 保留舊值不同）
+export function updateUser(userId: string, nickname: string | null, age: number | null, gender: string | null): void {
+  db.prepare(`
+    UPDATE silver_users
+    SET nickname = ?, age = ?, gender = ?, updatedAt = datetime('now', 'localtime')
+    WHERE userId = ?
+  `).run(nickname, age, gender, userId);
+}
+
+// 刪除用戶，連同該用戶所有關聯資料一起清掉，避免留下孤兒資料
+export function deleteUser(userId: string): void {
+  const tx = db.transaction((uid: string) => {
+    db.prepare('DELETE FROM user_notes WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM health_events WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM recurring_reminders WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM user_state WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM news_preferences WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM auto_bless_sends WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM family_recipes WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM silver_users WHERE userId = ?').run(uid);
+  });
+  tx(userId);
+}
+
 // ── User Notes（聊天中偵測到的額外資訊，多筆累加，不覆蓋既有欄位）────────────
 
 export interface UserNote {
@@ -352,4 +397,95 @@ export function setPendingAction(userId: string, action: string | null): void {
       pendingAction = excluded.pendingAction,
       updatedAt = excluded.updatedAt
   `).run(userId, action);
+}
+
+export interface ErrorLog {
+  id: number;
+  workflowName: string | null;
+  nodeName: string | null;
+  message: string | null;
+  executionUrl: string | null;
+  createdAt: string;
+}
+
+export function createErrorLog(
+  workflowName: string | null,
+  nodeName: string | null,
+  message: string | null,
+  executionUrl: string | null
+): number {
+  const info = db
+    .prepare('INSERT INTO error_logs (workflowName, nodeName, message, executionUrl) VALUES (?, ?, ?, ?)')
+    .run(workflowName, nodeName, message, executionUrl);
+  return info.lastInsertRowid as number;
+}
+
+export function getErrorLogs(limit = 100): ErrorLog[] {
+  return db.prepare('SELECT * FROM error_logs ORDER BY id DESC LIMIT ?').all(limit) as ErrorLog[];
+}
+
+export function deleteErrorLog(id: number): void {
+  db.prepare('DELETE FROM error_logs WHERE id = ?').run(id);
+}
+
+// ── Family Recipes（家傳食譜卡，長輩口述記錄自家私房菜，可保存傳承）────────────
+
+export interface FamilyRecipe {
+  id: number;
+  userId: string;
+  name: string; // 菜名，例如「阿嬤滷肉」
+  ingredients: string | null; // 食材，口述整段文字
+  steps: string | null; // 做法步驟，口述整段文字
+  tips: string | null; // 家傳撇步，傳承精華
+  driveFileId: string | null; // 生成的食譜卡圖，存 Google Drive
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function createFamilyRecipe(
+  userId: string,
+  name: string,
+  ingredients: string | null = null,
+  steps: string | null = null,
+  tips: string | null = null
+): number {
+  const result = db.prepare(`
+    INSERT INTO family_recipes (userId, name, ingredients, steps, tips)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(userId, name, ingredients, steps, tips);
+  return result.lastInsertRowid as number;
+}
+
+export function getUserFamilyRecipes(userId: string): FamilyRecipe[] {
+  return db.prepare('SELECT * FROM family_recipes WHERE userId = ? ORDER BY createdAt DESC').all(userId) as FamilyRecipe[];
+}
+
+export function getFamilyRecipeById(id: number): FamilyRecipe | null {
+  return (db.prepare('SELECT * FROM family_recipes WHERE id = ?').get(id) as FamilyRecipe) ?? null;
+}
+
+// 局部更新：長輩語音分次口述，只蓋有傳入的欄位，沒講到的不動（COALESCE）
+export function updateFamilyRecipe(
+  id: number,
+  fields: { name?: string; ingredients?: string; steps?: string; tips?: string }
+): void {
+  db.prepare(`
+    UPDATE family_recipes SET
+      name = COALESCE(?, name),
+      ingredients = COALESCE(?, ingredients),
+      steps = COALESCE(?, steps),
+      tips = COALESCE(?, tips),
+      updatedAt = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(fields.name ?? null, fields.ingredients ?? null, fields.steps ?? null, fields.tips ?? null, id);
+}
+
+export function setFamilyRecipeDriveFile(id: number, driveFileId: string): void {
+  db.prepare(`
+    UPDATE family_recipes SET driveFileId = ?, updatedAt = datetime('now', 'localtime') WHERE id = ?
+  `).run(driveFileId, id);
+}
+
+export function deleteFamilyRecipe(id: number): void {
+  db.prepare('DELETE FROM family_recipes WHERE id = ?').run(id);
 }
