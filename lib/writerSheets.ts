@@ -53,9 +53,9 @@ async function readSheet(sheetId: string, tabName?: string, skipRows = 0): Promi
 
   const data = await res.json() as { values?: string[][] };
   const values = data.values ?? [];
-  // 跳過全空白列，再額外跳過 skipRows 列，然後取表頭
+  // 跳過全空白列 + 只有單一欄位有值的「說明列」（真正的表頭一定是多欄），再額外跳過 skipRows 列，然後取表頭
   let headerIdx = 0;
-  while (headerIdx < values.length && values[headerIdx].every(cell => !cell?.trim())) {
+  while (headerIdx < values.length && values[headerIdx].filter(cell => cell?.trim()).length < 2) {
     headerIdx++;
   }
   headerIdx += skipRows;

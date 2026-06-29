@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'next/navigation';
 import RichEditor from '@/components/writer/RichEditor';
 import SectionBlockEditor from '@/components/writer/SectionBlockEditor';
@@ -1165,6 +1165,80 @@ function AnalysisNote({ analysisResult }: { analysisResult: string }) {
   );
 }
 
+// ── @ 引用段落：把目錄拆成可引用的 H2/H3 清單 ────────────────────────
+function getOutlineItems(outline: string): { label: string; full: string }[] {
+  // 先拆成 H2 區塊，@ H2 時引用整段（含底下所有 H3），@ H3 時只引用該行
+  const blocks: { h2: string; h3s: string[] }[] = [];
+  let cur: { h2: string; h3s: string[] } | null = null;
+  for (const line of outline.split('\n')) {
+    const h2 = line.match(/^##\s+(.+)/);
+    const h3 = line.match(/^###\s+(.+)/);
+    if (h2) { cur = { h2: h2[1].trim(), h3s: [] }; blocks.push(cur); }
+    else if (h3 && cur) { cur.h3s.push(h3[1].trim()); }
+  }
+  const items: { label: string; full: string }[] = [];
+  for (const b of blocks) {
+    const full = `## ${b.h2}` + (b.h3s.length ? '\n' + b.h3s.map(h => `### ${h}`).join('\n') : '');
+    items.push({ label: `H2 ${b.h2}（整段）`, full });
+    for (const h of b.h3s) items.push({ label: `　H3 ${h}`, full: `### ${h}` });
+  }
+  return items;
+}
+
+// 帶 @ 引用段落選單的輸入框，給 Gemini／GPT 兩隻玩偶共用
+function OutlineQuoteInput({ outline, quotes, setQuotes, value, onChange, placeholder, accent }: {
+  outline: string;
+  quotes: string[];
+  setQuotes: Dispatch<SetStateAction<string[]>>;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  accent: 'blue' | 'green';
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const items = getOutlineItems(outline);
+  const a = accent === 'blue'
+    ? { chip: 'bg-blue-50 border-blue-200', text: 'text-blue-700', at: 'text-blue-400', ring: 'focus:ring-blue-300', border: 'border-blue-200' }
+    : { chip: 'bg-green-50 border-green-200', text: 'text-green-700', at: 'text-green-400', ring: 'focus:ring-green-300', border: 'border-green-200' };
+  return (
+    <div className="w-full space-y-1">
+      {quotes.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {quotes.map((q, i) => (
+            <div key={i} className={`flex items-start gap-1.5 ${a.chip} border rounded-lg px-2 py-1`}>
+              <span className={`${a.at} text-[10px] font-bold shrink-0 mt-0.5`}>@</span>
+              <p className={`flex-1 text-[10px] ${a.text} line-clamp-1`}>{q.split('\n')[0].replace(/^#+\s*/, '')}{/^##\s/.test(q) ? '（整段）' : ''}</p>
+              <button type="button" onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
+                className={`shrink-0 ${a.at} hover:opacity-70 text-[10px] leading-none`}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="relative w-full">
+        {menuOpen && items.length > 0 && (
+          <div className="absolute bottom-full mb-1 left-0 right-0 z-20 bg-white border border-gray-200 rounded-lg shadow-xl max-h-40 overflow-y-auto">
+            <p className="px-2 py-1 text-[10px] text-gray-400 bg-gray-50 border-b border-gray-100">選要引用的段落</p>
+            {items.map((it, k) => (
+              <button key={k} type="button"
+                onClick={() => { onChange(value.replace(/@\s*$/, '')); setQuotes(prev => [...prev, it.full]); setMenuOpen(false); }}
+                className="w-full text-left px-2 py-1.5 text-[10px] text-gray-700 hover:bg-gray-50 truncate">
+                {it.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <textarea
+          value={value}
+          onChange={e => { const v = e.target.value; onChange(v); setMenuOpen(/@\s*$/.test(v)); }}
+          placeholder={placeholder}
+          rows={3}
+          className={`w-full border ${a.border} rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 ${a.ring}`}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── OutlineEditor ─────────────────────────────────────────────────────
 
 function OutlineEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -1252,6 +1326,11 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
   // 玩偶下方可切換的模型
   const [outlineModel, setOutlineModel] = useState(OUTLINE_MODEL);
   const [reviewModel, setReviewModel] = useState(REVIEW_MODEL);
+  // Gemini 出稿時的寫手需求（對應 GPT 的 reviewInstruction）
+  const [outlineInstruction, setOutlineInstruction] = useState('');
+  // @ 引用的段落（局部更改）：Gemini 與 GPT 各一份
+  const [outlineQuotes, setOutlineQuotes] = useState<string[]>([]);
+  const [reviewQuotes, setReviewQuotes] = useState<string[]>([]);
 
   // GPT 架構審稿：回傳一份完整新架構，前端做整份 diff 對照後可一鍵採用
   const [reviewInstruction, setReviewInstruction] = useState('');
@@ -1265,7 +1344,14 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
 
   async function run() {
     const id = ++runId.current;
-    const msg = buildOutlinePrompt(title, writingGuide, outlineOverride);
+    let msg = buildOutlinePrompt(title, writingGuide, outlineOverride);
+    // @ 引用段落 → 局部更改：帶上現有架構，要求只動指定段落、其他保留
+    if (outlineQuotes.length > 0 && outline.trim()) {
+      msg += `\n\n【目前已有的完整架構】\n${outline}\n\n【請「重寫」下列被指定的段落（若指定的是 H2，請連同它底下的所有 H3 一起重寫），其他段落一字不要動，最後輸出「完整」的新架構】\n${outlineQuotes.join('\n')}`;
+    }
+    if (outlineInstruction.trim()) {
+      msg += `\n\n【寫手的指定需求 — 請務必落實】\n${outlineInstruction.trim()}`;
+    }
     outlineMsg.current = msg;
     setOutline(''); setError(''); setOutlining(true);
     try {
@@ -1301,9 +1387,13 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
 
 固定架構規則：
 ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGuide.trim()}` : ''}`;
+      // @ 引用段落 → 局部審稿：要求只針對指定段落調整
+      const reviewInstr = reviewQuotes.length > 0
+        ? `請「重寫」以下被指定的段落（若指定的是 H2，請連同它底下的所有 H3 一起重寫），其他段落維持不變：\n${reviewQuotes.join('\n')}\n\n${reviewInstruction.trim()}`
+        : reviewInstruction;
       const prompt = buildOutlineReviewPrompt(outline, {
         title,
-        instruction: reviewInstruction,
+        instruction: reviewInstr,
         structureRules,
         writingGuide,
       });
@@ -1353,7 +1443,22 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         >
           {GEMINI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
-        <p className="text-[10px] text-gray-400 text-center">換模型後按「重新產生」</p>
+        <OutlineQuoteInput
+          outline={outline}
+          quotes={outlineQuotes}
+          setQuotes={setOutlineQuotes}
+          value={outlineInstruction}
+          onChange={setOutlineInstruction}
+          placeholder="想怎麼排？打 @ 可指定段落局部改（留空用預設）"
+          accent="blue"
+        />
+        <button
+          onClick={run}
+          disabled={outlining}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {outlining && <Spinner />}{outlining ? '產生中…' : '🔄 重新產生架構'}
+        </button>
       </aside>
 
       {/* 中間：主內容 */}
@@ -1372,9 +1477,6 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
             className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
           >
             <EditIcon />提示詞
-          </button>
-          <button onClick={run} disabled={outlining} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-            {outlining && <Spinner />}重新產生
           </button>
         </div>
       </div>
@@ -1477,12 +1579,14 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         >
           {GPT_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
-        <textarea
+        <OutlineQuoteInput
+          outline={outline}
+          quotes={reviewQuotes}
+          setQuotes={setReviewQuotes}
           value={reviewInstruction}
-          onChange={e => setReviewInstruction(e.target.value)}
-          placeholder="想怎麼調架構？例：基礎臉部按摩步驟要獨立成一個 H2 完整說明（留空也可）"
-          rows={3}
-          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-green-300"
+          onChange={setReviewInstruction}
+          placeholder="想怎麼調？打 @ 可指定段落局部改（留空也可）"
+          accent="green"
         />
         <button
           onClick={handleReview}
