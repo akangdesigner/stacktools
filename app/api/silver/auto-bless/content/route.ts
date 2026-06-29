@@ -32,6 +32,47 @@ const WISDOM = [
   '身體健康，比什麼都重要', '家和萬事興，平安最幸福', '學會感恩，知足惜福',
 ];
 
+// 視覺場景池：餵給 n8n 生圖節點當「具體背景」，避免 AI 每次都擺爛畫一朵花
+// 依時段/主題分組，讓場景跟祝福語氛圍相搭（晚安不會配到大太陽）
+const MORNING_SCENES = [
+  '朝陽從山巒後升起，雲海泛著金光',
+  '清晨的荷花池，露珠在花瓣上閃爍',
+  '沾著晨露的向日葵花田，藍天白雲',
+  '晨霧繚繞的綠色茶園梯田',
+  '公園小徑灑滿晨光，櫻花盛開',
+  '一杯冒著熱氣的茶，窗外晨曦微亮',
+  '小鳥站在綻放的梅枝上，晨光柔和',
+  '金黃稻田上的日出，溫暖光暈',
+];
+const NIGHT_SCENES = [
+  '皎潔的滿月高掛，柔和雲彩環繞',
+  '寧靜湖面倒映明月與點點星光',
+  '庭院裡的桂花樹，月色朦朧',
+  '溫暖的紅燈籠在夜色中散發柔光',
+  '星空下的山巒剪影，銀河閃爍',
+  '窗邊一盞暖燈，月光灑入房間',
+  '荷塘月色，蓮花在夜裡靜靜綻放',
+];
+const WISDOM_SCENES = [
+  '水墨風格的高山流水，雲霧繚繞',
+  '蒼松與白鶴，傳統國畫意境',
+  '蓮花在清澈池水中綻放，禪意十足',
+  '遠山含黛，一葉扁舟泛於湖上',
+  '蜿蜒山徑通往雲霧深處',
+  '竹林小徑，陽光透過竹葉灑落',
+  '蒼勁老松立於山崖，雲海翻騰',
+  '寧靜的禪意庭園，枯山水與青苔',
+];
+const FESTIVAL_SCENES = [
+  '滿園盛開的紅牡丹，金光灑落',
+  '火紅燈籠高掛，喜氣洋洋',
+  '金黃稻穗與飽滿果實，豐收意象',
+  '紅梅綻放於白雪之中，喜氣吉祥',
+  '一對鴛鴦戲水於荷花池，富貴祥和',
+  '金色光芒放射，祥雲朵朵',
+  '盛開的桃花林，粉色花瓣紛飛',
+];
+
 const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
 
 export const dynamic = 'force-dynamic';
@@ -48,21 +89,25 @@ export async function GET(req: NextRequest) {
   const mmdd = `${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   const festival = FESTIVALS[mmdd];
-  let theme: string, content: string;
+  let theme: string, content: string, visual: string;
 
   if (festival) {
     theme = festival.theme;
     content = festival.content;
+    visual = pick(FESTIVAL_SCENES);
   } else if (hour === 6) {
     theme = '早安';
     content = pick(MORNING);
+    visual = pick(MORNING_SCENES);
   } else if (hour === 21) {
     theme = '晚安';
     content = pick(NIGHT);
+    visual = pick(NIGHT_SCENES);
   } else {
     theme = '哲理長輩圖';
     content = pick(WISDOM);
+    visual = pick(WISDOM_SCENES);
   }
 
-  return NextResponse.json({ userId, slot, theme, content });
+  return NextResponse.json({ userId, slot, theme, content, visual });
 }
