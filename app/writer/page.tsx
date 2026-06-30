@@ -97,6 +97,37 @@ function findWeekGroups(groups: IndexedRow[][], monthIdx: number, dayIdx: number
 
 function fmtDate(d: Date) { return `${d.getMonth() + 1}/${d.getDate()}`; }
 
+// 關鍵字預覽最大字數，超過就先卡住、點擊才展開（避免長關鍵字撐爆欄位）
+const KW_PREVIEW_LEN = 18;
+
+// 每日排程的關鍵字欄位：太長時先截斷預覽，點擊整列才展開完整內容
+function KeywordCell({ value, href }: { value: string; href: string }) {
+  const [expanded, setExpanded] = useState(false);          // 是否已展開
+  const isLong = value.length > KW_PREVIEW_LEN;             // 超過門檻才需要卡掉
+  // 收合狀態且超長 → 只顯示前 N 字 + 省略號
+  const display = isLong && !expanded ? `${value.slice(0, KW_PREVIEW_LEN)}…` : value;
+  return (
+    <div className="flex items-center gap-1.5 px-1 py-0.5">
+      <span
+        className={`text-sm text-gray-800 flex-1 min-w-0 break-words ${isLong ? 'cursor-pointer' : ''}`}
+        onClick={() => isLong && setExpanded(e => !e)}
+        title={isLong ? (expanded ? '點擊收合' : '點擊展開完整關鍵字') : undefined}
+      >
+        {display}
+        {isLong && (
+          <span className="ml-1 text-xs text-indigo-400 whitespace-nowrap">{expanded ? '收合' : '展開'}</span>
+        )}
+      </span>
+      <a
+        href={href}
+        className="flex-shrink-0 text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors whitespace-nowrap"
+      >
+        寫文
+      </a>
+    </div>
+  );
+}
+
 // ── ScheduleView ─────────────────────────────────────────────────────
 
 function ScheduleView({ data, person, sheetId }: { data: SheetData; person: string; sheetId: string }) {
@@ -191,15 +222,10 @@ function ScheduleView({ data, person, sheetId }: { data: SheetData; person: stri
                     {COLS.map(c => (
                       <td key={c.ci} className="px-2 py-1.5">
                         {c.ci === kwIdx && dv(idx, c.ci) ? (
-                          <div className="flex items-center gap-1.5 px-1 py-0.5">
-                            <span className="text-sm text-gray-800 flex-1 min-w-0 truncate">{dv(idx, c.ci)}</span>
-                            <a
-                              href={`/writer/compose?keyword=${encodeURIComponent(dv(idx, c.ci))}&vendor=${encodeURIComponent(dv(idx, vendorIdx))}`}
-                              className="flex-shrink-0 text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors whitespace-nowrap"
-                            >
-                              寫文
-                            </a>
-                          </div>
+                          <KeywordCell
+                            value={dv(idx, c.ci)}
+                            href={`/writer/compose?keyword=${encodeURIComponent(dv(idx, c.ci))}&vendor=${encodeURIComponent(dv(idx, vendorIdx))}`}
+                          />
                         ) : (
                           <PPCell
                             value={dv(idx, c.ci)}
