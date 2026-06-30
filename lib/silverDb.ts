@@ -107,28 +107,92 @@ if (!userNotesColumns.some((c) => c.name === 'importance')) {
 
 const SHORT_TERM_NOTE_LIMIT = 20;
 
+// 固定的新聞類別清單（長輩可從這裡複選；順序就是選單顯示順序）
+export const NEWS_CATEGORIES = [
+  '健康醫療',
+  '財經理財',
+  '社會生活',
+  '政治國際',
+  '娛樂體育',
+  '旅遊美食',
+] as const;
+
+export type NewsCategory = (typeof NEWS_CATEGORIES)[number];
+
+// 是不是合法類別（擋掉 n8n 傳進來的錯字或舊資料殘留）
+export function isValidNewsCategory(value: string): value is NewsCategory {
+  return (NEWS_CATEGORIES as readonly string[]).includes(value);
+}
+
+// DB 存的是逗號字串，這裡轉成乾淨的陣列：去空白、過濾非法、去重複、維持清單順序
+function parseCategories(raw: string | null | undefined): NewsCategory[] {
+  if (!raw) return [];
+  const chosen = new Set(
+    raw.split(',').map((s) => s.trim()).filter(isValidNewsCategory),
+  );
+  return NEWS_CATEGORIES.filter((c) => chosen.has(c));
+}
+
+// 把傳進來的陣列整理成合法、去重、照清單順序排好的結果
+function normalizeCategories(categories: string[]): NewsCategory[] {
+  const chosen = new Set(categories.map((s) => s.trim()).filter(isValidNewsCategory));
+  return NEWS_CATEGORIES.filter((c) => chosen.has(c));
+}
+
 export interface NewsPreference {
+  userId: string;
+  categories: NewsCategory[];
+  updatedAt: string;
+}
+
+interface NewsPreferenceRow {
   userId: string;
   category: string;
   updatedAt: string;
 }
 
 export function getPreference(userId: string): NewsPreference | null {
-  return (db.prepare('SELECT * FROM news_preferences WHERE userId = ?').get(userId) as NewsPreference) ?? null;
+  const row = db
+    .prepare('SELECT * FROM news_preferences WHERE userId = ?')
+    .get(userId) as NewsPreferenceRow | undefined;
+  if (!row) return null;
+  return { userId: row.userId, categories: parseCategories(row.category), updatedAt: row.updatedAt };
 }
 
 export function getAllPreferences(): NewsPreference[] {
-  return db.prepare('SELECT * FROM news_preferences').all() as NewsPreference[];
+  const rows = db.prepare('SELECT * FROM news_preferences').all() as NewsPreferenceRow[];
+  return rows.map((row) => ({
+    userId: row.userId,
+    categories: parseCategories(row.category),
+    updatedAt: row.updatedAt,
+  }));
 }
 
-export function upsertPreference(userId: string, category: string): void {
+// 整批覆蓋使用者的訂閱類別（n8n 傳一組勾選結果進來），回傳整理後實際存下的類別
+export function setPreferenceCategories(userId: string, categories: string[]): NewsCategory[] {
+  const clean = normalizeCategories(categories);
   db.prepare(`
     INSERT INTO news_preferences (userId, category, updatedAt)
     VALUES (?, ?, datetime('now', 'localtime'))
     ON CONFLICT(userId) DO UPDATE SET
       category = excluded.category,
       updatedAt = excluded.updatedAt
-  `).run(userId, category);
+  `).run(userId, clean.join(','));
+  return clean;
+}
+
+// 單一類別切換：原本有就拿掉、沒有就加上（長輩在對話中點一下類別用），回傳切換後的清單
+export function toggleNewsCategory(
+  userId: string,
+  category: string,
+  action: 'toggle' | 'add' | 'remove' = 'toggle',
+): NewsCategory[] {
+  if (!isValidNewsCategory(category)) return getPreference(userId)?.categories ?? [];
+  const current = getPreference(userId)?.categories ?? [];
+  const has = current.includes(category);
+  const shouldHave = action === 'add' ? true : action === 'remove' ? false : !has;
+  const next = shouldHave ? [...current, category] : current.filter((c) => c !== category);
+  return setPreferenceCategories(userId, next);
 }
 
 // ── Health Events ──────────────────────────────────────────────────────────
