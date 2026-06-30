@@ -89,6 +89,14 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now', 'localtime')),
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS news_cache (
+    userId TEXT PRIMARY KEY,
+    date TEXT NOT NULL,           -- 快取日期 YYYY-MM-DD，判斷是不是今天抓的
+    newsJson TEXT NOT NULL,       -- 今日抓到的全部新聞（最多 20 則）JSON 陣列
+    batchIndex INTEGER DEFAULT 0, -- 長輩目前看到第幾批（0=第一批 1~5 則，1=第二批 6~10 則…）
+    updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
@@ -488,4 +496,60 @@ export function setFamilyRecipeDriveFile(id: number, driveFileId: string): void 
 
 export function deleteFamilyRecipe(id: number): void {
   db.prepare('DELETE FROM family_recipes WHERE id = ?').run(id);
+}
+
+// ── News Cache（今日新聞快取＋閱讀進度，支援「5 則一批、按鈕看更多」輪流瀏覽）──────
+
+export interface NewsItem {
+  title: string;
+  summary: string;
+  img: string;
+}
+
+export interface NewsCache {
+  userId: string;
+  date: string;
+  newsJson: string;
+  batchIndex: number;
+  updatedAt: string;
+}
+
+// 存入今日新聞（n8n 抓完最多 20 則後呼叫）。同一人同一天覆蓋，並把閱讀進度歸零。
+export function saveNewsCache(userId: string, news: NewsItem[]): void {
+  db.prepare(`
+    INSERT INTO news_cache (userId, date, newsJson, batchIndex, updatedAt)
+    VALUES (?, date('now', 'localtime'), ?, 0, datetime('now', 'localtime'))
+    ON CONFLICT(userId) DO UPDATE SET
+      date = date('now', 'localtime'),
+      newsJson = excluded.newsJson,
+      batchIndex = 0,
+      updatedAt = datetime('now', 'localtime')
+  `).run(userId, JSON.stringify(news));
+}
+
+// 取出快取原始資料；若不是今天的就視同沒有（回 null）
+export function getNewsCache(userId: string): NewsCache | null {
+  const row = db
+    .prepare("SELECT * FROM news_cache WHERE userId = ? AND date = date('now', 'localtime')")
+    .get(userId) as NewsCache | undefined;
+  return row ?? null;
+}
+
+// 前進到下一批，回傳新的 batchIndex
+export function advanceNewsBatch(userId: string): number {
+  db.prepare(`
+    UPDATE news_cache SET batchIndex = batchIndex + 1, updatedAt = datetime('now', 'localtime')
+    WHERE userId = ?
+  `).run(userId);
+  const row = db.prepare('SELECT batchIndex FROM news_cache WHERE userId = ?').get(userId) as
+    | { batchIndex: number }
+    | undefined;
+  return row?.batchIndex ?? 0;
+}
+
+// 從頭再看一次：閱讀進度歸零
+export function resetNewsBatch(userId: string): void {
+  db.prepare(`
+    UPDATE news_cache SET batchIndex = 0, updatedAt = datetime('now', 'localtime') WHERE userId = ?
+  `).run(userId);
 }
