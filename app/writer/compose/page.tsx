@@ -10,6 +10,8 @@ import StructurePanel from '@/components/writer/StructurePanel';
 
 type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 type SearchResult = { title: string; url: string; content: string };
+// 影片獨家觀點：從上傳影音逐字稿萃取、大眾文章少提的見解
+type VideoInsight = { id: string; viewpoint: string; sourceFile: string; whyRare: string };
 type Stage = 'analyze' | 'outline' | 'write' | 'review';
 
 type PromptStyle = 'info' | 'scene' | 'faq' | 'compare' | 'conclusion';
@@ -140,12 +142,16 @@ function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string
 請進行 SEO 寫作控制表與標題提案。輸出完畢後請立即停止，不要自行產生文章架構、前言、段落或任何正文內容，等待下一步指令。`;
 }
 
-function buildOutlinePrompt(title: string, writingGuide = '', override = '') {
+function buildOutlinePrompt(title: string, writingGuide = '', override = '', insights: VideoInsight[] = []) {
   const guideBlock = writingGuide.trim() ? `\n\n全域寫作指引（架構必須符合）：\n${writingGuide.trim()}` : '';
+  // 影片獨家觀點：在架構階段就為這些觀點預留切入點，但不可把觀點原文當標題
+  const insightBlock = insights.length > 0
+    ? `\n\n【需要在架構中為以下影片獨家觀點安排切入點】\n${insights.map((it, i) => `${i + 1}. ${it.viewpoint}`).join('\n')}\n請在規劃 H2/H3 時，確保上述獨家觀點有對應的段落可以承載，但不要把觀點原文當成標題。`
+    : '';
   const body = override.trim() || PROMPT_DEFAULTS.outline;
   return `我選擇：${title}
 
-${body}${guideBlock}
+${body}${guideBlock}${insightBlock}
 
 請直接輸出架構，格式為 ## H2 和 ### H3，第一行從 ## 開始，不要有任何前言或說明。`;
 }
@@ -225,7 +231,7 @@ const QUALITY_RULES = `內容品質規則（每句都要符合）：
 - 禁用「先否定再肯定」句型：不是A而是B、不只是A更是B、不應該A而應該B。
 - 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。若該段落的具體指示明確要求改用 "- " 開頭的 Markdown 條列格式，則以該指示為準，不適用本條的粗體項目符號慣例。`;
 
-function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string, authorityRefs: SearchResult[] = []): string {
+function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string, authorityRefs: SearchResult[] = [], insights: VideoInsight[] = []): string {
   const parts: string[] = [];
   parts.push(`【行為規範 — 最優先執行】
 ・直接輸出段落內容，絕對不得向使用者提問、列出選項方案、要求使用者做決定。
@@ -240,6 +246,10 @@ function buildSystemMessage(sectionOverride: string, brandDescription: string, c
   if (clientWritingRules.trim()) {
     parts.push(`【客戶寫作風格 — 高優先，若與使用者指定規則無衝突則一起遵守】\n${clientWritingRules.trim()}`);
   }
+  if (insights.length > 0) {
+    const list = insights.map((it, i) => `${i + 1}. ${it.viewpoint}（來源：${it.sourceFile || '影片'}）`).join('\n');
+    parts.push(`【影片獨家觀點 — 必須融入本文，但要用自己的話重寫，嚴禁照抄逐字稿原句】\n以下是從相關影片/音檔中萃取、且一般網路文章少見的獨家見解。撰寫時請在語意相關的段落自然融入這些觀點，藉此展現第一手經驗與專業判斷（EEAT）。注意：要消化後改寫成符合本文風格的句子，不可直接貼上逐字稿口語；若某觀點與本段落無關則略過。\n${list}`);
+  }
   if (authorityRefs.length > 0) {
     const refList = authorityRefs
       .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content.slice(0, 200)}`)
@@ -252,12 +262,15 @@ function buildSystemMessage(sectionOverride: string, brandDescription: string, c
 }
 
 // 小模型在長對話下會忽略 system message 的風格規則，必須把規則原文重申在最後一則訊息結尾
-function buildPriorityReminder(sectionOverride: string, clientWritingRules: string, authorityRefs: SearchResult[] = []): string {
+function buildPriorityReminder(sectionOverride: string, clientWritingRules: string, authorityRefs: SearchResult[] = [], insights: VideoInsight[] = []): string {
   const parts: string[] = [];
   if (sectionOverride.trim() || clientWritingRules.trim()) {
     parts.push('【寫作規則重申 — 直接輸出，不得提問或列選項】');
     if (clientWritingRules.trim()) parts.push(`客戶寫作風格：\n${clientWritingRules.trim()}`);
     if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（盡量融入其精神，難以執行時自行判斷最合理的方式）：\n${sectionOverride.trim()}`);
+  }
+  if (insights.length > 0) {
+    parts.push('【影片獨家觀點提醒 — 務必執行】本段若涉及上述影片獨家觀點，務必自然融入至少一處，並用自己的話改寫，不可照抄逐字稿口語。');
   }
   if (authorityRefs.length > 0) {
     parts.push(`【引用來源提醒 — 務必執行，不是可選】這個段落如果提到具體數據、研究結論、統計數字或專業判斷依據，必須挑至少 1 處用 Markdown 超連結格式標注來源，不可整段毫無連結。可用來源：\n${authorityRefs.map((r, i) => `${i + 1}. [${r.title}](${r.url})`).join('\n')}`);
@@ -810,13 +823,216 @@ function TitleSelector({ titles, value, onChange }: { titles: string[]; value: s
 type GscClientOption = { id: number; name: string };
 type BrandProfileOption = { gsc_client_id: number; brand_url: string; brand_description: string; writing_rules: string; banned_words: string };
 
+// ── VideoInsights（影片獨家觀點萃取，掛在 Stage 1 內）────────────────────
+
+type VideoFileRow = { id: string; name: string; status: 'transcribing' | 'done' | 'error'; transcript?: string; error?: string };
+
+function VideoInsights({ keyword, mainstreamContext, selected, onChange, onAddToNotes }: {
+  keyword: string;
+  mainstreamContext: string; // Stage 1 分析結果，當作「大眾文章已涵蓋」的對照基準
+  selected: VideoInsight[];
+  onChange: (v: VideoInsight[]) => void;
+  onAddToNotes: (markdown: string) => void; // 把勾選觀點寫進 SEO 筆記
+}) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<VideoFileRow[]>([]);
+  const [insights, setInsights] = useState<VideoInsight[]>([]);
+  const [extracting, setExtracting] = useState(false);
+  const [error, setError] = useState('');
+  const [added, setAdded] = useState(false);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    const newRows: VideoFileRow[] = list.map(f => ({ id: Math.random().toString(36).slice(2), name: f.name, status: 'transcribing' }));
+    setRows(prev => [...prev, ...newRows]);
+    // 逐檔並行轉錄
+    await Promise.all(list.map(async (file, i) => {
+      const id = newRows[i].id;
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/writer/transcribe', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '轉錄失敗');
+        setRows(prev => prev.map(r => r.id === id ? { ...r, status: 'done', transcript: data.transcript } : r));
+      } catch (e) {
+        setRows(prev => prev.map(r => r.id === id ? { ...r, status: 'error', error: e instanceof Error ? e.message : '轉錄失敗' } : r));
+      }
+    }));
+  }
+
+  async function extract() {
+    // 來源用「影片 N」序號（對應列表順序），別把 SaveClip 那種亂碼檔名丟給 AI
+    const transcripts = rows
+      .map((r, i) => ({ r, label: `影片 ${i + 1}` }))
+      .filter(({ r }) => r.status === 'done' && r.transcript)
+      .map(({ r, label }) => ({ filename: label, transcript: r.transcript as string }));
+    if (transcripts.length === 0) return;
+    setExtracting(true); setError('');
+    try {
+      const res = await fetch('/api/writer/video-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcripts, keyword, mainstreamContext }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '萃取失敗');
+      const list: VideoInsight[] = data.insights ?? [];
+      setInsights(list);
+      onChange(list); // 預設全選，使用者再自行取消不要的
+    } catch (e) { setError(e instanceof Error ? e.message : '萃取失敗'); }
+    finally { setExtracting(false); }
+  }
+
+  function toggle(it: VideoInsight) {
+    const exists = selected.some(s => s.id === it.id);
+    onChange(exists ? selected.filter(s => s.id !== it.id) : [...selected, it]);
+    setAdded(false); // 勾選有變動，允許重新加入筆記
+  }
+
+  function addToNotes() {
+    if (selected.length === 0) return;
+    const block = '## 影片獨家觀點\n' + selected
+      .map(it => `- ${it.viewpoint}${it.sourceFile ? `（來源：${it.sourceFile}）` : ''}`)
+      .join('\n');
+    onAddToNotes(block);
+    setAdded(true);
+  }
+
+  const transcribing = rows.some(r => r.status === 'transcribing');
+  const doneCount = rows.filter(r => r.status === 'done').length;
+
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-indigo-50 transition-colors">
+        <span className="flex items-center gap-2 text-sm font-semibold text-indigo-800">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+          影片獨家觀點（選用）
+          {selected.length > 0 && <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px]">已選 {selected.length}</span>}
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 text-indigo-400 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-indigo-500/80">上傳幾支相關影片/音檔（單檔 ≤200MB，會自動抽音軌壓縮），系統會轉成逐字稿、找出大眾文章少提的獨家觀點，勾選後融入文章。</p>
+
+          <label className="flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-indigo-300 rounded-lg text-xs text-indigo-600 hover:bg-indigo-50 cursor-pointer transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            選擇影音檔（可多選）
+            <input type="file" multiple accept="audio/*,video/*" className="hidden" onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
+          </label>
+
+          {rows.length > 0 && (
+            <div className="rounded-lg border border-indigo-100 bg-white divide-y divide-indigo-50">
+              {rows.map((r, i) => (
+                <div key={r.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                  <span className="flex-1 truncate font-medium text-gray-700" title={r.name}>影片 {i + 1}</span>
+                  {r.status === 'transcribing' && <span className="flex items-center gap-1 text-indigo-500"><Spinner />轉錄中…</span>}
+                  {r.status === 'done' && <span className="text-green-600">已轉錄 ✓</span>}
+                  {r.status === 'error' && <span className="text-red-500 truncate max-w-[180px]" title={r.error}>失敗：{r.error}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {doneCount > 0 && (
+            <button onClick={extract} disabled={extracting || transcribing}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50">
+              {extracting && <Spinner />}
+              {extracting ? '萃取觀點中…' : `萃取獨家觀點（${doneCount} 份逐字稿）`}
+            </button>
+          )}
+
+          {error && <Err msg={error} />}
+
+          {insights.length > 0 && (() => {
+            // 來源分佈：看每支影片各貢獻幾條，一眼分辨是 AI 沒抓還是真的沒料
+            const bySource = insights.reduce<Record<string, number>>((acc, it) => {
+              const k = it.sourceFile || '未標來源';
+              acc[k] = (acc[k] ?? 0) + 1;
+              return acc;
+            }, {});
+            return (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-indigo-700">勾選要融入文章的觀點（{selected.length}/{insights.length}）：</p>
+                {selected.length > 0 && (
+                  <button onClick={addToNotes}
+                    className={`shrink-0 flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border transition-colors ${added ? 'border-green-300 text-green-700 bg-green-50' : 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'}`}>
+                    {added ? '已加入 SEO 筆記 ✓' : '＋ 加入 SEO 筆記'}
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400">
+                已分析 {doneCount} 支影片 · 來源分佈：{Object.entries(bySource).map(([src, n]) => `${src}（${n} 條）`).join('、')}
+              </p>
+              {insights.map(it => {
+                const checked = selected.some(s => s.id === it.id);
+                return (
+                  <label key={it.id} className={`flex gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${checked ? 'border-indigo-300 bg-white' : 'border-gray-200 bg-gray-50/60 opacity-70'}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggle(it)} className="mt-0.5 accent-indigo-600" />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-xs text-gray-800 leading-relaxed">{it.viewpoint}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-gray-400">
+                        {it.sourceFile && <span>來源：{it.sourceFile}</span>}
+                        {it.whyRare && <span>獨特性：{it.whyRare}</span>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            );
+          })()}
+
+          {insights.length === 0 && doneCount > 0 && !extracting && !error && (
+            <p className="text-xs text-gray-400">尚未萃取觀點，點上面的按鈕開始。</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── InsightsHint（Stage 2/3 顯示勾選的影片觀點，讓使用者看到 AI 被要求融入哪些）──
+
+function InsightsHint({ insights }: { insights: VideoInsight[] }) {
+  const [open, setOpen] = useState(false);
+  if (insights.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-indigo-50 transition-colors">
+        <span className="flex items-center gap-2 text-xs font-semibold text-indigo-800">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+          影片獨家觀點
+          <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px]">{insights.length}</span>
+          <span className="text-indigo-400 font-normal">撰寫時會自動融入</span>
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 text-indigo-400 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <ul className="px-4 pb-3 pt-1 space-y-1.5">
+          {insights.map(it => (
+            <li key={it.id} className="flex gap-1.5 text-xs text-gray-700 leading-relaxed">
+              <span className="text-indigo-400 shrink-0">•</span>
+              <span>{it.viewpoint}{it.sourceFile && <span className="text-gray-400">（{it.sourceFile}）</span>}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Stage 1 ───────────────────────────────────────────────────────────
 
 function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeOverride, onDone }: {
   keyword: string; vendor: string; writingGuide: string;
   analyzeOverride: string;
   onSaveAnalyzeOverride: (text: string | null) => void;
-  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string, brandDescription: string, bannedWords: string) => void;
+  onDone: (analyzeMsg: string, analysisResult: string, title: string, clientWritingRules: string, brandDescription: string, bannedWords: string, selectedInsights: VideoInsight[]) => void;
 }) {
   const [brandName, setBrandName] = useState(vendor);
   const [brandUrl, setBrandUrl] = useState('');
@@ -834,6 +1050,9 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
   const [titles, setTitles] = useState<string[]>([]);
   const [selectedTitle, setSelectedTitle] = useState('');
   const [showPromptModal, setShowPromptModal] = useState(false);
+  const [selectedInsights, setSelectedInsights] = useState<VideoInsight[]>([]);
+  // 把觀點寫進筆記後，用這個 key 強制 AnalysisEditor 重新掛載以反映新值（同 OutlineEditor 做法）
+  const [analysisEditorKey, setAnalysisEditorKey] = useState(0);
   const analyzeMsg = useRef('');
 
   useEffect(() => {
@@ -1026,8 +1245,14 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
                 </div>
               </div>
             )
-            : <AnalysisEditor value={result} onChange={setResult} />
+            : <AnalysisEditor key={analysisEditorKey} value={result} onChange={setResult} />
           }
+        </div>
+      )}
+
+      {result && !analyzing && (
+        <div className="pt-4 border-t border-gray-100">
+          <VideoInsights keyword={keyword} mainstreamContext={result} selected={selectedInsights} onChange={setSelectedInsights} onAddToNotes={md => { setResult(r => r.trimEnd() + '\n\n' + md); setAnalysisEditorKey(k => k + 1); }} />
         </div>
       )}
 
@@ -1036,7 +1261,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
           <label className="block text-sm font-semibold text-gray-800">選擇 SEO 標題</label>
           <TitleSelector titles={titles} value={selectedTitle} onChange={setSelectedTitle} />
           {selectedTitle && (
-            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules, brandDescription, bannedWords)}
+            <button onClick={() => onDone(analyzeMsg.current, result, selectedTitle, clientWritingRules, brandDescription, bannedWords, selectedInsights)}
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 transition-colors">
               確認標題，進入架構規劃 →
             </button>
@@ -1307,10 +1532,38 @@ function OutlineEditor({ value, onChange }: { value: string; onChange: (v: strin
   );
 }
 
+// ── 官方品牌 logo（Gemini 漸層星芒、OpenAI 花瓣結）──────────────────────
+// 來源：simple-icons（官方標誌單色/漸層路徑）
+
+function GeminiLogo({ className = 'w-12 h-12' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Gemini">
+      <defs>
+        <linearGradient id="geminiGrad" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#4285F4" />
+          <stop offset=".5" stopColor="#9B72CB" />
+          <stop offset="1" stopColor="#D96570" />
+        </linearGradient>
+      </defs>
+      <path fill="url(#geminiGrad)" d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" />
+    </svg>
+  );
+}
+
+// fill 用 currentColor，顏色跟著外層文字走（白字按鈕、綠字標題都能適配，不會撞背景色）
+function OpenAILogo({ className = 'w-11 h-11' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenAI">
+      <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" />
+    </svg>
+  );
+}
+
 // ── Stage 2 ───────────────────────────────────────────────────────────
 
-function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverride, onSaveOutlineOverride, onBack, onDone }: {
+function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsights, outlineOverride, onSaveOutlineOverride, onBack, onDone }: {
   title: string; analyzeMsg: string; analysisResult: string; writingGuide: string;
+  selectedInsights: VideoInsight[];
   outlineOverride: string;
   onSaveOutlineOverride: (text: string | null) => void;
   onBack: () => void;
@@ -1344,7 +1597,7 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, outlineOverri
 
   async function run() {
     const id = ++runId.current;
-    let msg = buildOutlinePrompt(title, writingGuide, outlineOverride);
+    let msg = buildOutlinePrompt(title, writingGuide, outlineOverride, selectedInsights);
     // @ 引用段落 → 局部更改：帶上現有架構，要求只動指定段落、其他保留
     if (outlineQuotes.length > 0 && outline.trim()) {
       msg += `\n\n【目前已有的完整架構】\n${outline}\n\n【請「重寫」下列被指定的段落（若指定的是 H2，請連同它底下的所有 H3 一起重寫），其他段落一字不要動，最後輸出「完整」的新架構】\n${outlineQuotes.join('\n')}`;
@@ -1433,7 +1686,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
           {outlining ? '讓我想想架構怎麼排…' : GEMINI_OUTLINE_LINE}
           <div className="absolute -bottom-2 left-8 w-3 h-3 bg-blue-50 border-b border-r border-blue-200 rotate-45" />
         </div>
-        <div className={`text-5xl ${outlining ? 'animate-bounce' : ''}`}>🤖</div>
+        <div className={outlining ? 'animate-bounce' : ''}><GeminiLogo className="w-12 h-12" /></div>
         <span className="text-xs font-semibold text-blue-600">Gemini</span>
         <span className="text-[10px] text-gray-400">架構主筆</span>
         <select
@@ -1481,6 +1734,8 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         </div>
       </div>
 
+      <InsightsHint insights={selectedInsights} />
+
       {showPromptModal && (
         <PromptEditModal
           defaultText={PROMPT_DEFAULTS.outline}
@@ -1514,7 +1769,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
       {(reviewing || outlineEval || suggestedOutline) && (
         <div className="space-y-2.5 border-t border-gray-100 pt-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
-            🦉 GPT 架構審稿{reviewing && <Spinner />}
+            <OpenAILogo className="w-4 h-4" /> GPT 架構審稿{reviewing && <Spinner />}
           </div>
           {outlineEval && (
             <p className="text-sm text-gray-600 bg-green-50 rounded-lg px-3 py-2 whitespace-pre-wrap leading-relaxed">{outlineEval}</p>
@@ -1569,7 +1824,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
                 : GPT_IDLE_LINE}
           <div className="absolute -bottom-2 right-8 w-3 h-3 bg-green-50 border-b border-r border-green-200 rotate-45" />
         </div>
-        <div className={`text-5xl ${reviewing ? 'animate-bounce' : ''}`}>🦉</div>
+        <div className={`text-[#10A37F] ${reviewing ? 'animate-bounce' : ''}`}><OpenAILogo className="w-11 h-11" /></div>
         <span className="text-xs font-semibold text-green-600">GPT</span>
         <span className="text-[10px] text-gray-400">審稿顧問</span>
         <select
@@ -1593,7 +1848,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
           disabled={reviewing || !outline.trim()}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
         >
-          {reviewing && <Spinner />}{reviewing ? '審稿中…' : '🦉 請 GPT 審稿'}
+          {reviewing && <Spinner />}{reviewing ? '審稿中…' : <span className="flex items-center gap-1.5"><OpenAILogo className="w-3.5 h-3.5" /> 請 GPT 審稿</span>}
         </button>
         <p className="text-[10px] text-gray-400 text-center">審稿建議會出現在中間目錄下方</p>
       </aside>
@@ -1603,7 +1858,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
 
 // ── Stage 3 ───────────────────────────────────────────────────────────
 
-function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, onSaveSectionOverride, onBack, onNext }: {
+function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlineResult, initSections, writingGuide, clientWritingRules, brandDescription, bannedWords, selectedInsights, sectionOverride, onSaveSectionOverride, onBack, onNext }: {
   title: string; keyword: string;
   analyzeMsg: string; analysisResult: string;
   outlineMsg: string; outlineResult: string;
@@ -1611,6 +1866,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   clientWritingRules: string;
   brandDescription: string;
   bannedWords: string;
+  selectedInsights: VideoInsight[];
   sectionOverride: string;
   onSaveSectionOverride: (text: string | null) => void;
   onBack: () => void;
@@ -1645,10 +1901,10 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   // 撰寫過程持續存草稿，避免在這個階段重新整理就把已產生的段落內容弄丟
   useEffect(() => {
     const t = setTimeout(() => {
-      saveDraft({ keyword, selectedTitle: title, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections, clientWritingRules, brandDescription, bannedWords });
+      saveDraft({ keyword, selectedTitle: title, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections, clientWritingRules, brandDescription, bannedWords, selectedInsights });
     }, 800);
     return () => clearTimeout(t);
-  }, [sections, keyword, title, analyzeMsg, analysisResult, outlineMsg, outlineResult, clientWritingRules, brandDescription, bannedWords]);
+  }, [sections, keyword, title, analyzeMsg, analysisResult, outlineMsg, outlineResult, clientWritingRules, brandDescription, bannedWords, selectedInsights]);
 
   function getBlockItems(content: string): { label: string; full: string }[] {
     const items: { label: string; full: string }[] = [];
@@ -1720,8 +1976,8 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       const usesPerH3Table = sec.h3s.length > 0 && sec.promptStyle === 'info';
       const finalPrompt = (sec.generateTable && !usesPerH3Table
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。${TABLE_WORDCOUNT_REMINDER}`
-        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs);
-      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs);
+        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights);
+      const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs, selectedInsights);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
         ...sysMsg,
@@ -1742,7 +1998,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
     const quotes = (sec.reviseQuotes ?? []).filter(q => q.trim());
     const originalContent = sec.content;
     setErrors(prev => ({ ...prev, [id]: '' }));
-    const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs);
+    const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs, selectedInsights);
     const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
     const baseMessages = [
       ...sysMsg,
@@ -1767,7 +2023,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
           let replacement = '';
           await streamAPI([
             ...baseMessages,
-            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs)}` },
+            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights)}` },
           ], chunk => {
             replacement += chunk;
             const partial = currentContent.includes(quote)
@@ -1801,7 +2057,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       try {
         await streamAPI([
           ...baseMessages,
-          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs)}` },
+          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights)}` },
         ], chunk => {
           streamed += chunk;
           setSections(prev => prev.map(s => s.id === id ? { ...s, content: streamed } : s));
@@ -1929,6 +2185,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
 
       <div className="flex-1 overflow-auto">
         <div className="px-6 py-5 space-y-4">
+          <InsightsHint insights={selectedInsights} />
 
           {/* Section cards */}
           {sections.map((sec, i) => (
@@ -2702,6 +2959,7 @@ type Draft = {
   clientWritingRules: string;
   brandDescription: string;
   bannedWords?: string;
+  selectedInsights?: VideoInsight[];
   savedAt: number;
 };
 
@@ -2737,6 +2995,7 @@ function ComposeInner() {
   const [outlineResult, setOutlineResult] = useState('');
   const [sections, setSections] = useState<Section[]>([]);
   const [reviewSections, setReviewSections] = useState<Section[]>([]);
+  const [selectedInsights, setSelectedInsights] = useState<VideoInsight[]>([]);
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
 
   function restoreDraft(d: Draft) {
@@ -2746,6 +3005,7 @@ function ComposeInner() {
     setClientWritingRules(d.clientWritingRules);
     setBrandDescriptionGlobal(d.brandDescription);
     setBannedWords(d.bannedWords ?? '');
+    setSelectedInsights(d.selectedInsights ?? []);
     setOutlineMsg(d.outlineMsg);
     setOutlineResult(d.outlineResult);
     setSections(d.sections);
@@ -2827,13 +3087,14 @@ function ComposeInner() {
             writingGuide={writingGuide}
             analyzeOverride={promptOverrides.analyze ?? ''}
             onSaveAnalyzeOverride={text => savePromptOverride('analyze', text)}
-            onDone={(msg, result, title, rules, brandDesc, banned) => {
+            onDone={(msg, result, title, rules, brandDesc, banned, insights) => {
               setAnalyzeMsg(msg);
               setAnalysisResult(result);
               setSelectedTitle(title);
               setClientWritingRules(rules);
               setBrandDescriptionGlobal(brandDesc);
               setBannedWords(banned);
+              setSelectedInsights(insights);
               setStage('outline');
             }}
           />
@@ -2844,6 +3105,7 @@ function ComposeInner() {
             analyzeMsg={analyzeMsg}
             analysisResult={analysisResult}
             writingGuide={[writingGuide, clientWritingRules].filter(Boolean).join('\n\n')}
+            selectedInsights={selectedInsights}
             outlineOverride={promptOverrides.outline ?? ''}
             onSaveOutlineOverride={text => savePromptOverride('outline', text)}
             onBack={() => setStage('analyze')}
@@ -2852,7 +3114,7 @@ function ComposeInner() {
               setOutlineResult(oResult);
               setSections(secs);
               setReviewSections([]);
-              saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg: oMsg, outlineResult: oResult, sections: secs, clientWritingRules, brandDescription, bannedWords });
+              saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg: oMsg, outlineResult: oResult, sections: secs, clientWritingRules, brandDescription, bannedWords, selectedInsights });
               setStage('write');
             }}
           />
@@ -2870,10 +3132,11 @@ function ComposeInner() {
             clientWritingRules={clientWritingRules}
             brandDescription={brandDescription}
             bannedWords={bannedWords}
+            selectedInsights={selectedInsights}
             sectionOverride={promptOverrides.section ?? ''}
             onSaveSectionOverride={text => savePromptOverride('section', text)}
             onBack={() => setStage('outline')}
-            onNext={secs => { setReviewSections(secs); saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections: secs, clientWritingRules, brandDescription, bannedWords }); setStage('review'); }}
+            onNext={secs => { setReviewSections(secs); saveDraft({ keyword, selectedTitle, analyzeMsg, analysisResult, outlineMsg, outlineResult, sections: secs, clientWritingRules, brandDescription, bannedWords, selectedInsights }); setStage('review'); }}
           />
         )}
         {stage === 'review' && (
