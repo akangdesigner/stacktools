@@ -97,6 +97,14 @@ db.exec(`
     batchIndex INTEGER DEFAULT 0, -- 長輩目前看到第幾批（0=第一批 1~5 則，1=第二批 6~10 則…）
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS travel_cache (
+    userId TEXT PRIMARY KEY,
+    date TEXT NOT NULL,           -- 快取日期 YYYY-MM-DD，判斷是不是今天抓的
+    travelJson TEXT NOT NULL,     -- 今日抓到的旅遊景點（最多 15 個）JSON 陣列
+    batchIndex INTEGER DEFAULT 0, -- 長輩目前看到第幾批（0=第一批 1~3 個，1=第二批 4~6 個…）
+    updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
@@ -615,5 +623,63 @@ export function advanceNewsBatch(userId: string): number {
 export function resetNewsBatch(userId: string): void {
   db.prepare(`
     UPDATE news_cache SET batchIndex = 0, updatedAt = datetime('now', 'localtime') WHERE userId = ?
+  `).run(userId);
+}
+
+// ── Travel Cache（今日旅遊景點快取＋閱讀進度，支援「3 個一批、按鈕看更多」輪流瀏覽）──
+
+export interface TravelItem {
+  name: string;      // 景點名
+  summary: string;   // 一段大字簡介
+  img: string;       // 代表圖片網址
+  transport: string; // 交通/位置（怎麼去、在哪）
+  season: string;    // 適合原因/季節（為什麼推薦、適合何時去）
+}
+
+export interface TravelCache {
+  userId: string;
+  date: string;
+  travelJson: string;
+  batchIndex: number;
+  updatedAt: string;
+}
+
+// 存入今日旅遊景點（n8n 抓完最多 15 個後呼叫）。同一人同一天覆蓋，並把閱讀進度歸零。
+export function saveTravelCache(userId: string, travel: TravelItem[]): void {
+  db.prepare(`
+    INSERT INTO travel_cache (userId, date, travelJson, batchIndex, updatedAt)
+    VALUES (?, date('now', 'localtime'), ?, 0, datetime('now', 'localtime'))
+    ON CONFLICT(userId) DO UPDATE SET
+      date = date('now', 'localtime'),
+      travelJson = excluded.travelJson,
+      batchIndex = 0,
+      updatedAt = datetime('now', 'localtime')
+  `).run(userId, JSON.stringify(travel));
+}
+
+// 取出快取原始資料；若不是今天的就視同沒有（回 null）
+export function getTravelCache(userId: string): TravelCache | null {
+  const row = db
+    .prepare("SELECT * FROM travel_cache WHERE userId = ? AND date = date('now', 'localtime')")
+    .get(userId) as TravelCache | undefined;
+  return row ?? null;
+}
+
+// 前進到下一批，回傳新的 batchIndex
+export function advanceTravelBatch(userId: string): number {
+  db.prepare(`
+    UPDATE travel_cache SET batchIndex = batchIndex + 1, updatedAt = datetime('now', 'localtime')
+    WHERE userId = ?
+  `).run(userId);
+  const row = db.prepare('SELECT batchIndex FROM travel_cache WHERE userId = ?').get(userId) as
+    | { batchIndex: number }
+    | undefined;
+  return row?.batchIndex ?? 0;
+}
+
+// 從頭再看一次：閱讀進度歸零
+export function resetTravelBatch(userId: string): void {
+  db.prepare(`
+    UPDATE travel_cache SET batchIndex = 0, updatedAt = datetime('now', 'localtime') WHERE userId = ?
   `).run(userId);
 }
