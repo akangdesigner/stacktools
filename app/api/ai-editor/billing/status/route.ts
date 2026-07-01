@@ -28,7 +28,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ found: false });
   }
 
-  const baseUrl = process.env.ECPAY_BASE_URL || req.nextUrl.origin;
+  // 優先用 ECPAY_BASE_URL，其次 NEXTAUTH_URL（線上=公開網址），最後才 origin
+  // 不能只靠 req.nextUrl.origin：Zeabur 容器內它會是內部位址 0.0.0.0:8080
+  const baseUrl = process.env.ECPAY_BASE_URL || process.env.NEXTAUTH_URL || req.nextUrl.origin;
   const amount = client.billing_amount || 3000;
 
   return NextResponse.json({

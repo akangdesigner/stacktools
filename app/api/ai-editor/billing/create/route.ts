@@ -30,9 +30,10 @@ export async function GET(req: NextRequest) {
   const client = getAiEditorClient(clientId);
   if (!client) return errorPage('找不到這位客戶，請確認連結是否正確', 404);
 
-  // 回呼網址必須是公開網址（綠界要打得到）。優先用 ECPAY_BASE_URL，其次用目前來源網址。
+  // 回呼網址必須是公開網址（綠界要打得到）。優先 ECPAY_BASE_URL，其次 NEXTAUTH_URL（線上=公開網址）。
+  // 不能只靠 req.nextUrl.origin：Zeabur 容器內它會是內部位址 0.0.0.0:8080，綠界會打不到。
   // 本機 localhost 綠界收不到回呼，正式驗證請在 Zeabur 線上進行。
-  const baseUrl = process.env.ECPAY_BASE_URL || req.nextUrl.origin;
+  const baseUrl = process.env.ECPAY_BASE_URL || process.env.NEXTAUTH_URL || req.nextUrl.origin;
 
   const { action, params, merchantTradeNo } = buildPeriodCheckoutParams({
     clientId: client.id,
