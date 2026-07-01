@@ -54,6 +54,10 @@ const NO_AUTO_LIST_REMINDER = '・除非這個 H3 另外被標記為條列格式
 // 只講「文字仍要寫滿」AI 還是會把表格當主角、前後文字隨便帶過，所以要明確要求表格前後都要有實質段落
 const TABLE_WORDCOUNT_REMINDER = '・表格只是文字說明以外「額外」的補充整理，不能取代文字內容，也不能只用一兩句話帶過表格就結束。寫法：表格前先完整說明這個主題的背景、原因或判斷依據；表格後再寫一段延伸補充（表格沒列出的細節、例外情況或具體案例），不是隨口收尾。上面的字數要求只算這些表格以外的文字，且前後兩段加總仍要完整達到該字數，不可因為有表格就把文字內容寫短';
 
+// 列表格式會跟「寫 N 段散文、約幾百字」的深度指令打架，AI 會為了改條列而把篇幅要求整個丟掉；
+// 這段負責調和：改條列不代表可以縮水，原本的內容量／字數要拆進條列點裡寫足
+const LIST_DEPTH_REMINDER = '・改成條列不代表可以縮水：上面的篇幅與字數要求仍然要達到，做法是把原本該寫的內容量拆成「足夠多」的條列點，每一點都要寫足（該有的判斷依據、數字、範例、注意事項照樣寫進點裡，可用「**粗體重點**：一句以上的說明」把單點展開），不可因為改條列就只列幾個短句草草帶過';
+
 type Section = {
   id: string;
   h2: string;
@@ -181,7 +185,9 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
   const depthBlock = hasPerH3Depth
     ? `\n\n各 H3 子節篇幅要求（依序對應，各自獨立）：\n${sec.h3s.map((h, i) => {
         const d = h3Depths[i] ?? 'standard';
-        const listReminder = showH3FormatHints && !h3Lists[i] ? `\n${NO_AUTO_LIST_REMINDER}` : '';
+        const listReminder = showH3FormatHints
+          ? (h3Lists[i] ? `\n${LIST_DEPTH_REMINDER}` : `\n${NO_AUTO_LIST_REMINDER}`)
+          : '';
         const tableReminder = showH3FormatHints && h3Tables[i] ? `\n${TABLE_WORDCOUNT_REMINDER}` : '';
         return `・### ${h}：${DEPTH_LABELS[d]}\n${DEPTH_INSTRUCTIONS[d].split('\n').slice(1).join('\n')}${listReminder}${tableReminder}`;
       }).join('\n\n')}${formatReminder}`
