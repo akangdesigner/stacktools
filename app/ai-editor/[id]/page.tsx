@@ -17,6 +17,12 @@ interface AiEditorClient {
   fb_page_id: string;
   meta_access_token: string;
   threads_access_token: string;
+  // 金流
+  billing_status: 'none' | 'pending' | 'active' | 'failed' | 'cancelled';
+  billing_amount: number;
+  card_last4: string;
+  next_charge_date: string;
+  last_charge_at: string;
 }
 
 export default function AiEditorClientPage() {
@@ -188,6 +194,85 @@ export default function AiEditorClientPage() {
             </FieldCard>
           </div>
         )}
+      </div>
+
+      {/* 自動扣款（綠界定期定額） */}
+      <BillingSection client={client} />
+    </div>
+  );
+}
+
+// 金流區塊：給公司內部看狀態、產生要傳給客戶（在 LINE）的授權連結
+function BillingSection({ client }: { client: AiEditorClient }) {
+  const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+
+  const link = origin ? `${origin}/api/ai-editor/billing/create?clientId=${client.id}` : '';
+  const amount = client.billing_amount || 3000;
+
+  const statusMap: Record<AiEditorClient['billing_status'], { label: string; cls: string }> = {
+    none: { label: '未設定', cls: 'bg-gray-100 text-gray-500' },
+    pending: { label: '待授權', cls: 'bg-amber-100 text-amber-700' },
+    active: { label: '扣款中', cls: 'bg-green-100 text-green-700' },
+    failed: { label: '扣款失敗', cls: 'bg-red-100 text-red-700' },
+    cancelled: { label: '已取消', cls: 'bg-gray-100 text-gray-500' },
+  };
+  const status = statusMap[client.billing_status] ?? statusMap.none;
+
+  async function copyLink() {
+    if (!link) return;
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-5">
+      <div className="flex items-center gap-3">
+        <h2 className="text-lg font-bold text-gray-900">自動扣款</h2>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+        <span className="ml-auto text-sm text-gray-500">每月 NT$ {amount.toLocaleString()}</span>
+      </div>
+
+      {/* 目前扣款資訊 */}
+      <div className="grid grid-cols-3 gap-3">
+        <FieldCard label="信用卡末四碼">
+          {client.card_last4
+            ? <span className="text-xs font-mono text-gray-800">**** {client.card_last4}</span>
+            : <span className="text-xs text-gray-300 italic">—</span>}
+        </FieldCard>
+        <FieldCard label="最近扣款">
+          {client.last_charge_at
+            ? <span className="text-xs text-gray-700">{client.last_charge_at}</span>
+            : <span className="text-xs text-gray-300 italic">—</span>}
+        </FieldCard>
+        <FieldCard label="下次扣款（估）">
+          {client.next_charge_date
+            ? <span className="text-xs text-gray-700">{client.next_charge_date}</span>
+            : <span className="text-xs text-gray-300 italic">—</span>}
+        </FieldCard>
+      </div>
+
+      {/* 授權連結：複製後貼到 LINE 傳給客戶 */}
+      <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
+        <p className="text-sm font-semibold text-gray-500">授權連結（複製後透過 LINE 傳給客戶）</p>
+        <div className="flex items-center gap-2">
+          <input
+            readOnly
+            value={link}
+            onFocus={e => e.currentTarget.select()}
+            className="flex-1 bg-white border border-gray-200 rounded px-2 py-1 text-xs font-mono text-gray-700 focus:outline-none"
+          />
+          <button
+            onClick={copyLink}
+            className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors shrink-0"
+          >
+            {copied ? '已複製 ✓' : '複製'}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400">客戶點開連結 → 綠界刷卡授權一次 → 之後每月自動扣款。授權結果會自動回填此頁狀態。</p>
       </div>
     </div>
   );
