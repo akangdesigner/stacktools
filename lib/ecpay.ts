@@ -87,6 +87,42 @@ function formatEcpayDate(d: Date): string {
   return `${tw.getUTCFullYear()}/${p(tw.getUTCMonth() + 1)}/${p(tw.getUTCDate())} ${p(tw.getUTCHours())}:${p(tw.getUTCMinutes())}:${p(tw.getUTCSeconds())}`;
 }
 
+// 定期定額訂單查詢網址：測試站 vs 正式站
+export const PERIOD_QUERY_URL = IS_PROD
+  ? 'https://payment.ecpay.com.tw/Cashier/QueryCreditCardPeriodInfo'
+  : 'https://payment-stage.ecpay.com.tw/Cashier/QueryCreditCardPeriodInfo';
+
+export interface PeriodInfo {
+  RtnCode?: number;
+  card4no?: string;        // 卡號末四碼
+  card6no?: string;        // 卡號前六碼
+  TotalSuccessTimes?: number;
+  process_date?: string;
+  [k: string]: unknown;
+}
+
+// 查詢定期定額訂單資訊。
+// 綠界「首次授權」回呼不一定帶卡號末四碼，需要時用這支主動查（回傳含 card4no）。
+export async function queryPeriodInfo(merchantTradeNo: string): Promise<PeriodInfo | null> {
+  const params: Record<string, string> = {
+    MerchantID: MERCHANT_ID,
+    MerchantTradeNo: merchantTradeNo,
+    TimeStamp: String(Math.floor(Date.now() / 1000)),
+  };
+  params.CheckMacValue = generateCheckMacValue(params);
+  try {
+    const res = await fetch(PERIOD_QUERY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(params).toString(),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as PeriodInfo;
+  } catch {
+    return null;
+  }
+}
+
 // 回呼時記錄用：現在的台灣時間字串 yyyy-MM-dd HH:mm:ss
 export function twNow(): string {
   const tw = new Date(Date.now() + 8 * 60 * 60 * 1000);

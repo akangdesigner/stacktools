@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic';
 // n8n 只要一支 HTTP GET 就能拿到渲染 Flex 卡片所需的全部資料。
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getClientByLineUid } from '@/lib/aiEditorDb';
+import { getClientByLineUid, updateClientBilling } from '@/lib/aiEditorDb';
+import { queryPeriodInfo } from '@/lib/ecpay';
 
 // 狀態中文對照，方便 n8n 直接顯示
 const STATUS_LABEL: Record<string, string> = {
@@ -33,6 +34,16 @@ export async function GET(req: NextRequest) {
   const baseUrl = process.env.ECPAY_BASE_URL || process.env.NEXTAUTH_URL || req.nextUrl.origin;
   const amount = client.billing_amount || 3000;
 
+  // 綠界首次回呼不一定帶卡號末四碼；若已扣款中卻沒末四碼，向綠界訂單查詢補回並寫回 DB（只查一次）
+  let cardLast4 = client.card_last4;
+  if (client.billing_status === 'active' && !cardLast4 && client.ecpay_trade_no) {
+    const info = await queryPeriodInfo(client.ecpay_trade_no);
+    if (info?.card4no) {
+      cardLast4 = String(info.card4no);
+      updateClientBilling(client.id, { card_last4: cardLast4 });
+    }
+  }
+
   return NextResponse.json({
     found: true,
     client_id: client.id,
@@ -40,7 +51,7 @@ export async function GET(req: NextRequest) {
     billing_status: client.billing_status,
     billing_status_label: STATUS_LABEL[client.billing_status] ?? client.billing_status,
     amount,
-    card_last4: client.card_last4 || '',
+    card_last4: cardLast4 || '',
     last_charge_at: client.last_charge_at || '',
     next_charge_date: client.next_charge_date || '',
     // 授權連結：客戶點開 → 綠界刷卡授權 → 之後每月自動扣款
