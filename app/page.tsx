@@ -140,6 +140,15 @@ const techTools: Tool[] = [
     iconBg: "bg-sky-100",
     inDev: false,
   },
+  {
+    href: "/tkd",
+    title: "TKD 現況產生器",
+    description: "輸入客戶網址與登記表網址，自動爬每一頁的現有 title / description / keywords / H1，依格式寫回 Google 登記表。",
+    icon: "🏷️",
+    color: "bg-lime-50 border-lime-200 hover:border-lime-400",
+    iconBg: "bg-lime-100",
+    inDev: false,
+  },
 ];
 
 const externalTools: Tool[] = [
