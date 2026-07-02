@@ -47,6 +47,7 @@ const TOOL_NAMES = [
   'IG 監控報告',
   '銀髮 LINE 機器人',
   '美妝競品監控台',
+  'TKD 現況產生器',
 ];
 
 const STATUSES = ['規劃中', '開發中', '已上線', '暫停'];
