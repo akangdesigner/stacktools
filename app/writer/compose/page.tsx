@@ -435,7 +435,7 @@ ${opts.instruction.trim()
   : ''}${reviewBody}
 
 輸出格式（嚴格遵守）：
-把你的審稿想法逐條列出（每條用「- 」開頭），具體說明要調整哪個 H2/H3、怎麼調整、為什麼。寫手會把這些想法貼回給出稿 AI 重新產生架構，所以每條想法都必須具體可執行，且不得違反上面的固定架構規則與架構底線（例如一個 H2 底下最多 4 個 H3，想補的內容太多就建議拆成新的 H2）。絕對不要自己輸出新的目錄架構，不要出現 ## 或 ### 開頭的行。若架構已經很好不需要調整，直接說明理由即可。繁體中文輸出。`;
+把你的審稿想法逐條列出（每條用「- 」開頭），具體說明要調整哪個 H2/H3、怎麼調整、為什麼；除了條列符號外不要使用任何 Markdown 標記（不要粗體、不要標題、不要分隔線），每條控制在兩句話以內。寫手會把這些想法貼回給出稿 AI 重新產生架構，所以每條想法都必須具體可執行，且不得違反上面的固定架構規則與架構底線（例如一個 H2 底下最多 4 個 H3，想補的內容太多就建議拆成新的 H2）。絕對不要自己輸出新的目錄架構，不要出現 ## 或 ### 開頭的行。若架構已經很好不需要調整，直接說明理由即可。繁體中文輸出。`;
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────
@@ -1689,16 +1689,28 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
         // @ 引用段落 → 局部更改：只動指定段落、其他保留
         msg += `\n\n【請「重寫」下列被指定的段落（若指定的是 H2，請連同它底下的所有 H3 一起重寫），其他段落一字不要動，最後輸出「完整」的新架構】\n${outlineQuotes.join('\n')}`;
       } else {
-        msg += `\n\n【請根據下方需求「修改」上面的架構：只調整需求涉及的段落，其他段落保留，最後輸出「完整」的新架構。需求若來自審稿建議，由你判斷哪些值得採納，不必照單全收】`;
+        msg += `\n\n【請根據下方修改需求調整上面的架構：只調整需求涉及的段落，其他段落保留，最後輸出「完整」的新架構】`;
       }
     }
     if (outlineInstruction.trim()) {
-      msg += `\n\n【寫手的指定需求 — 請務必落實】\n${outlineInstruction.trim()}`;
+      // 修改模式：貼回的內容多半是 GPT 的審稿建議，要求 Gemini 逐條評估取捨，不可照單全收；
+      // 全新出稿：需求欄是寫手自己的要求，維持務必落實
+      if (isModify) {
+        msg += `\n\n【修改需求（寫手貼回的內容，可能包含另一位審稿 AI 的建議）— 逐條獨立評估，不可照單全收】
+${outlineInstruction.trim()}
+
+評估方式：你是架構主筆，對最終架構的品質負責。請把上面內容拆成一條一條，逐條判斷：
+・符合搜尋意圖、有 SEO 價值、且不違反架構底線 → 採納並落實
+・會讓主題發散、與既有段落重複、或違反架構底線 → 明確不採納
+不要因為建議來自審稿就全部照做，也不要為了省事全部拒絕，每一條都要有你自己的專業判斷。`;
+      } else {
+        msg += `\n\n【寫手的指定需求 — 請務必落實】\n${outlineInstruction.trim()}`;
+      }
     }
     // 架構底線寫死附加，不受個人化出稿提示詞或審稿建議影響
     msg += `\n\n${STRUCTURE_HARD_RULES}`;
     if (isModify) {
-      msg += `\n\n【輸出格式（嚴格遵守）】先用 2～3 句話說明你決定怎麼調整（採納了哪些建議、哪些沒採納與原因），接著「從第一個 ## 開始」輸出完整的新架構，維持 ## H2 / ### H3 格式，架構之後不要再有任何說明文字。`;
+      msg += `\n\n【輸出格式（嚴格遵守）】先寫取捨說明：純文字、禁止任何 Markdown 符號（不要粗體、不要 * 或 - 條列、不要標題、不要分隔線），總共 3～5 句、150 字以內——採納哪幾條、不採納哪幾條，各用一句話帶過理由，不要展開論述（若全部採納，用一句話說明為什麼每條都通過評估）。說明寫完後，「從第一個 ## 開始」輸出完整的新架構，維持 ## H2 / ### H3 格式，架構之後不要再有任何說明文字。`;
     }
     outlineMsg.current = msg;
     setError(''); setOutlining(true);
@@ -1714,13 +1726,13 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
         { role: 'user', content: msg },
       ], chunk => {
         if (runId.current !== id) return;
-        if (isModify) { buf += chunk; setGeminiNote(splitNote(buf)); } // 調整說明即時冒在泡泡
+        if (isModify) { buf += chunk; setGeminiNote(cleanNoteText(splitNote(buf))); } // 調整說明即時冒在泡泡（洗掉 Markdown）
         else setOutline(r => r + chunk);
       }, outlineModel);
       if (isModify && runId.current === id) {
         const idx = buf.search(/^##\s/m);
         const newOutline = idx >= 0 ? buf.slice(idx).trim() : '';
-        setGeminiNote(splitNote(buf) || '我調整好了，看中間的對照 👇');
+        setGeminiNote(cleanNoteText(splitNote(buf)) || '我調整好了，看中間的對照 👇');
         if (newOutline) setSuggestedOutline(newOutline);
         else setError('Gemini 沒有回傳新的架構，請再按一次「修改架構」。');
       }
@@ -2715,6 +2727,15 @@ function stripMd(text: string): string {
     .replace(/^#{1,6}\s*/gm, '')
     .replace(/\*\*([^*\n]+)\*\*/g, '$1')
     .replace(/\*([^*\n]+)\*/g, '$1');
+}
+
+// Gemini 泡泡的取捨說明：提示詞已要求純文字，但模型偶爾還是會吐 Markdown，前端一律洗乾淨再顯示
+function cleanNoteText(t: string): string {
+  return stripMd(t)
+    .replace(/^[-*・]\s+/gm, '')   // 條列符號
+    .replace(/^-{3,}\s*$/gm, '')   // --- 分隔線
+    .replace(/\n{2,}/g, '\n')      // 壓縮多餘空行
+    .trim();
 }
 
 function SuggestionCard({ s, onAccept, onReject, onJump }: {
