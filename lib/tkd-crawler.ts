@@ -1,4 +1,5 @@
 import { parse } from 'node-html-parser';
+import { gunzipSync } from 'node:zlib';
 
 // 單一頁面的現有 TKD 資料（現有 title / description / keywords / h1）
 export type PageTkd = {
@@ -54,12 +55,60 @@ function extractLocs(xml: string): string[] {
   return locs;
 }
 
-// 從客戶網站 sitemap 蒐集頁面網址；支援 sitemap index（巢狀子 sitemap），並設頁數上限
+// 讀取 sitemap 內容：支援 gzip 壓縮（.xml.gz 或內容以 gzip magic number 開頭，如 91APP）
+async function fetchSitemapText(url: string): Promise<string | null> {
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    // gzip 檔開頭固定是 0x1f 0x8b，fetch 不會自動解壓（伺服器沒標 Content-Encoding）
+    if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+      try {
+        return gunzipSync(buf).toString('utf8');
+      } catch {
+        return null;
+      }
+    }
+    return buf.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+// 從 robots.txt 找網站宣告的 sitemap 位置（很多平台不放在 /sitemap.xml，例如 91APP 放在 /Sitemap/店家ID/...）
+async function sitemapsFromRobots(site: string): Promise<string[]> {
+  try {
+    const res = await fetchWithTimeout(`${site}/robots.txt`);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const out: string[] = [];
+    for (const m of text.matchAll(/^\s*sitemap:\s*(\S+)/gim)) out.push(m[1]);
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+// 多語系 sitemap（?locale=xx，如 Shopline）只挑一種語系展開，避免同一頁被各語系重複收錄
+// 優先中文（zh-hant / zh-tw），其次 default，都沒有才全展開
+function pickLocaleSitemaps(locs: string[]): string[] {
+  const withLocale = locs.filter((l) => /[?&]locale=/i.test(l));
+  if (withLocale.length === 0) return locs;
+  const rest = locs.filter((l) => !/[?&]locale=/i.test(l));
+  const zh = withLocale.filter((l) => /[?&]locale=zh/i.test(l));
+  if (zh.length > 0) return [...rest, ...zh];
+  const def = withLocale.filter((l) => /[?&]locale=default/i.test(l));
+  if (def.length > 0) return [...rest, ...def];
+  return locs;
+}
+
+// 從客戶網站 sitemap 蒐集頁面網址；支援 sitemap index（巢狀子 sitemap）、gzip、多語系變體，並設頁數上限
 async function collectFromSitemap(site: string, limit: number): Promise<string[]> {
   const seen = new Set<string>();
   const result: string[] = [];
-  // 待處理的 sitemap 佇列，先試常見的兩個位置
-  const queue = [`${site}/sitemap.xml`, `${site}/sitemap_index.xml`];
+  // 先讀 robots.txt 的 Sitemap 宣告，再退回常見的兩個位置
+  const declared = await sitemapsFromRobots(site);
+  const queue = [...declared, `${site}/sitemap.xml`, `${site}/sitemap_index.xml`];
   const visitedSitemaps = new Set<string>();
 
   while (queue.length > 0 && result.length < limit) {
@@ -67,28 +116,26 @@ async function collectFromSitemap(site: string, limit: number): Promise<string[]
     if (visitedSitemaps.has(sitemapUrl)) continue;
     visitedSitemaps.add(sitemapUrl);
 
-    let xml: string;
-    try {
-      const res = await fetchWithTimeout(sitemapUrl);
-      if (!res.ok) continue;
-      xml = await res.text();
-    } catch {
-      continue;
-    }
+    const xml = await fetchSitemapText(sitemapUrl);
+    if (!xml) continue;
 
     const locs = extractLocs(xml);
     // 判斷這是 sitemap index（子 sitemap 清單）還是一般 sitemap（頁面清單）
     const isIndex = /<sitemapindex[\s>]/i.test(xml);
+    const children: string[] = []; // 子 sitemap（含 .xml.gz 與 ?locale= 變體）
+    const pages: string[] = []; // 一般頁面
     for (const loc of locs) {
-      if (isIndex || /\.xml($|\?)/i.test(loc)) {
-        // 子 sitemap，加入佇列繼續展開
-        if (!visitedSitemaps.has(loc)) queue.push(loc);
-      } else {
-        if (!seen.has(loc)) {
-          seen.add(loc);
-          result.push(loc);
-          if (result.length >= limit) break;
-        }
+      if (isIndex || /\.xml(\.gz)?($|\?)/i.test(loc)) children.push(loc);
+      else pages.push(loc);
+    }
+    for (const child of pickLocaleSitemaps(children)) {
+      if (!visitedSitemaps.has(child)) queue.push(child);
+    }
+    for (const loc of pages) {
+      if (!seen.has(loc)) {
+        seen.add(loc);
+        result.push(loc);
+        if (result.length >= limit) break;
       }
     }
   }
@@ -109,6 +156,15 @@ async function collectFromHomepage(site: string, limit: number): Promise<string[
   try {
     const res = await fetchWithTimeout(site);
     if (!res.ok) return result;
+    // 有些網站裸網域首頁會轉址到 www，但內頁只有 www 版存在；
+    // 改用轉址後的最終網址當連結解析基底，避免組出 404 的裸網域內頁
+    let base = site;
+    if (res.url) {
+      base = res.url.replace(/\/+$/, '');
+      host = new URL(base).host;
+      result[0] = base; // 首頁本身也改記轉址後的網址
+      seen.add(base);
+    }
     const html = await res.text();
     const root = parse(html);
     for (const a of root.querySelectorAll('a')) {
@@ -117,7 +173,7 @@ async function collectFromHomepage(site: string, limit: number): Promise<string[
       if (!href) continue;
       let abs: string;
       try {
-        abs = new URL(href, site).href;
+        abs = new URL(href, base).href;
       } catch {
         continue;
       }
@@ -156,6 +212,8 @@ function isContentLink(url: string): boolean {
   if (/\/wp-(admin|login|json)/i.test(url)) return false; // WordPress 後台
   // 登入/購物車/會員/搜尋等功能頁，對 SEO 稽核沒意義
   if (/\/(login|logout|register|signup|signin|cart|checkout|account|member|members|wishlist|favorite|search|compare)(\/|\?|$)/i.test(url)) return false;
+  // 各平台的功能頁變體：sign_in（Shopline）、ShoppingCart/VipMember/TradesOrder/ECoupon/TraceSalePage（91APP）
+  if (/(sign[-_]?in|sign[-_]?up|shoppingcart|vipmember|tradesorder|ecoupon|tracesalepage)/i.test(url)) return false;
   if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|mp4|mp3)(\?|$)/i.test(url)) return false;
   return /^https?:/i.test(url);
 }
@@ -167,13 +225,17 @@ function withBlogPrefix(url: string, label: string): string {
   return isBlog && label && !label.startsWith('部落格') ? `部落格-${label}` : label;
 }
 
-// 蒐集「重點頁」：首頁 + 主選單(header/nav)連結，並保留選單文字當頁名
-async function collectImportantPages(site: string, limit: number): Promise<PageRef[]> {
+// 蒐集「選單頁」：首頁 + 主選單(header/nav)連結，並保留選單文字當頁名
+// 回傳 base（轉址後的最終網址，後續抓 sitemap 要用同一個基底）與頁面清單
+async function collectMenuPages(
+  site: string,
+  limit: number,
+): Promise<{ base: string; pages: PageRef[] }> {
   let host: string;
   try {
     host = new URL(site).host;
   } catch {
-    return [{ url: site, label: '首頁' }];
+    return { base: site, pages: [{ url: site, label: '首頁' }] };
   }
 
   const picked = new Map<string, PageRef>(); // key: 正規化網址（去尾斜線、小寫）
@@ -191,36 +253,99 @@ async function collectImportantPages(site: string, limit: number): Promise<PageR
     else if (!picked.get(key)!.label && name) picked.get(key)!.label = name; // 補上先前缺的頁名
   };
 
-  add(site, '首頁'); // 首頁一定放進去
-
-  try {
-    const res = await fetchWithTimeout(site);
-    if (res.ok) {
-      const root = parse(await res.text());
-
-      // 只抓主選單（header 與 nav）內的連結——這些就是網站的重點頁。
-      // 刻意不掃全頁連結，才不會把首頁列出的一篇篇文章也撈進來。
-      for (const a of root.querySelectorAll('header a, nav a')) {
-        const href = a.getAttribute('href');
-        if (!href) continue;
-        try {
-          add(new URL(href, site).href, a.text); // a.text 就是選單顯示文字
-        } catch {
-          /* 略過無法解析的連結 */
+  // 連結解析基底：有些網站裸網域首頁會轉址到 www，但內頁只有 www 版存在，
+  // 直接用使用者輸入的網址組內頁會 404，所以抓到首頁後改用轉址後的最終網址
+  let base = site;
+  let root: ReturnType<typeof parse> | null = null;
+  // 首頁抓失敗會讓整組蒐集垮掉（拿不到轉址後的 base，後面 sitemap 也會撈錯位置），
+  // 偶發網路失敗值得重試一次
+  for (let attempt = 0; attempt < 2 && !root; attempt++) {
+    try {
+      const res = await fetchWithTimeout(site);
+      if (res.ok) {
+        if (res.url) {
+          base = res.url.replace(/\/+$/, '');
+          host = new URL(base).host; // host 也同步更新，否則 www 連結會被同網域檢查濾掉
         }
+        root = parse(await res.text());
       }
+    } catch {
+      // 再試一次；兩次都失敗就只回傳首頁
     }
-  } catch {
-    // 首頁抓不到就只回傳首頁
   }
 
-  return Array.from(picked.values())
-    .slice(0, limit)
-    .map((p) => ({ url: p.url, label: withBlogPrefix(p.url, p.label ?? '') }));
+  add(base, '首頁'); // 首頁一定放進去（記轉址後的網址）
+
+  if (root) {
+    // 只抓主選單（header 與 nav）內的連結——這些通常是網站的重點頁。
+    // 刻意不掃全頁連結，才不會把首頁列出的一篇篇文章也撈進來。
+    for (const a of root.querySelectorAll('header a, nav a')) {
+      const href = a.getAttribute('href');
+      if (!href) continue;
+      try {
+        add(new URL(href, base).href, a.text); // a.text 就是選單顯示文字
+      } catch {
+        /* 略過無法解析的連結 */
+      }
+    }
+  }
+
+  return {
+    base,
+    pages: Array.from(picked.values())
+      .slice(0, limit)
+      .map((p) => ({ url: p.url, label: withBlogPrefix(p.url, p.label ?? '') })),
+  };
+}
+
+// 蒐集「候選頁」：選單頁（有頁名）＋整份 sitemap 合併、去重、硬規則過濾功能頁。
+// 這裡刻意收得寬，型態判斷與是否收錄交給 AI 分類（lib/tkd-classify.ts）與使用者勾選
+export async function collectCandidates(siteInput: string, limit = 300): Promise<PageRef[]> {
+  const site = normalizeSite(siteInput);
+  const { base, pages } = await collectMenuPages(site, limit);
+
+  // 去重 key：去錨點、小寫、去 locale 前綴（/zh-hant、/en 等）、去尾斜線——順序不能反，
+  // locale 去完可能只剩尾斜線（如 /zh-hant → /），要最後再去尾斜線才會跟首頁 key 相同
+  // （Shopline 的 sitemap 網址帶 /zh-hant/，跟選單抓到的不帶前綴網址其實是同一頁）
+  const keyOf = (u: string) =>
+    u
+      .split('#')[0]
+      .toLowerCase()
+      .replace(/(https?:\/\/[^/]+)\/(zh-hant|zh-tw|zh-cn|en(-us)?|ja|default)(\/|$)/, '$1/')
+      .replace(/\/+$/, '');
+  const picked = new Map<string, PageRef>();
+  for (const p of pages) picked.set(keyOf(p.url), p);
+
+  let baseHost = '';
+  try {
+    baseHost = new URL(base).host;
+  } catch {
+    /* base 一定來自合法網址，理論上不會走到這 */
+  }
+
+  if (picked.size < limit) {
+    // sitemap 用轉址後的 base 抓（裸網域的 sitemap/內頁可能 404）
+    const fromSitemap = await collectFromSitemap(base, limit * 3);
+    for (const u of fromSitemap) {
+      if (picked.size >= limit) break;
+      const clean = u.split('#')[0].replace(/\/+$/, '');
+      if (!isContentLink(clean)) continue;
+      try {
+        if (new URL(clean).host !== baseHost) continue;
+      } catch {
+        continue;
+      }
+      const key = keyOf(clean);
+      // 選單已收過的頁不重複收（保留選單頁名）；sitemap 來的沒頁名，寫入時用 title
+      if (!picked.has(key)) picked.set(key, { url: clean });
+    }
+  }
+
+  return Array.from(picked.values()).slice(0, limit);
 }
 
 // 蒐集客戶網站的頁面網址
-// scope='important'：只抓重點頁（預設）；scope='all'：全站 sitemap
+// scope='important'：候選頁（選單＋sitemap 合併，預設）；scope='all'：全站 sitemap
 export async function collectUrls(
   siteInput: string,
   limit = 100,
@@ -228,8 +353,8 @@ export async function collectUrls(
 ): Promise<PageRef[]> {
   const site = normalizeSite(siteInput);
   if (scope === 'important') {
-    const important = await collectImportantPages(site, limit);
-    if (important.length > 0) return important;
+    const candidates = await collectCandidates(site, limit);
+    if (candidates.length > 0) return candidates;
   }
   // 全站/退路模式沒有選單名，label 留空（寫入時改用網址或標題當顯示文字）
   const fromSitemap = await collectFromSitemap(site, limit);
@@ -248,11 +373,15 @@ export async function fetchPageTkd(page: PageRef): Promise<PageTkd> {
     const html = await res.text();
     const root = parse(html);
 
-    const title = root.querySelector('title')?.text?.trim() ?? '';
-    // meta description / keywords 大小寫不一，逐一嘗試
+    // SPA 網站（如 91APP）的 <title> 是空殼等 JS 填，但 og:title 有完整內容，當退路
+    const ogTitle =
+      root.querySelector('meta[property="og:title"]')?.getAttribute('content')?.trim() ?? '';
+    const title = (root.querySelector('title')?.text?.trim() || ogTitle) ?? '';
+    // meta description / keywords 大小寫不一，逐一嘗試；沒有就退 og:description
     const description =
-      root.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() ??
-      root.querySelector('meta[name="Description"]')?.getAttribute('content')?.trim() ??
+      root.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() ||
+      root.querySelector('meta[name="Description"]')?.getAttribute('content')?.trim() ||
+      root.querySelector('meta[property="og:description"]')?.getAttribute('content')?.trim() ||
       '';
     const keywords =
       root.querySelector('meta[name="keywords"]')?.getAttribute('content')?.trim() ??

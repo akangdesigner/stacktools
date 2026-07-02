@@ -24,25 +24,80 @@ interface TkdResult {
   pages: PageTkd[];
 }
 
+// 第①步 /api/tkd/collect 回傳的候選頁（AI 已判型態與建議勾選）
+interface CandidatePage {
+  url: string;
+  label?: string;
+  type: string;
+  include: boolean;
+}
+
+// 型態分組顯示順序（跟 lib/tkd-classify.ts 的 PAGE_TYPES 一致；client 端不能 import 那支 lib）
+const TYPE_ORDER = ["首頁", "形象頁", "分類頁", "產品頁", "部落格", "促銷", "功能頁", "其他"];
+
+// 網址顯示用：還原中文 slug，失敗就原樣
+function pretty(u: string): string {
+  try {
+    return decodeURI(u);
+  } catch {
+    return u;
+  }
+}
+
 export default function TkdPage() {
   const [siteUrl, setSiteUrl] = useState("");
   const [sheetUrl, setSheetUrl] = useState("");
   const [limit, setLimit] = useState(100);
   const [scope, setScope] = useState<"important" | "all">("important");
-  const [loading, setLoading] = useState(false);
+  const [collecting, setCollecting] = useState(false); // 第①步蒐集中
+  const [generating, setGenerating] = useState(false); // 第②步爬取＋寫入中
   const [error, setError] = useState("");
+  const [candidates, setCandidates] = useState<CandidatePage[] | null>(null);
   const [result, setResult] = useState<TkdResult | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  // 第①步：蒐集候選頁＋AI 分類，列出勾選清單
+  async function handleCollect(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    setCollecting(true);
+    setError("");
+    setCandidates(null);
+    setResult(null);
+    try {
+      const res = await fetch("/api/tkd/collect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteUrl, limit, scope }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "發生錯誤");
+      setCandidates(data.pages as CandidatePage[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCollecting(false);
+    }
+  }
+
+  // 第②步：把勾選的頁面送去爬 TKD＋AI 建議＋寫回登記表
+  async function handleGenerate() {
+    if (!candidates) return;
+    const selected = candidates.filter((p) => p.include);
+    if (selected.length === 0) {
+      setError("至少要勾選一頁");
+      return;
+    }
+    setGenerating(true);
     setError("");
     setResult(null);
     try {
       const res = await fetch("/api/tkd", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteUrl, sheetUrl, limit, scope }),
+        body: JSON.stringify({
+          siteUrl,
+          sheetUrl,
+          pages: selected.map((p) => ({ url: p.url, label: p.label })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
@@ -50,9 +105,31 @@ export default function TkdPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      setGenerating(false);
     }
   }
+
+  // 切換單頁勾選
+  function toggleOne(url: string) {
+    setCandidates((prev) =>
+      prev ? prev.map((p) => (p.url === url ? { ...p, include: !p.include } : p)) : prev,
+    );
+  }
+
+  // 切換整組勾選（全選/全不選）
+  function toggleGroup(type: string, include: boolean) {
+    setCandidates((prev) =>
+      prev ? prev.map((p) => (p.type === type ? { ...p, include } : p)) : prev,
+    );
+  }
+
+  // 依型態分組（保持 TYPE_ORDER 順序，只列有頁的組）
+  const groups = candidates
+    ? TYPE_ORDER.map((type) => ({ type, pages: candidates.filter((p) => p.type === type) })).filter(
+        (g) => g.pages.length > 0,
+      )
+    : [];
+  const selectedCount = candidates ? candidates.filter((p) => p.include).length : 0;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -60,12 +137,12 @@ export default function TkdPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">TKD 現況產生器</h1>
         <p className="text-sm text-gray-500 mt-1">
-          輸入客戶網址與登記表網址 → 自動爬每頁現有 TKD、AI 生成建議 TKD → 一次寫回登記表（現有＋建議）
+          輸入客戶網址 → AI 蒐集並判斷要收錄的頁面 → 勾選確認 → 爬每頁現有 TKD、AI 生成建議 → 一次寫回登記表
         </p>
       </div>
 
-      {/* 表單 */}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* 表單（第①步） */}
+      <form onSubmit={handleCollect} className="space-y-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -79,7 +156,9 @@ export default function TkdPage() {
               required
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
-            <p className="text-xs text-gray-400 mt-1">會優先讀該站的 sitemap.xml；沒有時退回爬首頁內部連結</p>
+            <p className="text-xs text-gray-400 mt-1">
+              會合併主選單與 sitemap（含 robots.txt 宣告位置）蒐集頁面，AI 判斷型態後列出讓你勾選
+            </p>
           </div>
 
           <div>
@@ -110,7 +189,7 @@ export default function TkdPage() {
                     checked={scope === "important"}
                     onChange={() => setScope("important")}
                   />
-                  重點頁（首頁／關於／服務／聯絡／部落格／商品）
+                  重點頁（AI 判斷：首頁／形象頁／分類／產品／部落格總覽）
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
@@ -138,10 +217,10 @@ export default function TkdPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={collecting || generating}
             className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
           >
-            {loading ? "爬取＋AI 生成建議中…（頁數多會跑 1–2 分鐘）" : "開始產生 TKD（現有＋建議）"}
+            {collecting ? "蒐集頁面＋AI 判斷中…" : "① 蒐集頁面"}
           </button>
         </div>
       </form>
@@ -153,7 +232,79 @@ export default function TkdPage() {
         </div>
       )}
 
-      {/* 結果 */}
+      {/* 第①步結果：候選頁勾選清單 */}
+      {candidates && !result && (
+        <div className="mt-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-800">
+                ② 確認要收錄的頁面（已勾 {selectedCount}／共 {candidates.length} 頁）
+              </h2>
+              <p className="text-xs text-gray-400">預設勾選是 AI 的建議，可自行調整</p>
+            </div>
+
+            {groups.map((g) => {
+              const checkedCount = g.pages.filter((p) => p.include).length;
+              return (
+                <div key={g.type} className="border border-gray-100 rounded-lg">
+                  <div className="flex items-center justify-between bg-gray-50 rounded-t-lg px-3 py-2">
+                    <span className="text-xs font-bold text-gray-700">
+                      {g.type}（{checkedCount}／{g.pages.length}）
+                    </span>
+                    <div className="flex gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(g.type, true)}
+                        className="text-orange-500 hover:text-orange-600"
+                      >
+                        全選
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(g.type, false)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        全不選
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                    {g.pages.map((p) => (
+                      <li key={p.url}>
+                        <label className="flex items-start gap-2 px-3 py-1.5 cursor-pointer hover:bg-orange-50">
+                          <input
+                            type="checkbox"
+                            checked={p.include}
+                            onChange={() => toggleOne(p.url)}
+                            className="mt-0.5"
+                          />
+                          <span className="text-xs text-gray-700 min-w-0">
+                            {p.label && <span className="font-medium">{p.label} </span>}
+                            <span className="text-gray-400 break-all">{pretty(p.url)}</span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={generating || selectedCount === 0}
+              className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
+            >
+              {generating
+                ? "爬取＋AI 生成建議中…（頁數多會跑 1–2 分鐘）"
+                : `③ 開始產生 TKD 並寫入登記表（${selectedCount} 頁）`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 第②步結果 */}
       {result && (
         <div className="mt-6 space-y-4">
           <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">

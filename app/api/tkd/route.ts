@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
       limit?: number;
       scope?: 'important' | 'all';
       dryRun?: boolean;
+      // 已在第①步（/api/tkd/collect）勾選好的頁面清單；有帶就直接用，不再重新蒐集
+      pages?: { url: string; label?: string }[];
     };
     const siteUrl = body.siteUrl?.trim();
     const sheetUrl = body.sheetUrl?.trim();
@@ -51,8 +53,11 @@ export async function POST(req: NextRequest) {
     const scope = body.scope === 'all' ? 'all' : 'important';
     const dryRun = body.dryRun === true; // 只抓取預覽、不寫回 sheet
 
-    // 1. 蒐集客戶網站頁面清單（重點頁或全站）
-    const urls = await collectUrls(siteUrl, limit, scope);
+    // 1. 頁面清單：優先用第①步勾選好的清單；沒帶才自己蒐集（相容直接呼叫這支 API 的舊用法）
+    const urls =
+      body.pages && body.pages.length > 0
+        ? body.pages.map((p) => ({ url: p.url, label: p.label }))
+        : await collectUrls(siteUrl, limit, scope);
     if (urls.length === 0) {
       return NextResponse.json(
         { error: '找不到任何頁面，請確認網址是否正確，或該站是否有 sitemap.xml' },
