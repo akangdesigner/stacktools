@@ -124,6 +124,27 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 - 若 H2 過多，合併內容重疊的段落；次要主題下放為 H3。
 
 若有需要調整，請直接輸出校正後的最終架構，不要另外寫分析說明。`,
+
+  review: `你是一位專業的 SEO 文章審稿員，專門審查繁體中文內容行銷文章。每條修改建議只針對一句話，不改整段。
+
+【文字品質】
+・刪除低資訊句：每句必須帶新資訊，不用不同說法重複同一件事
+・禁用「先否定、再肯定」句型：不是A而是B／不只A更是B／不應該A而應該B
+・避免低資訊連接詞開頭：「然而」「換句話說」「這樣」「這件事」「這一點」
+・錯誤做法的提醒順序：先給正確判斷標準，再簡短補充風險；不要先講錯誤
+
+【E-E-A-T】
+・文章中以 [文字](URL) 格式標注的超連結代表已引用來源，審稿時視為具備可查證依據，不需要建議補充來源
+・數據、研究、法規若沒有附超連結，才建議補充來源或改為保守說法
+・術語說明層次清楚：概念 → 判斷依據 → 實作，不可跳過關鍵步驟
+・效果宣稱保守，不得出現「保證」「100%」「一定」等絕對用語
+・可建議補充具體案例、操作情境或參考文獻
+
+【其他】
+・品牌相關宣稱不得超出品牌描述範圍，不捏造成效或數據
+・H3 小節之間不可重複說明相同概念`,
+
+  violation: `你是一位專業的廣告合規審稿員，專門檢查繁體中文內容行銷文章是否使用客戶禁用詞。只挑出明確違規的地方，不要對文字品質、語氣、風格、結構、SEO 等非違規問題提供建議。`,
 };
 
 // ── Prompts ───────────────────────────────────────────────────────────
@@ -232,11 +253,6 @@ function buildSectionPromptByStyle(sec: Section, outlineText: string, style: Pro
 寫法要求：以散文段落寫作為主。若需要條列，格式必須是「**粗體名稱**：一句說明」，不要用普通的 - 條列符號${listTitles.length > 0 ? `（但以下被標記為條列格式的 H3 子節例外，必須改用 "- " 開頭的 Markdown 條列：${listTitles.map(t => `「${t}」`).join('、')}）` : ''}。每一句都要有資訊量，刪掉廢話和沒意義的過場句。若有需要引用文獻、法規、研究數據，自然融入段落並附來源。繁體中文，風格清楚自然。${footer}`;
 }
 
-const QUALITY_RULES = `內容品質規則（每句都要符合）：
-- 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
-- 禁用「先否定再肯定」句型：不是A而是B、不只是A更是B、不應該A而應該B。
-- 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。若該段落的具體指示明確要求改用 "- " 開頭的 Markdown 條列格式，則以該指示為準，不適用本條的粗體項目符號慣例。`;
-
 function buildSystemMessage(sectionOverride: string, brandDescription: string, clientWritingRules: string, writingGuide: string, authorityRefs: SearchResult[] = [], insights: VideoInsight[] = []): string {
   const parts: string[] = [];
   parts.push(`【行為規範 — 最優先執行】
@@ -262,16 +278,18 @@ function buildSystemMessage(sectionOverride: string, brandDescription: string, c
       .join('\n\n');
     parts.push(`【可引用的權威來源】若段落中提到具體數據、研究結論或事實宣稱，請在該句子的關鍵詞上用 Markdown 超連結格式標注來源，例如：[研究指出 8 週後症狀改善](https://...)。引用以下清單中的 URL，若無對應來源請勿捏造連結。\n${refList}`);
   }
-  const guideText = [writingGuide.trim(), QUALITY_RULES].filter(Boolean).join('\n\n');
-  parts.push(`【全域寫作規則】\n${guideText}`);
+  if (writingGuide.trim()) {
+    parts.push(`【全域寫作規則】\n${writingGuide.trim()}`);
+  }
   return parts.join('\n\n');
 }
 
 // 小模型在長對話下會忽略 system message 的風格規則，必須把規則原文重申在最後一則訊息結尾
-function buildPriorityReminder(sectionOverride: string, clientWritingRules: string, authorityRefs: SearchResult[] = [], insights: VideoInsight[] = []): string {
+function buildPriorityReminder(sectionOverride: string, clientWritingRules: string, authorityRefs: SearchResult[] = [], insights: VideoInsight[] = [], writingGuide = ''): string {
   const parts: string[] = [];
-  if (sectionOverride.trim() || clientWritingRules.trim()) {
+  if (sectionOverride.trim() || clientWritingRules.trim() || writingGuide.trim()) {
     parts.push('【寫作規則重申 — 直接輸出，不得提問或列選項】');
+    if (writingGuide.trim()) parts.push(`全域寫作規則：\n${writingGuide.trim()}`);
     if (clientWritingRules.trim()) parts.push(`客戶寫作風格：\n${clientWritingRules.trim()}`);
     if (sectionOverride.trim()) parts.push(`使用者指定寫作規則（盡量融入其精神，難以執行時自行判斷最合理的方式）：\n${sectionOverride.trim()}`);
   }
@@ -292,27 +310,11 @@ function normalizeBoldPunctuation(md: string): string {
 function buildReviewSystemMessage(opts: {
   writingGuide: string; clientWritingRules: string;
   sectionOverride: string; brandDescription: string;
+  reviewOverride?: string; // 個人化的審稿規則（覆蓋 PROMPT_DEFAULTS.review）
 }): string {
   const parts: string[] = [];
 
-  parts.push(`你是一位專業的 SEO 文章審稿員，專門審查繁體中文內容行銷文章。每條修改建議只針對一句話，不改整段。
-
-【文字品質】
-・刪除低資訊句：每句必須帶新資訊，不用不同說法重複同一件事
-・禁用「先否定、再肯定」句型：不是A而是B／不只A更是B／不應該A而應該B
-・避免低資訊連接詞開頭：「然而」「換句話說」「這樣」「這件事」「這一點」
-・錯誤做法的提醒順序：先給正確判斷標準，再簡短補充風險；不要先講錯誤
-
-【E-E-A-T】
-・文章中以 [文字](URL) 格式標注的超連結代表已引用來源，審稿時視為具備可查證依據，不需要建議補充來源
-・數據、研究、法規若沒有附超連結，才建議補充來源或改為保守說法
-・術語說明層次清楚：概念 → 判斷依據 → 實作，不可跳過關鍵步驟
-・效果宣稱保守，不得出現「保證」「100%」「一定」等絕對用語
-・可建議補充具體案例、操作情境或參考文獻
-
-【其他】
-・品牌相關宣稱不得超出品牌描述範圍，不捏造成效或數據
-・H3 小節之間不可重複說明相同概念`);
+  parts.push((opts.reviewOverride ?? '').trim() || PROMPT_DEFAULTS.review);
 
   if (opts.brandDescription.trim())
     parts.push(`【品牌背景資訊 — 宣稱必須在此範圍內】\n${opts.brandDescription.trim()}`);
@@ -323,18 +325,12 @@ function buildReviewSystemMessage(opts: {
   return parts.join('\n\n');
 }
 
-function buildViolationReviewSystemMessage(opts: {
-  clientWritingRules: string; brandDescription: string; bannedWords: string;
-}): string {
-  const parts: string[] = [];
-  parts.push(`你是一位專業的廣告合規審稿員，專門檢查繁體中文內容行銷文章是否違反客戶禁用詞、寫文規範或品牌宣稱範圍。只挑出明確違規的地方，不要對文字品質、語氣、結構、SEO 等非違規問題提供建議。`);
-  if (opts.bannedWords.trim())
-    parts.push(`【禁止使用的詞彙或宣稱 — 文章中若出現以下詞彙、或語意相近的宣稱，一律視為違規】\n${opts.bannedWords.trim()}`);
-  if (opts.clientWritingRules.trim())
-    parts.push(`【寫文規範 — 違反視為違規】\n${opts.clientWritingRules.trim()}`);
-  if (opts.brandDescription.trim())
-    parts.push(`【品牌背景資訊 — 宣稱不得超出此範圍，超出視為違規】\n${opts.brandDescription.trim()}`);
-  return parts.join('\n\n');
+// 違規詞校驗完全依據客戶設定的禁詞清單判斷；客戶沒設定禁詞就不需要檢查（直接跳過）
+function buildViolationReviewSystemMessage(opts: { bannedWords: string; violationOverride?: string }): string {
+  return `${(opts.violationOverride ?? '').trim() || PROMPT_DEFAULTS.violation}
+
+【禁止使用的詞彙或宣稱 — 文章中若出現以下詞彙、或語意相近的宣稱，一律視為違規】
+${opts.bannedWords.trim()}`;
 }
 
 function buildViolationReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
@@ -347,7 +343,7 @@ ${article}
 
 ---
 
-請逐字檢查文章，找出所有違反禁用詞、寫文規範或品牌背景範圍的地方，不可遺漏。若完全沒有違規，請只輸出「整體評分：10/10 — 未發現違規」，不要輸出任何建議區塊。否則請先輸出「整體評分：X/10 — 說明」（依違規嚴重程度與數量評分），再逐條列出違規，每條格式如下：
+請逐字檢查文章，找出所有使用禁用詞（或語意相近宣稱）的地方，不可遺漏。若完全沒有違規，請只輸出「整體評分：10/10 — 未發現違規」，不要輸出任何建議區塊。否則請先輸出「整體評分：X/10 — 說明」（依違規嚴重程度與數量評分），再逐條列出違規，每條格式如下：
 
 ---SUGGESTION---
 SECTION: （問題所在的 H2 段落名稱）
@@ -359,7 +355,7 @@ NEW: （建議替換的安全用詞或調整後的銜接文字，確保替換或
 重要規定（違反則建議無效）：
 1. OLD 只複製真正違規的詞句本身，不要包含不相關的上下文；但若是局部刪除，必須照上面規則把多餘標點、連接詞也納入 OLD 範圍
 2. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
-3. 只挑出真正違規的地方，不要報告文字品質、語氣、結構等非違規問題
+3. 只挑出真正違規的地方，不要報告文字品質、語氣、風格、結構等非違規問題
 4. 局部刪除違規詞時，務必確認刪除/替換後語句通順，不留下多餘或斷裂的標點符號
 5. 繁體中文輸出`;
 }
@@ -726,8 +722,8 @@ function SystemPromptModal({ writingGuide, clientWritingRules, brandDescription,
 
           {/* 4. 全域寫作規則（唯讀） */}
           <div className="px-3 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <p className="text-xs font-semibold text-emerald-700 mb-1.5">④ 全域寫作規則（唯讀，來自全域設定＋內建品質規則）</p>
-            <p className="text-xs text-emerald-900 whitespace-pre-wrap leading-relaxed">{[writingGuide.trim(), QUALITY_RULES].filter(Boolean).join('\n\n')}</p>
+            <p className="text-xs font-semibold text-emerald-700 mb-1.5">④ 全域寫作規則（唯讀，來自設定的全域寫作指引）</p>
+            <p className="text-xs text-emerald-900 whitespace-pre-wrap leading-relaxed">{writingGuide.trim() || '（尚未設定，可至寫手流程工具的「模型與全域寫作規則設定」填寫）'}</p>
           </div>
 
           {/* 完整組合預覽 */}
@@ -1982,7 +1978,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       const usesPerH3Table = sec.h3s.length > 0 && sec.promptStyle === 'info';
       const finalPrompt = (sec.generateTable && !usesPerH3Table
         ? `${basePrompt}\n\n請在段落適當位置加入一個 Markdown 表格，整理此段落的重點資訊或比較項目。${TABLE_WORDCOUNT_REMINDER}`
-        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights);
+        : basePrompt) + buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights, writingGuide);
       const sys = buildSystemMessage(sectionOverride, brandDescription, clientWritingRules, writingGuide, authorityRefs, selectedInsights);
       const sysMsg: Message[] = sys ? [{ role: 'system', content: sys }] : [];
       await streamAPI([
@@ -2029,7 +2025,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
           let replacement = '';
           await streamAPI([
             ...baseMessages,
-            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights)}` },
+            { role: 'user', content: `在「${sec.h2}」段落中，以下是需要修改的段落：\n\n「${quote}」\n\n修改指令：${instruction}\n\n請只輸出修改後的這一段文字，使用與原文相同的 Markdown 格式，不要加標題、說明或其他段落。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights, writingGuide)}` },
           ], chunk => {
             replacement += chunk;
             const partial = currentContent.includes(quote)
@@ -2063,7 +2059,7 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
       try {
         await streamAPI([
           ...baseMessages,
-          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights)}` },
+          { role: 'user', content: `以下是「${sec.h2}」段落的現有內容：\n\n${originalContent}\n\n修改指令：${instruction}\n\n請根據修改指令調整段落內容，保持 Markdown 格式，從 ## 標題開始輸出，只輸出修改後的段落，不要加任何說明或備註。${buildPriorityReminder(sectionOverride, clientWritingRules, authorityRefs, selectedInsights, writingGuide)}` },
         ], chunk => {
           streamed += chunk;
           setSections(prev => prev.map(s => s.id === id ? { ...s, content: streamed } : s));
@@ -2654,20 +2650,25 @@ ${article}
 
 type ReviewMode = 'quality' | 'violation';
 
-function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, onBack }: {
+function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, reviewOverride, violationOverride, onSaveReviewOverride, onSaveViolationOverride, onBack }: {
   title: string; keyword: string;
   sections: Section[];
   writingGuide: string; clientWritingRules: string;
   brandDescription: string; bannedWords: string; sectionOverride: string;
+  reviewOverride: string; violationOverride: string;
+  onSaveReviewOverride: (text: string | null) => void;
+  onSaveViolationOverride: (text: string | null) => void;
   onBack: () => void;
 }) {
-  const [reviewMode, setReviewMode] = useState<ReviewMode>('quality');
+  // 預設違規詞校驗（必要檢查）；AI 內容校稿屬選用功能，有需要的人再手動切換開啟
+  const [reviewMode, setReviewMode] = useState<ReviewMode>('violation');
   const [reviewing, setReviewing] = useState(false);
   const [overallEval, setOverallEval] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState('');
   const [finalScore, setFinalScore] = useState('');
   const [finalScoring, setFinalScoring] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false); // 校稿提示詞公開檢視
   const runIdRef = useRef(0);
 
   const initArticle = sections
@@ -2676,7 +2677,9 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     .join('\n\n');
   const [articleText, setArticleText] = useState(initArticle);
 
-  useEffect(() => { if (articleText.trim()) runReview(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 進入校稿頁自動執行的是違規詞校驗（完全依據客戶禁詞清單，沒設定就直接跳過不檢查）；
+  // AI 內容校稿要手動切換並點「開始校稿」才會跑
+  useEffect(() => { if (articleText.trim() && bannedWords.trim()) runReview(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 切換內容校稿／違規詞校驗模式時，上一個模式留下的總評跟建議要清掉，
   // 否則畫面看起來毫無變化（只有 tab 跟按鈕文字換了），像是切換沒反應
@@ -2688,13 +2691,14 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
 
   async function runReview() {
     if (!articleText.trim()) return;
+    if (reviewMode === 'violation' && !bannedWords.trim()) return; // 沒有客戶禁詞就沒有檢查依據，直接跳過
     const id = ++runIdRef.current;
     setOverallEval(''); setSuggestions([]); setFinalScore(''); setError(''); setReviewing(true);
     let buf = '';
     try {
       const sys = reviewMode === 'violation'
-        ? buildViolationReviewSystemMessage({ clientWritingRules, brandDescription, bannedWords })
-        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
+        ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
+        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
       const prompt = reviewMode === 'violation'
         ? buildViolationReviewPrompt(articleText, { title, keyword })
         : buildReviewPrompt(articleText, { title, keyword });
@@ -2721,8 +2725,8 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     let buf = '';
     try {
       const sys = reviewMode === 'violation'
-        ? buildViolationReviewSystemMessage({ clientWritingRules, brandDescription, bannedWords })
-        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription });
+        ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
+        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
       const prompt = buildFinalScorePrompt(articleText, { title, keyword, initialEval: overallEval });
       await streamAPI([
         { role: 'system', content: sys },
@@ -2767,6 +2771,36 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     // 無 OLD，直接附加 NEW
     setArticleText(prev => prev + (s.new ? '\n\n' + s.new : ''));
     setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
+  }
+
+  // 一鍵採用全部待確認建議：逐條套用在同一份文字上（不能逐一呼叫 applyChange，
+  // 因為 articleText state 在同一輪事件裡不會更新，比對會讀到舊值）
+  function applyAllChanges() {
+    let text = articleText;
+    const updated: Suggestion[] = suggestions.map(s => {
+      if (s.status !== 'pending') return s;
+      if (!s.old) {
+        text += s.new ? '\n\n' + s.new : '';
+        return { ...s, status: 'accepted' as const };
+      }
+      if (text.includes(s.old)) {
+        text = text.replace(s.old, s.new);
+        return { ...s, status: 'accepted' as const };
+      }
+      const escaped = s.old.trim()
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\s+/g, '\\s+');
+      try {
+        const regex = new RegExp(escaped);
+        if (regex.test(text)) {
+          text = text.replace(regex, s.new);
+          return { ...s, status: 'accepted' as const };
+        }
+      } catch { /* 正則無效，當作找不到 */ }
+      return { ...s, status: 'error' as const };
+    });
+    setArticleText(text);
+    setSuggestions(updated);
   }
 
   function jumpToText(text: string, section?: string) {
@@ -2821,14 +2855,18 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
           <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
           <p className="text-xs text-gray-400">{reviewMode === 'violation' ? '違規詞校驗 · 檢查禁詞與品牌宣稱範圍' : 'AI 校稿 · 先看總評，再逐條處理'}</p>
         </div>
+        <button onClick={() => setShowPromptModal(true)}
+          className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors shrink-0">
+          提示詞
+        </button>
         <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 text-xs shrink-0">
-          <button onClick={() => switchReviewMode('quality')} disabled={reviewing || finalScoring}
-            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'quality' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
-            內容校稿
-          </button>
           <button onClick={() => switchReviewMode('violation')} disabled={reviewing || finalScoring}
             className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'violation' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
             違規詞校驗
+          </button>
+          <button onClick={() => switchReviewMode('quality')} disabled={reviewing || finalScoring}
+            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'quality' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+            AI 內容校稿（選用）
           </button>
         </div>
         {suggestions.length > 0 && !reviewing && (
@@ -2836,9 +2874,9 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
             {pendingCount > 0 ? `${pendingCount} 條待確認` : '全部處理完畢 ✓'}
           </span>
         )}
-        <button onClick={runReview} disabled={reviewing || finalScoring || !articleText.trim()}
+        <button onClick={runReview} disabled={reviewing || finalScoring || !articleText.trim() || (reviewMode === 'violation' && !bannedWords.trim())}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 shrink-0">
-          {reviewing && <Spinner />}{reviewing ? (reviewMode === 'violation' ? '檢查中…' : '校稿中…') : (reviewMode === 'violation' ? '開始檢查' : '重新校稿')}
+          {reviewing && <Spinner />}{reviewing ? (reviewMode === 'violation' ? '檢查中…' : '校稿中…') : (reviewMode === 'violation' ? '開始檢查' : (overallEval ? '重新校稿' : '開始校稿'))}
         </button>
       </div>
 
@@ -2888,7 +2926,7 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
                 <div className="shrink-0">
                   {reviewMode === 'violation' && !bannedWords.trim() && !overallEval && !reviewing && (
                     <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2">
-                      這個客戶尚未設定禁詞清單，仍會依寫文規範與品牌描述範圍檢查，但建議先到客戶設定補上禁詞。
+                      這個客戶未設定禁詞清單，沒有檢查依據，已跳過違規詞校驗。若需要禁詞檢查，請先到客戶設定填寫禁詞。
                     </p>
                   )}
                   {reviewing && !overallEval && (
@@ -2921,7 +2959,23 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
                   )}
                   {!reviewing && suggestions.length > 0 && (
                     <>
-                      <p className="text-xs font-medium text-gray-400 px-1">修改建議 · {suggestions.length} 條</p>
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-xs font-medium text-gray-400">修改建議 · {suggestions.length} 條</p>
+                        {pendingCount > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={applyAllChanges}
+                              className="text-xs px-2 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
+                              全部採用
+                            </button>
+                            <button
+                              onClick={() => setSuggestions(prev => prev.map(x => x.status === 'pending' ? { ...x, status: 'rejected' } : x))}
+                              className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors">
+                              全部跳過
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       {suggestions.map(s => (
                         <SuggestionCard
                           key={s.id}
@@ -2937,7 +2991,9 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
                     <p className="text-xs text-gray-400 text-center py-4">{reviewMode === 'violation' ? '未發現違規' : '無具體修改建議'}</p>
                   )}
                   {!reviewing && !overallEval && !error && (
-                    <p className="text-sm text-gray-400 py-8 text-center">點擊「{reviewMode === 'violation' ? '開始檢查' : '重新校稿'}」開始</p>
+                    <p className="text-sm text-gray-400 py-8 text-center">{reviewMode === 'violation'
+                      ? (bannedWords.trim() ? '點擊「開始檢查」開始' : '未設定禁詞，無需檢查，文章可直接使用')
+                      : 'AI 內容校稿為選用功能，需要時點擊「開始校稿」執行'}</p>
                   )}
                 </div>
               </>
@@ -2946,6 +3002,15 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
           </div>
         </div>
       </div>
+
+      {showPromptModal && (
+        <PromptEditModal
+          defaultText={reviewMode === 'violation' ? PROMPT_DEFAULTS.violation : PROMPT_DEFAULTS.review}
+          currentOverride={reviewMode === 'violation' ? violationOverride : reviewOverride}
+          onSave={reviewMode === 'violation' ? onSaveViolationOverride : onSaveReviewOverride}
+          onClose={() => setShowPromptModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -3155,6 +3220,10 @@ function ComposeInner() {
             brandDescription={brandDescription}
             bannedWords={bannedWords}
             sectionOverride={promptOverrides.section ?? ''}
+            reviewOverride={promptOverrides.review ?? ''}
+            violationOverride={promptOverrides.violation ?? ''}
+            onSaveReviewOverride={text => savePromptOverride('review', text)}
+            onSaveViolationOverride={text => savePromptOverride('violation', text)}
             onBack={() => setStage('write')}
           />
         )}
