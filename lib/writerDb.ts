@@ -93,6 +93,12 @@ const SETTING_DEFAULTS: WriterSettings = {
   openrouter_model: 'openai/gpt-4o-mini',
 };
 
+// 全域寫作指引的預設內容：沒填過個人指引的帳號會自動帶入這份，修改後存檔即成為自己的版本
+export const DEFAULT_WRITING_GUIDE = `內容品質規則（每句都要符合）：
+- 每句必須有新資訊或判斷，不重複說法，不加空泛轉場句。
+- 禁用「先否定再肯定」句型：不是A而是B、不只是A更是B、不應該A而應該B。
+- 格式依內容性質：說明型→段落；條件/注意→項目符號（**粗體**：說明）；步驟→編號；比較→表格。若該段落的具體指示明確要求改用 "- " 開頭的 Markdown 條列格式，則以該指示為準，不適用本條的粗體項目符號慣例。`;
+
 // 已退役的 OpenRouter 型號 → 新版對應（舊瀏覽器頁面可能把退役型號存回來）
 const MODEL_ALIASES: Record<string, string> = {
   'anthropic/claude-3.5-sonnet-20241022': 'anthropic/claude-sonnet-4.6',

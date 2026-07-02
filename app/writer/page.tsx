@@ -1155,12 +1155,12 @@ function SettingsModal({ initial, onClose, onSave }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 space-y-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold text-gray-900">設定</h2>
+        <h2 className="text-lg font-semibold text-gray-900">模型與全域寫作規則設定</h2>
 
-        {/* 全域寫作指引 */}
+        {/* 全域寫作指引（個人一份；沒填過的帳號自動帶入預設） */}
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold text-gray-700">全域寫作指引</legend>
-          <p className="text-xs text-gray-400">這份指引會注入到所有 AI 寫作提示詞中，用來規範文章風格、架構與限制。</p>
+          <p className="text-xs text-gray-400">這份指引會注入到所有 AI 寫作提示詞中，用來規範文章風格、架構與限制。沒填過的帳號會自動帶入預設內容，可直接修改後存檔。</p>
           <textarea
             className={`${inputCls} h-32 resize-none leading-relaxed`}
             placeholder={"例：\n・文章風格偏向親切、口語，不要使用過於艱深的詞彙\n・段落字數控制在 200–300 字\n・結尾段落需加入品牌 CTA"}
@@ -1319,7 +1319,7 @@ export default function WriterPage() {
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          設定
+          模型與全域寫作規則設定
         </button>
       </div>
 
