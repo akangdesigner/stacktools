@@ -44,6 +44,44 @@ function pretty(u: string): string {
   }
 }
 
+// 背景任務進度（對應 lib/tkd-jobs.ts 的 TkdJob）
+interface TkdJob {
+  status: "running" | "completed" | "failed";
+  message: string;
+  done: number;
+  total: number;
+  result?: unknown; // 完成後的結果（蒐集與產生兩種任務的形狀不同，由呼叫端斷言）
+  error?: string;
+}
+
+// 安全解析回應：伺服器逾時會回「Bad Gateway」純文字，直接 res.json() 會炸出看不懂的錯
+async function safeJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`伺服器回應異常（HTTP ${res.status}）：${text.slice(0, 100)}`);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// 啟動背景任務後每 3 秒輪詢進度直到完成，回傳任務結果；失敗就丟錯
+// （兩步的 API 都改成「POST 回 jobId → GET ?id= 查進度」，避免長請求被 Zeabur 閘道切斷回 502）
+async function pollJob<T>(endpoint: string, jobId: string, onProgress: (msg: string) => void): Promise<T> {
+  for (;;) {
+    await sleep(3000);
+    const res = await fetch(`${endpoint}?id=${encodeURIComponent(jobId)}`);
+    const job = (await safeJson(res)) as unknown as TkdJob & { error?: string };
+    if (!res.ok) throw new Error(String(job.error || "查詢任務進度失敗"));
+    if (job.status === "failed") throw new Error(job.error || "任務失敗");
+    if (job.status === "completed") return job.result as T;
+    onProgress(job.message || "處理中…");
+  }
+}
+
 export default function TkdPage() {
   const [siteUrl, setSiteUrl] = useState("");
   const [sheetUrl, setSheetUrl] = useState("");
@@ -54,6 +92,8 @@ export default function TkdPage() {
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<CandidatePage[] | null>(null);
   const [extraKeywords, setExtraKeywords] = useState(""); // 指定關鍵字（逗號分隔，全站共用）
+  const [collectProgress, setCollectProgress] = useState(""); // 第①步背景任務的進度訊息
+  const [progress, setProgress] = useState(""); // 第②步背景任務的進度訊息
   const [result, setResult] = useState<TkdResult | null>(null);
 
   // 第①步：蒐集候選頁＋AI 分類，列出勾選清單
@@ -63,23 +103,30 @@ export default function TkdPage() {
     setError("");
     setCandidates(null);
     setResult(null);
+    setCollectProgress("任務啟動中…");
     try {
       const res = await fetch("/api/tkd/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ siteUrl, limit, scope }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "發生錯誤");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(String(data.error || "發生錯誤"));
+      const jobId = String(data.jobId || "");
+      if (!jobId) throw new Error("伺服器沒有回傳任務 id");
+      const collected = await pollJob<{ pages: CandidatePage[] }>(
+        "/api/tkd/collect",
+        jobId,
+        setCollectProgress,
+      );
       // 小積木拍板的預設勾選規則：只勾「有頁名」的（＝主選單抓到的頁），
       // sitemap 撈到的無頁名頁一律不勾，要收哪些由使用者自己點；AI 判斷只拿來分組
-      setCandidates(
-        (data.pages as CandidatePage[]).map((p) => ({ ...p, include: !!p.label })),
-      );
+      setCandidates(collected.pages.map((p) => ({ ...p, include: !!p.label })));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCollecting(false);
+      setCollectProgress("");
     }
   }
 
@@ -94,7 +141,9 @@ export default function TkdPage() {
     setGenerating(true);
     setError("");
     setResult(null);
+    setProgress("任務啟動中…");
     try {
+      // 啟動背景任務（伺服器立刻回 jobId，避免長時間請求被 Zeabur 閘道切斷回 502）
       const res = await fetch("/api/tkd", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -105,13 +154,16 @@ export default function TkdPage() {
           extraKeywords,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "發生錯誤");
-      setResult(data as TkdResult);
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(String(data.error || "發生錯誤"));
+      const jobId = String(data.jobId || "");
+      if (!jobId) throw new Error("伺服器沒有回傳任務 id");
+      setResult(await pollJob<TkdResult>("/api/tkd", jobId, setProgress));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
+      setProgress("");
     }
   }
 
@@ -226,7 +278,7 @@ export default function TkdPage() {
             disabled={collecting || generating}
             className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
           >
-            {collecting ? "蒐集頁面＋AI 判斷中…" : "① 蒐集頁面"}
+            {collecting ? collectProgress || "蒐集頁面＋AI 判斷中…" : "① 蒐集頁面"}
           </button>
         </div>
       </form>
@@ -331,7 +383,7 @@ export default function TkdPage() {
               className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
             >
               {generating
-                ? "爬取＋AI 生成建議中…（頁數多會跑 1–2 分鐘）"
+                ? progress || "處理中…"
                 : `③ 開始產生 TKD 並寫入登記表（${selectedCount} 頁）`}
             </button>
           </div>

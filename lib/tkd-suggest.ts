@@ -33,6 +33,9 @@ async function askOpenRouter(prompt: string, apiKey: string): Promise<string> {
     body: JSON.stringify({
       model: MODEL,
       messages: [{ role: 'user', content: prompt }],
+      // 一定要設上限：不設的話 OpenRouter 會用模型上限 64k 當「最壞情況」預扣額度，
+      // 餘額不足以預扣時每次請求都直接 402 被拒（建議 TKD 全部留空的元兇）
+      max_tokens: 1000,
       temperature: 0.4,
     }),
     signal: AbortSignal.timeout(60000),

@@ -9,8 +9,10 @@ import {
   clearRowsOfSite,
 } from '@/lib/tkd-sheet';
 import { generateSuggestion } from '@/lib/tkd-suggest';
+import { createTkdJob, progressTkdJob, completeTkdJob, failTkdJob, getTkdJob } from '@/lib/tkd-jobs';
 
-// 爬多頁可能較久，放寬這支 route 的執行時間上限
+// 爬多頁會跑很久，改成背景任務：POST 立刻回 jobId，前端用 GET ?id= 輪詢進度，
+// 避免撞 Zeabur 閘道逾時（約 60 秒就回 502 Bad Gateway）
 export const maxDuration = 300;
 
 // 頁數硬上限，避免不小心對超大站台爬爆
@@ -32,6 +34,132 @@ function sheetLink(url: string, text: string): string {
   return `=HYPERLINK("${q(url)}","${q(text || url)}")`;
 }
 
+// 整段爬取＋AI 建議＋寫表的管線（在背景執行，進度寫回任務表）
+async function runPipeline(
+  jobId: string,
+  params: {
+    siteUrl: string;
+    sheetUrl: string;
+    limit: number;
+    scope: 'important' | 'all';
+    dryRun: boolean;
+    extraKeywords: string;
+    pages?: { url: string; label?: string }[];
+  },
+): Promise<void> {
+  const { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords } = params;
+
+  // 1. 頁面清單：優先用第①步勾選好的清單；沒帶才自己蒐集（相容直接呼叫這支 API 的舊用法）
+  const urls =
+    params.pages && params.pages.length > 0
+      ? params.pages.map((p) => ({ url: p.url, label: p.label }))
+      : await collectUrls(siteUrl, limit, scope);
+  if (urls.length === 0) {
+    throw new Error('找不到任何頁面，請確認網址是否正確，或該站是否有 sitemap.xml');
+  }
+
+  // 2. 逐頁抓現有 TKD
+  progressTkdJob(jobId, `爬取 ${urls.length} 頁的現有 TKD 中…`, 0, urls.length);
+  const pages = await fetchAllTkd(urls);
+
+  // 3. 解析登記表：找到分頁與表頭
+  const sheetId = extractSheetId(sheetUrl);
+  const gid = extractGid(sheetUrl);
+  const tabName = await resolveTabName(sheetId, gid);
+  const headers = await readHeaders(sheetId, tabName);
+  if (headers.length === 0) {
+    throw new Error('讀不到登記表表頭，請確認分頁與網址是否正確');
+  }
+
+  // 4. 對應各欄位索引（依表頭關鍵字，容忍空白與大小寫）
+  const idxPage = findCol(headers, (h) => h.includes('頁面') || h.includes('網址') || h.includes('url'));
+  const idxTitle = findCol(headers, (h) => h.includes('現有') && h.includes('title'));
+  const idxDesc = findCol(headers, (h) => h.includes('現有') && h.includes('description'));
+  const idxKw = findCol(headers, (h) => h.includes('現有') && h.includes('keywords'));
+  const idxH1 = findCol(headers, (h) => h.includes('現有') && h.includes('h1'));
+  // 建議欄索引
+  const idxSugT = findCol(headers, (h) => h.includes('建議') && h.includes('title'));
+  const idxSugD = findCol(headers, (h) => h.includes('建議') && h.includes('description'));
+  const idxSugK = findCol(headers, (h) => h.includes('建議') && h.includes('keywords'));
+  const idxSugH = findCol(headers, (h) => h.includes('建議') && h.includes('h1'));
+
+  if (idxPage < 0) {
+    throw new Error('登記表找不到「頁面」欄位，無法寫回，請確認表頭');
+  }
+
+  // 5. 逐頁組列：現有欄直接填；非預覽時再逐頁「依序」呼叫 AI 生成建議欄（不可並行，並行會被截短）
+  const rows: string[][] = [];
+  let suggested = 0;
+  let doneCount = 0;
+  for (const p of pages) {
+    const row = new Array(headers.length).fill('');
+    // 頁面欄寫成「選單名＋超連結」；沒有選單名（全站模式）就用可讀網址當顯示文字
+    row[idxPage] = sheetLink(p.url, p.label || prettyUrl(p.url));
+    if (idxTitle >= 0) row[idxTitle] = p.title;
+    if (idxDesc >= 0) row[idxDesc] = p.description;
+    if (idxKw >= 0) row[idxKw] = p.keywords;
+    if (idxH1 >= 0) row[idxH1] = p.h1;
+    if (!dryRun) {
+      progressTkdJob(jobId, `AI 生成建議中（${doneCount + 1}／${pages.length} 頁）`, doneCount, pages.length);
+      try {
+        const sug = await generateSuggestion({
+          url: p.url,
+          label: p.label,
+          title: p.title,
+          description: p.description,
+          keywords: p.keywords,
+          h1: p.h1,
+          content: p.content,
+          extraKeywords: extraKeywords || undefined,
+        });
+        if (idxSugT >= 0) row[idxSugT] = sug.title;
+        if (idxSugD >= 0) row[idxSugD] = sug.description;
+        if (idxSugK >= 0) row[idxSugK] = sug.keywords;
+        if (idxSugH >= 0) row[idxSugH] = sug.h1;
+        suggested++;
+      } catch {
+        // 建議生成失敗就留空，不影響現有欄寫入
+      }
+    }
+    doneCount++;
+    rows.push(row);
+  }
+
+  // 寫入前先清掉這個登記表裡「同一網站」的舊列，避免重跑時重複疊加
+  let cleared = 0;
+  if (!dryRun) {
+    progressTkdJob(jobId, '寫入登記表中…', pages.length, pages.length);
+    const host = (() => {
+      try { return new URL(normalizeSite(siteUrl)).host; } catch { return ''; }
+    })();
+    cleared = await clearRowsOfSite(sheetId, tabName, idxPage, host);
+    await appendRows(sheetId, tabName, rows);
+  }
+
+  completeTkdJob(
+    jobId,
+    {
+      ok: true,
+      dryRun,
+      tabName,
+      cleared,
+      pageCount: urls.length,
+      wroteCount: dryRun ? 0 : rows.length,
+      suggested: dryRun ? 0 : suggested,
+      matched: {
+        頁面: idxPage >= 0,
+        現有title: idxTitle >= 0,
+        現有description: idxDesc >= 0,
+        現有keywords: idxKw >= 0,
+        現有H1: idxH1 >= 0,
+      },
+      pages: pages.map((p) => ({ ...p, url: prettyUrl(p.url) })),
+    },
+    `已完成，共寫入 ${dryRun ? 0 : rows.length} 列`,
+  );
+}
+
+// 啟動任務：驗證參數後立刻回 jobId，管線丟到背景跑
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
@@ -61,115 +189,22 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join(', ');
 
-    // 1. 頁面清單：優先用第①步勾選好的清單；沒帶才自己蒐集（相容直接呼叫這支 API 的舊用法）
-    const urls =
-      body.pages && body.pages.length > 0
-        ? body.pages.map((p) => ({ url: p.url, label: p.label }))
-        : await collectUrls(siteUrl, limit, scope);
-    if (urls.length === 0) {
-      return NextResponse.json(
-        { error: '找不到任何頁面，請確認網址是否正確，或該站是否有 sitemap.xml' },
-        { status: 400 },
-      );
-    }
+    const job = createTkdJob('準備頁面清單中…');
+    // 刻意不 await：讓管線在背景跑完，進度與結果都寫回任務表
+    runPipeline(job.id, { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, pages: body.pages })
+      .catch((e) => failTkdJob(job.id, e instanceof Error ? e.message : String(e)));
 
-    // 2. 逐頁抓現有 TKD
-    const pages = await fetchAllTkd(urls);
-
-    // 3. 解析登記表：找到分頁與表頭
-    const sheetId = extractSheetId(sheetUrl);
-    const gid = extractGid(sheetUrl);
-    const tabName = await resolveTabName(sheetId, gid);
-    const headers = await readHeaders(sheetId, tabName);
-    if (headers.length === 0) {
-      return NextResponse.json(
-        { error: '讀不到登記表表頭，請確認分頁與網址是否正確' },
-        { status: 400 },
-      );
-    }
-
-    // 4. 對應各欄位索引（依表頭關鍵字，容忍空白與大小寫）
-    const idxPage = findCol(headers, (h) => h.includes('頁面') || h.includes('網址') || h.includes('url'));
-    const idxTitle = findCol(headers, (h) => h.includes('現有') && h.includes('title'));
-    const idxDesc = findCol(headers, (h) => h.includes('現有') && h.includes('description'));
-    const idxKw = findCol(headers, (h) => h.includes('現有') && h.includes('keywords'));
-    const idxH1 = findCol(headers, (h) => h.includes('現有') && h.includes('h1'));
-    // 建議欄索引
-    const idxSugT = findCol(headers, (h) => h.includes('建議') && h.includes('title'));
-    const idxSugD = findCol(headers, (h) => h.includes('建議') && h.includes('description'));
-    const idxSugK = findCol(headers, (h) => h.includes('建議') && h.includes('keywords'));
-    const idxSugH = findCol(headers, (h) => h.includes('建議') && h.includes('h1'));
-
-    if (idxPage < 0) {
-      return NextResponse.json(
-        { error: '登記表找不到「頁面」欄位，無法寫回，請確認表頭' },
-        { status: 400 },
-      );
-    }
-
-    // 5. 逐頁組列：現有欄直接填；非預覽時再逐頁「依序」呼叫 AI 生成建議欄（不可並行，並行會被截短）
-    const rows: string[][] = [];
-    let suggested = 0;
-    for (const p of pages) {
-      const row = new Array(headers.length).fill('');
-      // 頁面欄寫成「選單名＋超連結」；沒有選單名（全站模式）就用可讀網址當顯示文字
-      row[idxPage] = sheetLink(p.url, p.label || prettyUrl(p.url));
-      if (idxTitle >= 0) row[idxTitle] = p.title;
-      if (idxDesc >= 0) row[idxDesc] = p.description;
-      if (idxKw >= 0) row[idxKw] = p.keywords;
-      if (idxH1 >= 0) row[idxH1] = p.h1;
-      if (!dryRun) {
-        try {
-          const sug = await generateSuggestion({
-            url: p.url,
-            label: p.label,
-            title: p.title,
-            description: p.description,
-            keywords: p.keywords,
-            h1: p.h1,
-            content: p.content,
-            extraKeywords: extraKeywords || undefined,
-          });
-          if (idxSugT >= 0) row[idxSugT] = sug.title;
-          if (idxSugD >= 0) row[idxSugD] = sug.description;
-          if (idxSugK >= 0) row[idxSugK] = sug.keywords;
-          if (idxSugH >= 0) row[idxSugH] = sug.h1;
-          suggested++;
-        } catch {
-          // 建議生成失敗就留空，不影響現有欄寫入
-        }
-      }
-      rows.push(row);
-    }
-
-    // 寫入前先清掉這個登記表裡「同一網站」的舊列，避免重跑時重複疊加
-    let cleared = 0;
-    if (!dryRun) {
-      const host = (() => {
-        try { return new URL(normalizeSite(siteUrl)).host; } catch { return ''; }
-      })();
-      cleared = await clearRowsOfSite(sheetId, tabName, idxPage, host);
-      await appendRows(sheetId, tabName, rows);
-    }
-
-    return NextResponse.json({
-      ok: true,
-      dryRun,
-      tabName,
-      cleared,
-      pageCount: urls.length,
-      wroteCount: dryRun ? 0 : rows.length,
-      suggested: dryRun ? 0 : suggested,
-      matched: {
-        頁面: idxPage >= 0,
-        現有title: idxTitle >= 0,
-        現有description: idxDesc >= 0,
-        現有keywords: idxKw >= 0,
-        現有H1: idxH1 >= 0,
-      },
-      pages: pages.map((p) => ({ ...p, url: prettyUrl(p.url) })),
-    });
+    return NextResponse.json({ ok: true, jobId: job.id });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
+}
+
+// 查詢任務進度／結果
+export async function GET(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get('id');
+  if (!id) return NextResponse.json({ error: '缺少任務 id' }, { status: 400 });
+  const job = getTkdJob(id);
+  if (!job) return NextResponse.json({ error: '找不到這個任務（可能已過期，請重新執行）' }, { status: 404 });
+  return NextResponse.json(job);
 }
