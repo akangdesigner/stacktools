@@ -70,7 +70,11 @@ export default function TkdPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
-      setCandidates(data.pages as CandidatePage[]);
+      // 小積木拍板的預設勾選規則：只勾「有頁名」的（＝主選單抓到的頁），
+      // sitemap 撈到的無頁名頁一律不勾，要收哪些由使用者自己點；AI 判斷只拿來分組
+      setCandidates(
+        (data.pages as CandidatePage[]).map((p) => ({ ...p, include: !!p.label })),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -240,7 +244,9 @@ export default function TkdPage() {
               <h2 className="text-sm font-bold text-gray-800">
                 ② 確認要收錄的頁面（已勾 {selectedCount}／共 {candidates.length} 頁）
               </h2>
-              <p className="text-xs text-gray-400">預設勾選是 AI 的建議，可自行調整</p>
+              <p className="text-xs text-gray-400">
+                預設只勾主選單頁（有粗體頁名的），其餘請自行勾選；點網址可開新分頁確認
+              </p>
             </div>
 
             {groups.map((g) => {
@@ -280,7 +286,16 @@ export default function TkdPage() {
                           />
                           <span className="text-xs text-gray-700 min-w-0">
                             {p.label && <span className="font-medium">{p.label} </span>}
-                            <span className="text-gray-400 break-all">{pretty(p.url)}</span>
+                            {/* 點網址開新分頁確認內容；stopPropagation 避免點連結時順便切到勾選 */}
+                            <a
+                              href={p.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-gray-400 break-all hover:text-orange-500 hover:underline"
+                            >
+                              {pretty(p.url)}
+                            </a>
                           </span>
                         </label>
                       </li>
