@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { collectCandidates, collectUrls, normalizeSite } from '@/lib/tkd-crawler';
+import { collectCandidates, collectUrls, filterOutNoindex, normalizeSite } from '@/lib/tkd-crawler';
 import { classifyPages, classifyByRules } from '@/lib/tkd-classify';
 
 // 第①步：蒐集候選頁面＋AI 判斷型態與是否收錄，回傳清單讓使用者勾選。
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
-      const pages = classifyByRules(urls, site).map((p) => ({ ...p, include: true }));
+      const kept = await filterOutNoindex(urls); // noindex 頁直接不列（客戶不給收錄的頁不進登記表）
+      const pages = classifyByRules(kept, site).map((p) => ({ ...p, include: true }));
       return NextResponse.json({ ok: true, scope, pageCount: pages.length, pages });
     }
 
@@ -46,7 +47,15 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const pages = await classifyPages(candidates, site);
+    // noindex 頁在 AI 分類前就濾掉：清單乾淨、也省下分類的頁數
+    const kept = await filterOutNoindex(candidates);
+    if (kept.length === 0) {
+      return NextResponse.json(
+        { error: '蒐集到的頁面全是 noindex，沒有可收錄的頁' },
+        { status: 400 },
+      );
+    }
+    const pages = await classifyPages(kept, site);
     return NextResponse.json({ ok: true, scope, pageCount: pages.length, pages });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

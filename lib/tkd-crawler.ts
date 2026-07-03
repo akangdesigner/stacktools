@@ -345,6 +345,40 @@ export async function collectCandidates(siteInput: string, limit = 300): Promise
   return Array.from(picked.values()).slice(0, limit);
 }
 
+// 檢查單頁是否 noindex（meta robots／googlebot 標籤或 X-Robots-Tag 回應標頭）。
+// 抓取失敗（網路錯誤、非 200）不視為 noindex——寧可保留讓使用者看到，第②步爬的時候會回報錯誤
+async function isNoindex(url: string): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return false;
+    if (/noindex/i.test(res.headers.get('x-robots-tag') ?? '')) return true;
+    const root = parse(await res.text());
+    for (const m of root.querySelectorAll('meta')) {
+      const name = (m.getAttribute('name') ?? '').toLowerCase();
+      if (name !== 'robots' && name !== 'googlebot') continue;
+      if (/noindex/i.test(m.getAttribute('content') ?? '')) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// 濾掉 noindex 頁（小積木拍板：客戶自己都不給搜尋引擎收的頁，放進登記表沒意義）。
+// 以並發池逐頁檢查，蒐集階段會因此多花一點時間，但勾選清單從源頭就乾淨
+export async function filterOutNoindex(pages: PageRef[], concurrency = 8): Promise<PageRef[]> {
+  const flags: boolean[] = new Array(pages.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < pages.length) {
+      const i = cursor++;
+      flags[i] = await isNoindex(pages[i].url);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, pages.length) }, () => worker()));
+  return pages.filter((_, i) => !flags[i]);
+}
+
 // 蒐集客戶網站的頁面網址
 // scope='important'：候選頁（選單＋sitemap 合併，預設）；scope='all'：全站 sitemap
 export async function collectUrls(
