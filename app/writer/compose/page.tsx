@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, Suspense, type Dispatch, type SetStateAction } from 'react';
+import { useState, useRef, useEffect, useMemo, Suspense, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'next/navigation';
 import RichEditor from '@/components/writer/RichEditor';
 import SectionBlockEditor from '@/components/writer/SectionBlockEditor';
@@ -1077,8 +1077,17 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
   const analyzeMsg = useRef('');
 
   useEffect(() => {
-    fetch('/api/gsc/clients').then(r => r.json()).then((list: GscClientOption[]) => {
-      setGscClients(list.filter(c => c.name));
+    // 只列出「客戶設定」有填任一欄資料（品牌網址／品牌描述／寫文規範／禁詞）的客戶
+    Promise.all([
+      fetch('/api/gsc/clients').then(r => r.json()) as Promise<GscClientOption[]>,
+      fetch('/api/writer/brand-profile').then(r => r.json()) as Promise<BrandProfileOption[]>,
+    ]).then(([list, profiles]) => {
+      const hasData = new Set(
+        profiles
+          .filter(p => (p.brand_url ?? '').trim() || (p.brand_description ?? '').trim() || (p.writing_rules ?? '').trim() || (p.banned_words ?? '').trim())
+          .map(p => p.gsc_client_id)
+      );
+      setGscClients(list.filter(c => c.name && hasData.has(c.id)));
     }).catch(() => {});
   }, []);
 
@@ -1151,9 +1160,6 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
             <option value="">── 不選擇（手動輸入）──</option>
             {gscClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          {selectedClientId && !brandDescription && (
-            <p className="mt-1 text-xs text-gray-400">此客戶尚未填寫品牌描述，可至 <a href="/writer#clients" className="underline text-blue-500">客戶設定</a> 新增。</p>
-          )}
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">
@@ -1443,6 +1449,14 @@ function OutlineQuoteInput({ outline, quotes, setQuotes, value, onChange, placeh
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const items = getOutlineItems(outline);
+  // 貼回大段內容（例如 GPT 的審稿想法）時輸入框自動長高，最高 360px 後改框內捲動
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight + 2, 360)}px`;
+  }, [value]);
   const a = accent === 'blue'
     ? { chip: 'bg-blue-50 border-blue-200', text: 'text-blue-700', at: 'text-blue-400', ring: 'focus:ring-blue-300', border: 'border-blue-200' }
     : { chip: 'bg-green-50 border-green-200', text: 'text-green-700', at: 'text-green-400', ring: 'focus:ring-green-300', border: 'border-green-200' };
@@ -1474,11 +1488,12 @@ function OutlineQuoteInput({ outline, quotes, setQuotes, value, onChange, placeh
           </div>
         )}
         <textarea
+          ref={taRef}
           value={value}
           onChange={e => { const v = e.target.value; onChange(v); setMenuOpen(/@\s*$/.test(v)); }}
           placeholder={placeholder}
           rows={3}
-          className={`w-full border ${a.border} rounded-lg px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-2 ${a.ring}`}
+          className={`w-full border ${a.border} rounded-lg px-2 py-1.5 text-sm leading-relaxed resize-none overflow-y-auto focus:outline-none focus:ring-2 ${a.ring}`}
         />
       </div>
     </div>
@@ -1555,52 +1570,101 @@ function OutlineEditor({ value, onChange }: { value: string; onChange: (v: strin
 
 // Gemini 修改架構的對照：以 H2/H3 標題行為單位做 LCS diff，
 // 用跟 OutlineEditor 相同的徽章視覺呈現（寫手看的是標題列表，不是原始 Markdown）
-function OutlineDiffView({ oldText, newText }: { oldText: string; newText: string }) {
-  type Row = { type: 'same' | 'add' | 'del'; level: 'h2' | 'h3'; text: string };
+function OutlineDiffView({ oldText, newText, onAdopt, onDiscard }: {
+  oldText: string; newText: string;
+  onAdopt: (finalOutline: string) => void;   // 依勾選結果組出的最終架構
+  onDiscard: () => void;
+}) {
+  type Row = { type: 'same' | 'add' | 'del'; level: 'h2' | 'h3'; text: string; line: string };
 
-  const toLines = (t: string) => t.split('\n').map(l => l.trim()).filter(l => /^##/.test(l));
-  const a = toLines(oldText), b = toLines(newText);
+  // line 保留原始標題行（含 ## 前綴），採用時直接拿來組回架構文字
+  const rows = useMemo<Row[]>(() => {
+    const toLines = (t: string) => t.split('\n').map(l => l.trim()).filter(l => /^##/.test(l));
+    const a = toLines(oldText), b = toLines(newText);
 
-  // LCS 對齊新舊標題行（架構行數少，O(n²) 沒問題）；被改名的標題會呈現成一刪一增
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0) as number[]);
-  for (let i = m - 1; i >= 0; i--)
-    for (let j = n - 1; j >= 0; j--)
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    // LCS 對齊新舊標題行（架構行數少，O(n²) 沒問題）；被改名的標題會呈現成一刪一增
+    const m = a.length, n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0) as number[]);
+    for (let i = m - 1; i >= 0; i--)
+      for (let j = n - 1; j >= 0; j--)
+        dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
 
-  const parseLine = (l: string): { level: 'h2' | 'h3'; text: string } =>
-    l.startsWith('###') ? { level: 'h3', text: l.replace(/^###\s*/, '') } : { level: 'h2', text: l.replace(/^##\s*/, '') };
+    const parseLine = (l: string): { level: 'h2' | 'h3'; text: string; line: string } =>
+      l.startsWith('###') ? { level: 'h3', text: l.replace(/^###\s*/, ''), line: l } : { level: 'h2', text: l.replace(/^##\s*/, ''), line: l };
 
-  const rows: Row[] = [];
-  let i = 0, j = 0;
-  while (i < m && j < n) {
-    if (a[i] === b[j]) { rows.push({ type: 'same', ...parseLine(a[i]) }); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { rows.push({ type: 'del', ...parseLine(a[i]) }); i++; }
-    else { rows.push({ type: 'add', ...parseLine(b[j]) }); j++; }
+    const out: Row[] = [];
+    let i = 0, j = 0;
+    while (i < m && j < n) {
+      if (a[i] === b[j]) { out.push({ type: 'same', ...parseLine(a[i]) }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ type: 'del', ...parseLine(a[i]) }); i++; }
+      else { out.push({ type: 'add', ...parseLine(b[j]) }); j++; }
+    }
+    while (i < m) { out.push({ type: 'del', ...parseLine(a[i]) }); i++; }
+    while (j < n) { out.push({ type: 'add', ...parseLine(b[j]) }); j++; }
+    return out;
+  }, [oldText, newText]);
+
+  // 每一條調整可個別勾選要不要採用（預設全勾）；沒勾的新增不會加入、沒勾的刪除會保留原標題
+  const [checked, setChecked] = useState<boolean[]>(() => rows.map(() => true));
+
+  const changeIdxs = rows.map((r, i) => r.type !== 'same' ? i : -1).filter(i => i >= 0);
+  const checkedCount = changeIdxs.filter(i => checked[i]).length;
+
+  function adopt() {
+    const lines: string[] = [];
+    rows.forEach((r, i) => {
+      if (r.type === 'same') lines.push(r.line);
+      else if (r.type === 'add' && checked[i]) lines.push(r.line);
+      else if (r.type === 'del' && !checked[i]) lines.push(r.line);
+    });
+    // H2 之間補空行，維持跟 AI 產出相同的排版
+    onAdopt(lines.map((l, i) => (i > 0 && !l.startsWith('###') ? `\n${l}` : l)).join('\n'));
   }
-  while (i < m) { rows.push({ type: 'del', ...parseLine(a[i]) }); i++; }
-  while (j < n) { rows.push({ type: 'add', ...parseLine(b[j]) }); j++; }
 
   return (
-    <div className="space-y-1 px-4 py-4 border border-blue-200 rounded-xl bg-white max-h-96 overflow-y-auto">
-      {rows.map((r, idx) => (
-        <div key={idx}
-          className={`flex items-center gap-2 rounded-lg px-1.5 py-1 ${r.level === 'h3' ? 'ml-6' : ''} ${
-            r.type === 'add' ? 'bg-green-50' : r.type === 'del' ? 'bg-red-50' : ''
-          }`}>
-          <span className={`px-1.5 py-0.5 text-xs font-bold rounded shrink-0 ${r.level === 'h2' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-            {r.level.toUpperCase()}
-          </span>
-          <span className={`flex-1 ${r.level === 'h3' ? 'text-xs' : 'text-sm'} ${
-            r.type === 'add' ? 'text-green-700 font-medium' : r.type === 'del' ? 'text-red-500 line-through' : r.level === 'h3' ? 'text-gray-600' : 'text-gray-800'
-          }`}>
-            {r.text}
-          </span>
-          {r.type === 'add' && <span className="text-[10px] text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full shrink-0">新增</span>}
-          {r.type === 'del' && <span className="text-[10px] text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full shrink-0">刪除</span>}
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="space-y-1 px-4 py-4 border border-blue-200 rounded-xl bg-white max-h-96 overflow-y-auto">
+        {rows.map((r, idx) => (
+          <div key={idx}
+            className={`flex items-center gap-2 rounded-lg px-1.5 py-1 ${r.level === 'h3' ? 'ml-6' : ''} ${
+              r.type === 'add' ? 'bg-green-50' : r.type === 'del' ? 'bg-red-50' : ''
+            }`}>
+            {r.type !== 'same' ? (
+              <input type="checkbox" checked={checked[idx]}
+                onChange={e => setChecked(cs => cs.map((c, i) => i === idx ? e.target.checked : c))}
+                className="w-3.5 h-3.5 accent-blue-600 shrink-0 cursor-pointer" />
+            ) : (
+              <span className="w-3.5 shrink-0" />
+            )}
+            <span className={`px-1.5 py-0.5 text-xs font-bold rounded shrink-0 ${r.level === 'h2' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+              {r.level.toUpperCase()}
+            </span>
+            <span className={`flex-1 ${r.level === 'h3' ? 'text-xs' : 'text-sm'} ${
+              r.type === 'add'
+                ? (checked[idx] ? 'text-green-700 font-medium' : 'text-gray-400 line-through')   // 沒勾的新增＝不會加入
+                : r.type === 'del'
+                ? (checked[idx] ? 'text-red-500 line-through' : 'text-gray-700')                 // 沒勾的刪除＝保留原標題
+                : r.level === 'h3' ? 'text-gray-600' : 'text-gray-800'
+            }`}>
+              {r.text}
+            </span>
+            {r.type === 'add' && <span className="text-[10px] text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full shrink-0">{checked[idx] ? '新增' : '不新增'}</span>}
+            {r.type === 'del' && <span className="text-[10px] text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full shrink-0">{checked[idx] ? '刪除' : '保留'}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2 pt-1">
+        <button onClick={adopt}
+          className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+          採用勾選的調整
+        </button>
+        <button onClick={onDiscard}
+          className="px-4 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 transition-colors">
+          放棄
+        </button>
+        <span className="text-xs text-gray-400">已勾選 {checkedCount} / {changeIdxs.length} 項調整</span>
+      </div>
+    </>
   );
 }
 
@@ -1740,10 +1804,9 @@ ${outlineInstruction.trim()}
     finally { if (runId.current === id) setOutlining(false); }
   }
 
-  // 採用 Gemini 調整後的新架構（覆蓋目錄編輯框，並強制編輯器重新掛載以顯示新值）
-  function handleAdoptOutline() {
-    if (!suggestedOutline) return;
-    setOutline(suggestedOutline);
+  // 採用 Gemini 調整後的新架構（依勾選結果組出最終架構，覆蓋目錄編輯框，並強制編輯器重新掛載以顯示新值）
+  function handleAdoptOutline(finalOutline: string) {
+    setOutline(finalOutline);
     setEditorKey(k => k + 1);
     setSuggestedOutline(null);
     setGeminiNote(c => (c ? `${c}（已採用 ✅）` : '已採用 ✅'));
@@ -1888,54 +1951,19 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
       {outline && !outlining && (
         <div className="space-y-1.5">
           {suggestedOutline ? (
-            /* Gemini 修改後：綠增紅刪對照直接顯示在架構本身的位置，採用後才回到可編輯狀態 */
+            /* Gemini 修改後：綠增紅刪對照直接顯示在架構本身的位置，可逐條勾選要採用哪些，採用後才回到可編輯狀態 */
             <>
               <label className="text-xs font-medium text-gray-600">
-                文章架構（<span className="text-green-700">綠＝新增</span>、<span className="text-red-600">紅＝刪除</span>，採用後可編輯）
+                文章架構（<span className="text-green-700">綠＝新增</span>、<span className="text-red-600">紅＝刪除</span>，取消勾選＝該條維持原樣，採用後可編輯）
               </label>
-              <OutlineDiffView oldText={outline} newText={suggestedOutline} />
-              <div className="flex gap-2 pt-1">
-                <button onClick={handleAdoptOutline}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
-                  採用這份架構
-                </button>
-                <button onClick={() => setSuggestedOutline(null)}
-                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 transition-colors">
-                  放棄
-                </button>
-              </div>
+              <OutlineDiffView key={suggestedOutline} oldText={outline} newText={suggestedOutline}
+                onAdopt={handleAdoptOutline} onDiscard={() => setSuggestedOutline(null)} />
             </>
           ) : (
             <>
               <label className="text-xs font-medium text-gray-600">文章架構（可直接編輯）</label>
               <OutlineEditor key={editorKey} value={outline} onChange={setOutline} />
             </>
-          )}
-        </div>
-      )}
-
-      {/* GPT 架構審稿：只列出調整想法，參考後可複製貼回左邊 Gemini 需求欄重新出稿 */}
-      {(reviewing || outlineEval) && (
-        <div className="space-y-2.5 border-t border-gray-100 pt-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
-            <OpenAILogo className="w-4 h-4" /> GPT 架構審稿{reviewing && <Spinner />}
-          </div>
-          {outlineEval && (
-            <p className="text-sm text-gray-600 bg-green-50 rounded-lg px-3 py-2 whitespace-pre-wrap leading-relaxed">{outlineEval}</p>
-          )}
-          {outlineEval && !reviewing && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(outlineEval);
-                  setEvalCopied(true);
-                  setTimeout(() => setEvalCopied(false), 1500);
-                }}
-                className="px-4 py-2 rounded-xl border border-green-200 text-green-700 text-sm hover:bg-green-50 transition-colors">
-                {evalCopied ? '已複製 ✓' : '複製想法'}
-              </button>
-              <p className="text-xs text-gray-400">參考想法後，貼到左邊 Gemini 的需求欄再按「修改架構」。</p>
-            </div>
           )}
         </div>
       )}
@@ -1957,7 +1985,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
           {reviewing
             ? '讓我從架構看看…🤔'
             : outlineEval
-              ? '想法列在中間了，參考後可以貼回給 Gemini 調整 👇'
+              ? '想法列在下面了，參考後可以貼回給 Gemini 調整 👇'
               : GPT_IDLE_LINE}
           <div className="absolute -bottom-2 right-8 w-3 h-3 bg-green-50 border-b border-r border-green-200 rotate-45" />
         </div>
@@ -1994,7 +2022,33 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         >
           <EditIcon />審稿提示詞
         </button>
-        <p className="text-[10px] text-gray-400 text-center">審稿建議會出現在中間目錄下方</p>
+        {/* GPT 架構審稿想法：列在自己欄位下方，參考後可複製貼回左邊 Gemini 需求欄重新出稿 */}
+        {(reviewing || outlineEval) ? (
+          <div className="w-full space-y-2 border-t border-gray-100 pt-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-green-700">
+              <OpenAILogo className="w-3.5 h-3.5" /> GPT 架構審稿{reviewing && <Spinner />}
+            </div>
+            {outlineEval && (
+              <p className="text-xs text-gray-600 bg-green-50 rounded-lg px-2.5 py-2 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">{outlineEval}</p>
+            )}
+            {outlineEval && !reviewing && (
+              <>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(outlineEval);
+                    setEvalCopied(true);
+                    setTimeout(() => setEvalCopied(false), 1500);
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg border border-green-200 text-green-700 text-xs hover:bg-green-50 transition-colors">
+                  {evalCopied ? '已複製 ✓' : '複製想法'}
+                </button>
+                <p className="text-[10px] text-gray-400">參考想法後，貼到左邊 Gemini 的需求欄再按「修改架構」。</p>
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="text-[10px] text-gray-400 text-center">審稿建議會出現在這下面</p>
+        )}
       </aside>
     </div>
   );
