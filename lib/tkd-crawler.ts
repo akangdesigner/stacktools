@@ -304,12 +304,13 @@ export async function collectCandidates(siteInput: string, limit = 300): Promise
   const site = normalizeSite(siteInput);
   const { base, pages } = await collectMenuPages(site, limit);
 
-  // 去重 key：去錨點、小寫、去 locale 前綴（/zh-hant、/en 等）、去尾斜線——順序不能反，
+  // 去重 key：先統一編碼（選單連結經 new URL() 會把中文轉成 %E3%80%90...，
+  // sitemap 來的是原始中文字，不先 decode 兩邊 key 對不上、同一頁會重複收），
+  // 再去錨點、小寫、去 locale 前綴（/zh-hant、/en 等）、去尾斜線——順序不能反，
   // locale 去完可能只剩尾斜線（如 /zh-hant → /），要最後再去尾斜線才會跟首頁 key 相同
   // （Shopline 的 sitemap 網址帶 /zh-hant/，跟選單抓到的不帶前綴網址其實是同一頁）
   const keyOf = (u: string) =>
-    u
-      .split('#')[0]
+    prettyUrl(u.split('#')[0])
       .toLowerCase()
       .replace(/(https?:\/\/[^/]+)\/(zh-hant|zh-tw|zh-cn|en(-us)?|ja|default)(\/|$)/, '$1/')
       .replace(/\/+$/, '');
