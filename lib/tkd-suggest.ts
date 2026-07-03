@@ -10,6 +10,7 @@ export type SuggestInput = {
   keywords: string;
   h1: string;
   content?: string;
+  extraKeywords?: string; // 使用者指定要納入建議 TKD 的關鍵字（逗號分隔）
 };
 
 // 建議結果
@@ -42,6 +43,16 @@ async function askOpenRouter(prompt: string, apiKey: string): Promise<string> {
 }
 
 function buildPrompt(p: SuggestInput): string {
+  // 有指定關鍵字時，額外加一段硬性規則
+  const extraBlock = p.extraKeywords
+    ? `
+【使用者指定關鍵字】
+使用者提供了一批候選關鍵字（可能很多個）：${p.extraKeywords}
+- **不用全部塞入**，由你判斷哪幾個跟「這一頁的內容」真正相關，只挑相關的納入 keywords 欄；完全不相關的直接略過
+- title 與 description 在「語句通順自然」的前提下，盡量多融入相關的指定關鍵字，多多益善；但通順優先，寧可少放也不要硬塞到不像人話
+- 如果整批都跟這頁無關，就照原本原則寫，不要勉強使用
+`
+    : '';
   return `你是資深 SEO 顧問。以下是一個網頁的「實際內容」與「現有 TKD」，請你**以頁面實際內容為主要依據**，重新撰寫更好的 SEO 標題(title)、描述(description)、關鍵字(keywords)與主標題(H1)。
 
 【最重要原則】
@@ -55,7 +66,7 @@ function buildPrompt(p: SuggestInput): string {
 - description：約 80 字，包含主要關鍵字、有吸引點擊的誘因
 - keywords：3~6 個使用者實際會搜尋的詞，用半形逗號分隔
 - h1：一句話，包含主關鍵字，簡潔有力
-
+${extraBlock}
 【頁面資料】
 頁名：${p.label || ''}
 網址：${p.url}

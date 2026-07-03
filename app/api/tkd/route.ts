@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
       dryRun?: boolean;
       // 已在第①步（/api/tkd/collect）勾選好的頁面清單；有帶就直接用，不再重新蒐集
       pages?: { url: string; label?: string }[];
+      // 使用者指定要納入建議 TKD 的關鍵字（逗號分隔，全站每頁共用）
+      extraKeywords?: string;
     };
     const siteUrl = body.siteUrl?.trim();
     const sheetUrl = body.sheetUrl?.trim();
@@ -52,6 +54,12 @@ export async function POST(req: NextRequest) {
     const limit = Math.min(body.limit && body.limit > 0 ? body.limit : 100, MAX_LIMIT);
     const scope = body.scope === 'all' ? 'all' : 'important';
     const dryRun = body.dryRun === true; // 只抓取預覽、不寫回 sheet
+    // 指定關鍵字：整理成「半形逗號＋空格」分隔，去掉空項
+    const extraKeywords = (body.extraKeywords || '')
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(', ');
 
     // 1. 頁面清單：優先用第①步勾選好的清單；沒帶才自己蒐集（相容直接呼叫這支 API 的舊用法）
     const urls =
@@ -120,6 +128,7 @@ export async function POST(req: NextRequest) {
             keywords: p.keywords,
             h1: p.h1,
             content: p.content,
+            extraKeywords: extraKeywords || undefined,
           });
           if (idxSugT >= 0) row[idxSugT] = sug.title;
           if (idxSugD >= 0) row[idxSugD] = sug.description;

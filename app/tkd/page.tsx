@@ -53,6 +53,7 @@ export default function TkdPage() {
   const [generating, setGenerating] = useState(false); // 第②步爬取＋寫入中
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<CandidatePage[] | null>(null);
+  const [extraKeywords, setExtraKeywords] = useState(""); // 指定關鍵字（逗號分隔，全站共用）
   const [result, setResult] = useState<TkdResult | null>(null);
 
   // 第①步：蒐集候選頁＋AI 分類，列出勾選清單
@@ -101,6 +102,7 @@ export default function TkdPage() {
           siteUrl,
           sheetUrl,
           pages: selected.map((p) => ({ url: p.url, label: p.label })),
+          extraKeywords,
         }),
       });
       const data = await res.json();
@@ -304,6 +306,23 @@ export default function TkdPage() {
                 </div>
               );
             })}
+
+            {/* 指定關鍵字：送出前讓使用者確認是否要指定必含的關鍵字 */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                指定關鍵字（選填，逗號分隔）
+              </label>
+              <input
+                type="text"
+                value={extraKeywords}
+                onChange={(e) => setExtraKeywords(e.target.value)}
+                placeholder="例：台中網頁設計, SEO 優化, RWD 網站"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                可以一次給很多個，AI 會逐頁判斷相關性，只把跟該頁相關的詞納入建議 TKD，不會全部硬塞
+              </p>
+            </div>
 
             <button
               type="button"
