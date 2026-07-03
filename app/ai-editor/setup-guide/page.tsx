@@ -230,11 +230,68 @@ function ThreadsTokenForm({ clients }: { clients: AiEditorClient[] }) {
   );
 }
 
+// IG 專用 Token 登記：沒有 FB 粉專的客戶走 Instagram Login API（graph.instagram.com）
+function IgTokenForm({ clients }: { clients: AiEditorClient[] }) {
+  const [clientName, setClientName] = useState('');
+  const [igToken, setIgToken] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const client = clients.find(c => c.name === clientName);
+    if (!client) { setResult({ ok: false, message: '找不到客戶' }); return; }
+    setLoading(true); setResult(null);
+    try {
+      const res = await fetch('/api/ai-editor/clients', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: client.id, ig_access_token: igToken.trim() }),
+      });
+      if (!res.ok) { setResult({ ok: false, message: '登記失敗' }); return; }
+      setResult({ ok: true, message: `✅ IG Token 登記完成！\n客戶：${client.name}` });
+      setIgToken('');
+    } catch { setResult({ ok: false, message: '連線失敗' }); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-bold text-gray-900">IG Token 登記（無 FB 客戶）</h2>
+        <p className="text-xs text-gray-400 mt-0.5">客戶只有 IG、沒有 FB 粉專時用，60 天有效可 refresh 延長</p>
+      </div>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">客戶名稱</label>
+          <ClientSelect clients={clients} value={clientName} onChange={setClientName} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">IG Access Token</label>
+          <textarea value={igToken} onChange={e => setIgToken(e.target.value)}
+            placeholder="IGAAxxxxx" required rows={3}
+            className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none" />
+        </div>
+        <button type="submit" disabled={loading || !igToken.trim() || !clientName}
+          className="w-full py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-40 transition-colors">
+          {loading ? '登記中…' : '登記 IG Token'}
+        </button>
+      </form>
+      {result && (
+        <div className={`rounded-lg px-4 py-3 text-xs whitespace-pre-wrap ${result.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+          {result.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPanel({ clients }: { clients: AiEditorClient[] }) {
   return (
     <div className="space-y-4">
       <FbTokenForm clients={clients} />
       <ThreadsTokenForm clients={clients} />
+      <IgTokenForm clients={clients} />
     </div>
   );
 }
@@ -357,6 +414,25 @@ export default function SetupGuidePage() {
 
           </div>
 
+          {/* 無 FB 客戶（只有 IG）的替代流程 */}
+          <div className="rounded-xl border border-purple-200 bg-white p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">客戶只有 IG、沒有 FB？</h2>
+              <p className="text-sm text-gray-500 mt-1">Step 1–3 的 Meta Token 需要 FB 粉專。客戶沒有 FB 時，改走「Instagram API with Instagram Login」，完全不需要 FB 帳號或粉專。</p>
+            </div>
+            <ol className="list-decimal list-inside space-y-1.5 ml-1 text-sm text-gray-700">
+              <li>請客戶把 IG 切換成<strong>商業帳號或創作者帳號</strong>（IG App → 設定 → 帳號類型與工具），免費、不需綁 FB</li>
+              <li>前往 Meta App → 左側「Instagram」→ 選擇「<strong>Instagram 登入的 API 設定</strong>」（API setup with Instagram login）</li>
+              <li>確認權限包含 <code className="bg-gray-100 px-1 rounded text-xs">instagram_business_basic</code> 和 <code className="bg-gray-100 px-1 rounded text-xs">instagram_business_content_publish</code></li>
+              <li>把客戶的 IG 帳號加入「Instagram 測試人員」（App 角色 → 測試人員），客戶要在 IG App 裡接受邀請（設定 → 網站權限 → 應用程式和網站 → 測試人員邀請）</li>
+              <li>回到後台按「產生權杖」，客戶登入 IG 授權後會得到 <code className="bg-gray-100 px-1 rounded text-xs">IGAA</code> 開頭的長效 Token（60 天）</li>
+              <li>貼到右側「<strong>IG Token 登記（無 FB 客戶）</strong>」表單完成登記</li>
+            </ol>
+            <p className="font-semibold text-sm text-gray-700 mt-2">快到期時 Refresh（重置為 60 天，同 Threads 做法）：</p>
+            <Code>{`GET https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token={現有Token}`}</Code>
+            <Note>這條路只能發 IG。客戶若之後也要發 FB，還是得回到 Step 1–3 的正規流程。FB Page ID 和 Meta Access Token 欄位留空即可。</Note>
+          </div>
+
           {/* 常見問題 */}
           <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
             <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wide">常見問題</h2>
@@ -367,6 +443,7 @@ export default function SetupGuidePage() {
                 { q: 'FB 發文顯示「permission denied」？', a: '產生 Token 時確認有勾選 pages_read_engagement 和 pages_manage_posts 兩個權限。' },
                 { q: 'Meta Token 多久需重換？', a: '透過此表單登記的是永久 Token，無需定期更換。改密碼或撤銷 App 授權時才需重新登記。' },
                 { q: 'Threads Token 多久需更新？', a: '60 天有效，但可用 refresh endpoint 延長（重置為 60 天），建議每 50 天呼叫一次或設定 n8n 排程自動 refresh。' },
+                { q: '客戶沒有 FB、只有 IG 怎麼辦？', a: '改走「Instagram API with Instagram Login」，不需要 FB 帳號或粉專，見上方「客戶只有 IG、沒有 FB？」區塊。Token 60 天有效，可 refresh 延長。' },
               ].map(({ q, a }) => (
                 <div key={q}>
                   <p className="font-semibold text-gray-800 mb-1">{q}</p>

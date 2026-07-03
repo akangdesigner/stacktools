@@ -66,6 +66,10 @@ function getDb() {
   if (!cols.includes('threads_access_token')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN threads_access_token TEXT NOT NULL DEFAULT ''`);
   }
+  // IG 專用 Token：沒有 FB 粉專的客戶走 Instagram Login API（graph.instagram.com），60 天有效可 refresh
+  if (!cols.includes('ig_access_token')) {
+    _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN ig_access_token TEXT NOT NULL DEFAULT ''`);
+  }
 
   // ── 金流（綠界信用卡定期定額 / 自動扣款）欄位 ──
   // 扣款狀態：none=未設定, pending=已產生連結待授權, active=授權成功扣款中, failed=扣款失敗, cancelled=已取消
@@ -109,6 +113,7 @@ export interface AiEditorClient {
   fb_page_id: string;
   meta_access_token: string;
   threads_access_token: string;
+  ig_access_token: string;  // 無 FB 客戶專用（Instagram Login API）
   // 金流欄位
   billing_status: 'none' | 'pending' | 'active' | 'failed' | 'cancelled';
   billing_amount: number;
@@ -126,8 +131,8 @@ export function getAiEditorClient(id: number): AiEditorClient | null {
   return getDb().prepare('SELECT * FROM ai_editor_clients WHERE id = ?').get(id) as AiEditorClient | null;
 }
 
-// 建立客戶時不需帶金流欄位（由 DB 預設值填入、之後走綠界流程更新）
-type NewAiEditorClient = Omit<AiEditorClient, 'id' | 'billing_status' | 'billing_amount' | 'ecpay_trade_no' | 'card_last4' | 'next_charge_date' | 'last_charge_at'>;
+// 建立客戶時不需帶金流欄位與 ig_access_token（由 DB 預設值填入、之後另外登記）
+type NewAiEditorClient = Omit<AiEditorClient, 'id' | 'ig_access_token' | 'billing_status' | 'billing_amount' | 'ecpay_trade_no' | 'card_last4' | 'next_charge_date' | 'last_charge_at'>;
 
 export function createAiEditorClient(data: NewAiEditorClient): AiEditorClient {
   const db = getDb();

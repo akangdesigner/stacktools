@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string };
+  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string; ig_access_token?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
@@ -62,6 +62,7 @@ export async function PUT(req: NextRequest) {
     ...(body.fb_page_id !== undefined && { fb_page_id: body.fb_page_id }),
     ...(body.meta_access_token !== undefined && { meta_access_token: body.meta_access_token }),
     ...(body.threads_access_token !== undefined && { threads_access_token: body.threads_access_token }),
+    ...(body.ig_access_token !== undefined && { ig_access_token: body.ig_access_token }),
   });
   return NextResponse.json({ ok: true });
 }
