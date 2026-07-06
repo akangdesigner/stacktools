@@ -141,12 +141,12 @@ const techTools: Tool[] = [
     inDev: false,
   },
   {
-    href: "/tkd",
-    title: "TKD 現況產生器",
-    description: "輸入客戶網址與登記表網址，自動爬每一頁的現有 title / description / keywords / H1，依格式寫回 Google 登記表。",
-    icon: "🏷️",
-    color: "bg-lime-50 border-lime-200 hover:border-lime-400",
-    iconBg: "bg-lime-100",
+    href: "/seo-check",
+    title: "網站健檢工具",
+    description: "SEO 網站健檢工具集：TKD 現況產生器、網站技術健檢。點進去再選要用的工具。",
+    icon: "🔍",
+    color: "bg-emerald-50 border-emerald-200 hover:border-emerald-400",
+    iconBg: "bg-emerald-100",
     inDev: false,
   },
 ];
