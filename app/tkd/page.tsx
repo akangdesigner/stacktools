@@ -32,9 +32,6 @@ interface CandidatePage {
   include: boolean;
 }
 
-// 型態分組顯示順序（跟 lib/tkd-classify.ts 的 PAGE_TYPES 一致；client 端不能 import 那支 lib）
-const TYPE_ORDER = ["首頁", "形象頁", "分類頁", "產品頁", "部落格", "促銷", "功能頁", "其他"];
-
 // 網址顯示用：還原中文 slug，失敗就原樣
 function pretty(u: string): string {
   try {
@@ -42,6 +39,33 @@ function pretty(u: string): string {
   } catch {
     return u;
   }
+}
+
+// 網址路徑層數（麵包屑深度）：首頁=0、/about=1、/works/detail/x=3。
+// 先去掉語系前綴（/zh-hant、/en 等），與 lib/tkd-crawler 的去重規則一致，避免多語系站把 /zh-hant/about 誤判成兩層
+function depthOf(u: string): number {
+  try {
+    return new URL(u).pathname
+      .replace(/^\/(zh-hant|zh-tw|zh-cn|en(-us)?|ja|default)(?=\/|$)/i, "")
+      .split("/")
+      .filter(Boolean).length;
+  } catch {
+    return 999;
+  }
+}
+
+// 該站「主要目標頁」的層數＝所有非首頁（層數≥1）裡最小的那層。
+// 不同平台網址深度不同：一般站主要頁在第 1 層（/about），91APP 這種深網址站可能在第 2 層（/xxx/yyy）——
+// 用「該站最小層數」自動適應，比寫死第一層準
+function mainDepthOf(pages: { url: string }[]): number {
+  const ds = pages.map((p) => depthOf(p.url)).filter((d) => d >= 1);
+  return ds.length ? Math.min(...ds) : 1;
+}
+
+// 是否主要目標頁：首頁(0 層) 或 落在該站最小層數的頁
+function isMainPage(url: string, mainDepth: number): boolean {
+  const d = depthOf(url);
+  return d === 0 || d === mainDepth;
 }
 
 // 背景任務進度（對應 lib/tkd-jobs.ts 的 TkdJob）
@@ -119,9 +143,13 @@ export default function TkdPage() {
         jobId,
         setCollectProgress,
       );
-      // 小積木拍板的預設勾選規則：只勾「有頁名」的（＝主選單抓到的頁），
-      // sitemap 撈到的無頁名頁一律不勾，要收哪些由使用者自己點；AI 判斷只拿來分組
-      setCandidates(collected.pages.map((p) => ({ ...p, include: !!p.label })));
+      // 小積木拍板的預設勾選規則：用「麵包屑層數」判主/子頁，預設只勾「主要目標頁」
+      // （該站網址層數最少的那層，如一般站的 /about、91APP 的 /xxx/yyy）；
+      // 更深的子頁一律不勾，要收哪些由使用者自己點
+      const mainDepth = mainDepthOf(collected.pages);
+      setCandidates(
+        collected.pages.map((p) => ({ ...p, include: isMainPage(p.url, mainDepth) })),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -174,18 +202,28 @@ export default function TkdPage() {
     );
   }
 
-  // 切換整組勾選（全選/全不選）
-  function toggleGroup(type: string, include: boolean) {
+  // 切換整組勾選（全選/全不選）：用網址清單指定，不再綁型態
+  function toggleGroup(urls: string[], include: boolean) {
+    const set = new Set(urls);
     setCandidates((prev) =>
-      prev ? prev.map((p) => (p.type === type ? { ...p, include } : p)) : prev,
+      prev ? prev.map((p) => (set.has(p.url) ? { ...p, include } : p)) : prev,
     );
   }
 
-  // 依型態分組（保持 TYPE_ORDER 順序，只列有頁的組）
+  // 以麵包屑層數分兩組：主要目標頁（該站最小層數＋首頁）／子頁（更深層）。
+  // AI 判的型態（形象/產品/分類…）降為每頁旁的小標籤，不再拿來分大組
+  const mainDepth = candidates ? mainDepthOf(candidates) : 1;
   const groups = candidates
-    ? TYPE_ORDER.map((type) => ({ type, pages: candidates.filter((p) => p.type === type) })).filter(
-        (g) => g.pages.length > 0,
-      )
+    ? [
+        {
+          key: "主要目標頁",
+          pages: candidates.filter((p) => isMainPage(p.url, mainDepth)),
+        },
+        {
+          key: "子頁",
+          pages: candidates.filter((p) => !isMainPage(p.url, mainDepth)),
+        },
+      ].filter((g) => g.pages.length > 0)
     : [];
   const selectedCount = candidates ? candidates.filter((p) => p.include).length : 0;
 
@@ -299,29 +337,30 @@ export default function TkdPage() {
                 ② 確認要收錄的頁面（已勾 {selectedCount}／共 {candidates.length} 頁）
               </h2>
               <p className="text-xs text-gray-400">
-                預設只勾主選單頁（有粗體頁名的），其餘請自行勾選；點網址可開新分頁確認
+                預設勾「主要目標頁」（網址層數最少的那層），子頁請自行勾選；點網址可開新分頁確認
               </p>
             </div>
 
             {groups.map((g) => {
               const checkedCount = g.pages.filter((p) => p.include).length;
+              const groupUrls = g.pages.map((p) => p.url);
               return (
-                <div key={g.type} className="border border-gray-100 rounded-lg">
+                <div key={g.key} className="border border-gray-100 rounded-lg">
                   <div className="flex items-center justify-between bg-gray-50 rounded-t-lg px-3 py-2">
                     <span className="text-xs font-bold text-gray-700">
-                      {g.type}（{checkedCount}／{g.pages.length}）
+                      {g.key}（{checkedCount}／{g.pages.length}）
                     </span>
                     <div className="flex gap-2 text-xs">
                       <button
                         type="button"
-                        onClick={() => toggleGroup(g.type, true)}
+                        onClick={() => toggleGroup(groupUrls, true)}
                         className="text-orange-500 hover:text-orange-600"
                       >
                         全選
                       </button>
                       <button
                         type="button"
-                        onClick={() => toggleGroup(g.type, false)}
+                        onClick={() => toggleGroup(groupUrls, false)}
                         className="text-gray-400 hover:text-gray-600"
                       >
                         全不選
@@ -340,6 +379,10 @@ export default function TkdPage() {
                           />
                           <span className="text-xs text-gray-700 min-w-0">
                             {p.label && <span className="font-medium">{p.label} </span>}
+                            {/* AI 判的型態降為小標籤，只做輔助辨識，不影響分組/勾選 */}
+                            <span className="inline-block text-[10px] text-gray-400 border border-gray-200 rounded px-1 mr-1 align-middle">
+                              {p.type}
+                            </span>
                             {/* 點網址開新分頁確認內容；stopPropagation 避免點連結時順便切到勾選 */}
                             <a
                               href={p.url}
