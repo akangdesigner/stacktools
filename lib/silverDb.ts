@@ -462,11 +462,23 @@ export function getUsersDueForAutoBless(slot: string): SilverUser[] {
 
 // ── User State（暫存使用者目前的等待動作，例如等待語音做祝福圖）──────────────
 
+// 旗標存活時間：超過就視為失效（避免使用者中途離開，卡住之後所有對話）
+const PENDING_ACTION_TTL_MS = 10 * 60 * 1000; // 10 分鐘
+
 export function getPendingAction(userId: string): string | null {
-  const row = db.prepare('SELECT pendingAction FROM user_state WHERE userId = ?').get(userId) as
-    | { pendingAction: string | null }
+  const row = db.prepare('SELECT pendingAction, updatedAt FROM user_state WHERE userId = ?').get(userId) as
+    | { pendingAction: string | null; updatedAt: string | null }
     | undefined;
-  return row?.pendingAction ?? null;
+  if (!row?.pendingAction) return null;
+  // 超過 10 分鐘沒動作就自動失效並清掉，讓後續對話回到正常流程
+  if (row.updatedAt) {
+    const savedAt = new Date(row.updatedAt.replace(' ', 'T')).getTime();
+    if (!Number.isNaN(savedAt) && Date.now() - savedAt > PENDING_ACTION_TTL_MS) {
+      db.prepare('UPDATE user_state SET pendingAction = NULL WHERE userId = ?').run(userId);
+      return null;
+    }
+  }
+  return row.pendingAction;
 }
 
 export function setPendingAction(userId: string, action: string | null): void {
