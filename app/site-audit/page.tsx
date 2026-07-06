@@ -120,6 +120,29 @@ export default function SiteAuditPage() {
               可貼任一頁面網址；站台檔案（sitemap / robots / llms）會以該網址的網域為準檢查。
             </p>
           </div>
+
+          {/* 進度表設定：一開始就填好，健檢完可直接寫回 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">進度表網址</label>
+            <input
+              type="text"
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              placeholder="要把健檢結果寫回進度表時填 Google Sheet 網址"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            />
+          </div>
+          <div className="sm:w-72">
+            <label className="block text-xs font-medium text-gray-600 mb-1">分頁名稱</label>
+            <input
+              type="text"
+              value={tab}
+              onChange={(e) => setTab(e.target.value)}
+              placeholder="分頁名稱"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading || !url.trim()}
@@ -186,27 +209,16 @@ export default function SiteAuditPage() {
             </table>
           </div>
 
-          {/* 寫回進度表：依「確認事項」比對，只更新狀態欄 */}
+          {/* 寫回進度表：欄位在上方設定區，這裡只留執行按鈕 */}
           <div className="mt-4 bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <div className="text-sm font-medium text-gray-700">寫回進度表</div>
-            <p className="text-xs text-gray-400">
-              依「確認事項」名稱比對，把上面的狀態寫進進度表的「狀態」欄（只動狀態欄，其他欄位不變）；工具沒測的項目不會動到。
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={sheetUrl}
-                onChange={(e) => setSheetUrl(e.target.value)}
-                placeholder="進度表 Google Sheet 網址"
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-              />
-              <input
-                type="text"
-                value={tab}
-                onChange={(e) => setTab(e.target.value)}
-                placeholder="分頁名稱"
-                className="sm:w-52 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-              />
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-gray-700">寫回進度表</div>
+                <p className="text-xs text-gray-400 mt-1">
+                  依「確認事項」比對，把上面的狀態寫進進度表的「狀態」欄（只動狀態欄）；工具沒測的項目不會動到。
+                  {!sheetUrl.trim() && <span className="text-amber-600">　請先於上方填進度表網址。</span>}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={handleWrite}
