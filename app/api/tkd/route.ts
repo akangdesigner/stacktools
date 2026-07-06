@@ -10,7 +10,7 @@ import {
 } from '@/lib/tkd-sheet';
 import { generateSuggestion } from '@/lib/tkd-suggest';
 import { createTkdJob, progressTkdJob, completeTkdJob, failTkdJob, getTkdJob } from '@/lib/tkd-jobs';
-import { createDraft, getDraft, type DraftPage } from '@/lib/tkdDb';
+import { getDraft, type DraftPage } from '@/lib/tkdDb';
 
 // 爬多頁會跑很久，改成背景任務：POST 立刻回 jobId，前端用 GET ?id= 輪詢進度，
 // 避免撞 Zeabur 閘道逾時（約 60 秒就回 502 Bad Gateway）
@@ -82,6 +82,8 @@ async function runPipeline(
 
   // 4. 對應各欄位索引（依表頭關鍵字，容忍空白與大小寫）
   const idxPage = findCol(headers, (h) => h.includes('頁面') || h.includes('網址') || h.includes('url'));
+  // 「#」序號欄（也接受 編號／序號／項次／no）：照寫入順序填 1、2、3…
+  const idxNum = findCol(headers, (h) => h === '#' || h.includes('編號') || h.includes('序號') || h.includes('項次') || h === 'no');
   const idxTitle = findCol(headers, (h) => h.includes('現有') && h.includes('title'));
   const idxDesc = findCol(headers, (h) => h.includes('現有') && h.includes('description'));
   const idxKw = findCol(headers, (h) => h.includes('現有') && h.includes('keywords'));
@@ -102,6 +104,8 @@ async function runPipeline(
   let doneCount = 0;
   for (const p of pages) {
     const row = new Array(headers.length).fill('');
+    // 「#」欄照寫入順序放流水號（1 起算）
+    if (idxNum >= 0) row[idxNum] = String(rows.length + 1);
     // 頁面欄寫成「選單名＋超連結」；沒有選單名（全站模式）就用可讀網址當顯示文字
     row[idxPage] = sheetLink(p.url, p.label || prettyUrl(p.url));
     if (idxTitle >= 0) row[idxTitle] = p.title;
@@ -146,20 +150,8 @@ async function runPipeline(
     await appendRows(sheetId, tabName, rows);
   }
 
-  // 階段一（existing）寫完現有 TKD 後存一筆草稿，之後可從草稿直接進階段二
-  let draftId: number | undefined = params.draftId;
-  if (stage === 'existing' && !dryRun) {
-    const host = (() => {
-      try { return new URL(normalizeSite(siteUrl)).host; } catch { return siteUrl; }
-    })();
-    draftId = createDraft({
-      name: `${host}（${pages.length} 頁）`,
-      siteUrl,
-      sheetUrl,
-      scope,
-      pages: pages.map((p) => ({ url: p.url, label: p.label })),
-    });
-  }
+  // 草稿改由使用者自己按「儲存草稿」建立（POST /api/tkd/drafts），這裡不自動建
+  const draftId: number | undefined = params.draftId;
 
   completeTkdJob(
     jobId,

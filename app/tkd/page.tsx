@@ -104,6 +104,19 @@ function isMainPage(url: string, mainDepth: number, keySet: Set<string>): boolea
   return segs.length <= mainDepth;
 }
 
+// 依「架構」自動選判斷主/子頁的規則（先看架構、再決定用哪種，避免被各平台網址結構搞爆）：
+// - 有抓到選單（有選單名的頁夠多）→ 用「在主選單裡＝主要目標頁」（最準，就是網站主人認定的重點頁）
+// - 抓不到選單（極少數全 JS 選單、連 ul 退路都撈不到）→ 退回「麵包屑結構」判斷
+function pickIsMain(
+  pages: { url: string; label?: string }[],
+): (p: { url: string; label?: string }) => boolean {
+  const hasMenu = pages.filter((p) => p.label && p.label.trim()).length >= 3; // 首頁＋≥2 選單項才算真的抓到選單
+  if (hasMenu) return (p) => !!(p.label && p.label.trim());
+  const mainDepth = mainDepthOf(pages);
+  const keySet = pathKeySet(pages);
+  return (p) => isMainPage(p.url, mainDepth, keySet);
+}
+
 // 背景任務進度（對應 lib/tkd-jobs.ts 的 TkdJob）
 interface TkdJob {
   status: "running" | "completed" | "failed";
@@ -158,6 +171,7 @@ export default function TkdPage() {
   // 兩階段：階段一（寫現有 TKD）完成後 stage1Done=true，露出關鍵字＋階段二按鈕
   const [stage1Done, setStage1Done] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null); // 目前這批對應的草稿 id
+  const [draftSaved, setDraftSaved] = useState(false); // 這批是否已按「儲存草稿」存過
   const [drafts, setDrafts] = useState<DraftItem[]>([]); // 「我的草稿」清單
 
   // 第①步：蒐集候選頁＋AI 分類，列出勾選清單
@@ -169,6 +183,7 @@ export default function TkdPage() {
     setResult(null);
     setStage1Done(false); // 重新蒐集＝重來一批，回到階段一
     setDraftId(null);
+    setDraftSaved(false);
     setCollectProgress("任務啟動中…");
     try {
       const res = await fetch("/api/tkd/collect", {
@@ -185,16 +200,13 @@ export default function TkdPage() {
         jobId,
         setCollectProgress,
       );
-      // 小積木拍板的預設勾選規則：用「麵包屑」判主/子頁，預設只勾「主要目標頁」，子頁不勾。
-      // 主/子判斷會看「上層頁是否也被收錄」（/products/xxx 的上層 /products 有收 → 子頁），
-      // 所以 Shopline 這種分類頁與商品頁同層的站也分得開；再排除 AI 判為促銷/功能頁的（收錄意義低）。
-      const mainDepth = mainDepthOf(collected.pages);
-      const keySet = pathKeySet(collected.pages);
+      // 預設勾選規則：pickIsMain 先看架構自動選規則——有抓到選單就以「選單名＝主要目標頁」，
+      // 抓不到選單才退回麵包屑結構判斷；再排除 AI 判為促銷/功能頁的（收錄意義低）。
+      const isMain = pickIsMain(collected.pages);
       setCandidates(
         collected.pages.map((p) => ({
           ...p,
-          include:
-            isMainPage(p.url, mainDepth, keySet) && p.type !== "促銷" && p.type !== "功能頁",
+          include: isMain(p) && p.type !== "促銷" && p.type !== "功能頁",
         })),
       );
     } catch (err) {
@@ -246,7 +258,7 @@ export default function TkdPage() {
     setResult(null);
     setProgress("任務啟動中…");
     try {
-      const r = await runTkdJob({
+      await runTkdJob({
         stage: "existing",
         siteUrl,
         sheetUrl,
@@ -254,14 +266,38 @@ export default function TkdPage() {
       });
       // 收斂成「已追蹤的頁」（只留勾選的，全部標記 include），進入階段二
       setCandidates(selected.map((p) => ({ ...p, include: true })));
-      setDraftId(typeof r.draftId === "number" ? r.draftId : null);
+      setDraftId(null); // 草稿改由使用者按「儲存草稿」才建立
+      setDraftSaved(false);
       setStage1Done(true);
-      loadDrafts();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
       setProgress("");
+    }
+  }
+
+  // 儲存草稿：把目前這批已追蹤的頁存起來，之後可從「我的草稿」續做階段二
+  async function handleSaveDraft() {
+    if (!candidates) return;
+    try {
+      const res = await fetch("/api/tkd/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteUrl,
+          sheetUrl,
+          scope,
+          pages: candidates.map((p) => ({ url: p.url, label: p.label, type: p.type })),
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(String(data.error || "儲存草稿失敗"));
+      setDraftId(typeof data.id === "number" ? data.id : null);
+      setDraftSaved(true);
+      loadDrafts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -317,6 +353,7 @@ export default function TkdPage() {
       setScope(d.scope);
       setCandidates(d.pages.map((p) => ({ url: p.url, label: p.label, type: p.type || "其他", include: true })));
       setDraftId(id);
+      setDraftSaved(true); // 從草稿載入的本來就是已存的
       setStage1Done(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -349,19 +386,18 @@ export default function TkdPage() {
     );
   }
 
-  // 以麵包屑分兩組：主要目標頁／子頁（判斷同 handleCollect：看上層是否被收錄＋層數）。
+  // 分兩組：主要目標頁／子頁（判斷同 handleCollect，由 pickIsMain 依架構自動選規則）。
   // AI 判的型態（形象/產品/分類…）降為每頁旁的小標籤，不再拿來分大組
-  const mainDepth = candidates ? mainDepthOf(candidates) : 1;
-  const keySet = candidates ? pathKeySet(candidates) : new Set<string>();
+  const isMainOf = candidates ? pickIsMain(candidates) : () => false;
   const groups = candidates
     ? [
         {
           key: "主要目標頁",
-          pages: candidates.filter((p) => isMainPage(p.url, mainDepth, keySet)),
+          pages: candidates.filter((p) => isMainOf(p)),
         },
         {
           key: "子頁",
-          pages: candidates.filter((p) => !isMainPage(p.url, mainDepth, keySet)),
+          pages: candidates.filter((p) => !isMainOf(p)),
         },
       ].filter((g) => g.pages.length > 0)
     : [];
@@ -594,7 +630,7 @@ export default function TkdPage() {
             ) : (
               <>
                 <div className="bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg px-3 py-2">
-                  ✓ 現有 TKD 已寫入登記表、已存成草稿。可以馬上生成建議，也可以之後從「我的草稿」續做。
+                  ✓ 現有 TKD 已寫入登記表。可以馬上生成建議，或先「儲存草稿」下次再做。
                 </div>
                 {/* 指定關鍵字：階段二送出前讓使用者確認要納入建議的必含關鍵字 */}
                 <div>
@@ -612,16 +648,26 @@ export default function TkdPage() {
                     可以一次給很多個，AI 會逐頁判斷相關性，只把跟該頁相關的詞納入建議 TKD，不會全部硬塞
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleGenerateSuggest}
-                  disabled={generating || selectedCount === 0}
-                  className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
-                >
-                  {generating
-                    ? progress || "處理中…"
-                    : `② 生成建議 TKD（${selectedCount} 頁）`}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleGenerateSuggest}
+                    disabled={generating || selectedCount === 0}
+                    className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
+                  >
+                    {generating
+                      ? progress || "處理中…"
+                      : `② 生成建議 TKD（${selectedCount} 頁）`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveDraft}
+                    disabled={generating || draftSaved}
+                    className="border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium rounded-lg px-4 py-2"
+                  >
+                    {draftSaved ? "✓ 已儲存草稿" : "儲存草稿（下次再做）"}
+                  </button>
+                </div>
               </>
             )}
           </div>
