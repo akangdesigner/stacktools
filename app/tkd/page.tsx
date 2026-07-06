@@ -41,31 +41,53 @@ function pretty(u: string): string {
   }
 }
 
-// 網址路徑層數（麵包屑深度）：首頁=0、/about=1、/works/detail/x=3。
+// 網址路徑段（麵包屑）：去語系前綴後的路徑分段，首頁=[]、/about=["about"]、/works/detail/x=["works","detail","x"]。
 // 先去掉語系前綴（/zh-hant、/en 等），與 lib/tkd-crawler 的去重規則一致，避免多語系站把 /zh-hant/about 誤判成兩層
-function depthOf(u: string): number {
+function pathSegs(u: string): string[] {
   try {
-    return new URL(u).pathname
+    const p = new URL(u).pathname
       .replace(/^\/(zh-hant|zh-tw|zh-cn|en(-us)?|ja|default)(?=\/|$)/i, "")
-      .split("/")
-      .filter(Boolean).length;
+      .replace(/\/+$/, "")
+      .toLowerCase();
+    return p ? p.split("/").filter(Boolean) : [];
   } catch {
-    return 999;
+    return [];
   }
 }
 
-// 該站「主要目標頁」的層數＝所有非首頁（層數≥1）裡最小的那層。
-// 不同平台網址深度不同：一般站主要頁在第 1 層（/about），91APP 這種深網址站可能在第 2 層（/xxx/yyy）——
-// 用「該站最小層數」自動適應，比寫死第一層準
+// 該站「主要層」：最淺、且該層頁數 ≥3 的那層（穩健版）。
+// 只取最小層會被單一淺層索引頁拉低（如 Shopline 的 /products 全商品頁 → 把層數壓成 1）；
+// 改成「最淺、且有一定數量的層」才穩。沒有任一層達 3 頁就退回最小層。
 function mainDepthOf(pages: { url: string }[]): number {
-  const ds = pages.map((p) => depthOf(p.url)).filter((d) => d >= 1);
-  return ds.length ? Math.min(...ds) : 1;
+  const cnt: Record<number, number> = {};
+  for (const p of pages) {
+    const d = pathSegs(p.url).length;
+    if (d >= 1) cnt[d] = (cnt[d] ?? 0) + 1;
+  }
+  const depths = Object.keys(cnt)
+    .map(Number)
+    .sort((a, b) => a - b);
+  for (const d of depths) if (cnt[d] >= 3) return d;
+  return depths[0] ?? 1;
 }
 
-// 是否主要目標頁：首頁(0 層) 或 落在該站最小層數的頁
-function isMainPage(url: string, mainDepth: number): boolean {
-  const d = depthOf(url);
-  return d === 0 || d === mainDepth;
+// 收錄頁的「路徑 key 集合」，用來判斷某頁的上層是否也被收錄
+function pathKeySet(pages: { url: string }[]): Set<string> {
+  return new Set(pages.map((p) => "/" + pathSegs(p.url).join("/")).filter((k) => k !== "/"));
+}
+
+// 是否主要目標頁（純用麵包屑判斷）：
+// 1) 首頁一定是；
+// 2) 若「有任一上層路徑也被收錄」→ 子頁（如 /products/xxx 的上層 /products 有被收，代表它是商品明細）；
+// 3) 若比該站主要層更深 → 子頁（接住沒有明確上層頁的文章列表，如 /blog/detail/xxx）；
+// 其餘＝主要目標頁（如 /categories/內衣 沒有 /categories 這個上層頁，就是主分頁）
+function isMainPage(url: string, mainDepth: number, keySet: Set<string>): boolean {
+  const segs = pathSegs(url);
+  if (segs.length === 0) return true; // 首頁
+  for (let i = 1; i < segs.length; i++) {
+    if (keySet.has("/" + segs.slice(0, i).join("/"))) return false; // 上層頁有被收 → 子頁
+  }
+  return segs.length <= mainDepth;
 }
 
 // 背景任務進度（對應 lib/tkd-jobs.ts 的 TkdJob）
@@ -143,12 +165,17 @@ export default function TkdPage() {
         jobId,
         setCollectProgress,
       );
-      // 小積木拍板的預設勾選規則：用「麵包屑層數」判主/子頁，預設只勾「主要目標頁」
-      // （該站網址層數最少的那層，如一般站的 /about、91APP 的 /xxx/yyy）；
-      // 更深的子頁一律不勾，要收哪些由使用者自己點
+      // 小積木拍板的預設勾選規則：用「麵包屑」判主/子頁，預設只勾「主要目標頁」，子頁不勾。
+      // 主/子判斷會看「上層頁是否也被收錄」（/products/xxx 的上層 /products 有收 → 子頁），
+      // 所以 Shopline 這種分類頁與商品頁同層的站也分得開；再排除 AI 判為促銷/功能頁的（收錄意義低）。
       const mainDepth = mainDepthOf(collected.pages);
+      const keySet = pathKeySet(collected.pages);
       setCandidates(
-        collected.pages.map((p) => ({ ...p, include: isMainPage(p.url, mainDepth) })),
+        collected.pages.map((p) => ({
+          ...p,
+          include:
+            isMainPage(p.url, mainDepth, keySet) && p.type !== "促銷" && p.type !== "功能頁",
+        })),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -210,18 +237,19 @@ export default function TkdPage() {
     );
   }
 
-  // 以麵包屑層數分兩組：主要目標頁（該站最小層數＋首頁）／子頁（更深層）。
+  // 以麵包屑分兩組：主要目標頁／子頁（判斷同 handleCollect：看上層是否被收錄＋層數）。
   // AI 判的型態（形象/產品/分類…）降為每頁旁的小標籤，不再拿來分大組
   const mainDepth = candidates ? mainDepthOf(candidates) : 1;
+  const keySet = candidates ? pathKeySet(candidates) : new Set<string>();
   const groups = candidates
     ? [
         {
           key: "主要目標頁",
-          pages: candidates.filter((p) => isMainPage(p.url, mainDepth)),
+          pages: candidates.filter((p) => isMainPage(p.url, mainDepth, keySet)),
         },
         {
           key: "子頁",
-          pages: candidates.filter((p) => !isMainPage(p.url, mainDepth)),
+          pages: candidates.filter((p) => !isMainPage(p.url, mainDepth, keySet)),
         },
       ].filter((g) => g.pages.length > 0)
     : [];
