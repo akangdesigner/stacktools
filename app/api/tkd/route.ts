@@ -10,6 +10,7 @@ import {
 } from '@/lib/tkd-sheet';
 import { generateSuggestion } from '@/lib/tkd-suggest';
 import { createTkdJob, progressTkdJob, completeTkdJob, failTkdJob, getTkdJob } from '@/lib/tkd-jobs';
+import { createDraft, getDraft, type DraftPage } from '@/lib/tkdDb';
 
 // 爬多頁會跑很久，改成背景任務：POST 立刻回 jobId，前端用 GET ?id= 輪詢進度，
 // 避免撞 Zeabur 閘道逾時（約 60 秒就回 502 Bad Gateway）
@@ -34,7 +35,9 @@ function sheetLink(url: string, text: string): string {
   return `=HYPERLINK("${q(url)}","${q(text || url)}")`;
 }
 
-// 整段爬取＋AI 建議＋寫表的管線（在背景執行，進度寫回任務表）
+// 整段爬取＋（視階段）AI 建議＋寫表的管線（在背景執行，進度寫回任務表）
+// stage='existing'：只寫現有 TKD、不生建議，寫完存一筆草稿（階段一）
+// stage='suggest' ：重爬頁面→生建議→寫回現有＋建議欄（階段二，可帶 draftId 從草稿載入）
 async function runPipeline(
   jobId: string,
   params: {
@@ -44,15 +47,21 @@ async function runPipeline(
     scope: 'important' | 'all';
     dryRun: boolean;
     extraKeywords: string;
-    pages?: { url: string; label?: string }[];
+    stage: 'existing' | 'suggest';
+    draftId?: number;
+    pages?: DraftPage[];
   },
 ): Promise<void> {
-  const { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords } = params;
+  const { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, stage } = params;
 
-  // 1. 頁面清單：優先用第①步勾選好的清單；沒帶才自己蒐集（相容直接呼叫這支 API 的舊用法）
+  // 頁面清單來源優先序：draftId（階段二從草稿載入）＞ 直接帶的勾選頁 ＞ 自己蒐集（舊用法）
+  const draftPages = params.draftId ? getDraft(params.draftId)?.pages : undefined;
+  const selectedPages = draftPages ?? params.pages;
+
+  // 1. 頁面清單
   const urls =
-    params.pages && params.pages.length > 0
-      ? params.pages.map((p) => ({ url: p.url, label: p.label }))
+    selectedPages && selectedPages.length > 0
+      ? selectedPages.map((p) => ({ url: p.url, label: p.label }))
       : await collectUrls(siteUrl, limit, scope);
   if (urls.length === 0) {
     throw new Error('找不到任何頁面，請確認網址是否正確，或該站是否有 sitemap.xml');
@@ -99,7 +108,8 @@ async function runPipeline(
     if (idxDesc >= 0) row[idxDesc] = p.description;
     if (idxKw >= 0) row[idxKw] = p.keywords;
     if (idxH1 >= 0) row[idxH1] = p.h1;
-    if (!dryRun) {
+    // 只有階段二（suggest）才生建議；階段一（existing）只寫現有欄
+    if (stage === 'suggest' && !dryRun) {
       progressTkdJob(jobId, `AI 生成建議中（${doneCount + 1}／${pages.length} 頁）`, doneCount, pages.length);
       try {
         const sug = await generateSuggestion({
@@ -136,11 +146,28 @@ async function runPipeline(
     await appendRows(sheetId, tabName, rows);
   }
 
+  // 階段一（existing）寫完現有 TKD 後存一筆草稿，之後可從草稿直接進階段二
+  let draftId: number | undefined = params.draftId;
+  if (stage === 'existing' && !dryRun) {
+    const host = (() => {
+      try { return new URL(normalizeSite(siteUrl)).host; } catch { return siteUrl; }
+    })();
+    draftId = createDraft({
+      name: `${host}（${pages.length} 頁）`,
+      siteUrl,
+      sheetUrl,
+      scope,
+      pages: pages.map((p) => ({ url: p.url, label: p.label })),
+    });
+  }
+
   completeTkdJob(
     jobId,
     {
       ok: true,
       dryRun,
+      stage,
+      draftId,
       tabName,
       cleared,
       pageCount: urls.length,
@@ -168,8 +195,12 @@ export async function POST(req: NextRequest) {
       limit?: number;
       scope?: 'important' | 'all';
       dryRun?: boolean;
+      // 階段：existing＝只寫現有 TKD＋存草稿；suggest＝生建議寫回（預設 suggest，相容舊用法）
+      stage?: 'existing' | 'suggest';
+      // 階段二從草稿載入頁面清單用
+      draftId?: number;
       // 已在第①步（/api/tkd/collect）勾選好的頁面清單；有帶就直接用，不再重新蒐集
-      pages?: { url: string; label?: string }[];
+      pages?: DraftPage[];
       // 使用者指定要納入建議 TKD 的關鍵字（逗號分隔，全站每頁共用）
       extraKeywords?: string;
     };
@@ -182,6 +213,8 @@ export async function POST(req: NextRequest) {
     const limit = Math.min(body.limit && body.limit > 0 ? body.limit : 100, MAX_LIMIT);
     const scope = body.scope === 'all' ? 'all' : 'important';
     const dryRun = body.dryRun === true; // 只抓取預覽、不寫回 sheet
+    const stage = body.stage === 'existing' ? 'existing' : 'suggest';
+    const draftId = typeof body.draftId === 'number' ? body.draftId : undefined;
     // 指定關鍵字：整理成「半形逗號＋空格」分隔，去掉空項
     const extraKeywords = (body.extraKeywords || '')
       .split(/[,，]/)
@@ -191,7 +224,7 @@ export async function POST(req: NextRequest) {
 
     const job = createTkdJob('準備頁面清單中…');
     // 刻意不 await：讓管線在背景跑完，進度與結果都寫回任務表
-    runPipeline(job.id, { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, pages: body.pages })
+    runPipeline(job.id, { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, stage, draftId, pages: body.pages })
       .catch((e) => failTkdJob(job.id, e instanceof Error ? e.message : String(e)));
 
     return NextResponse.json({ ok: true, jobId: job.id });

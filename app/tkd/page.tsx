@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // 單頁 TKD 結果（對應後端 PageTkd）
 interface PageTkd {
@@ -16,12 +16,26 @@ interface PageTkd {
 // 後端 /api/tkd 的成功回傳
 interface TkdResult {
   ok: boolean;
+  stage?: "existing" | "suggest";
+  draftId?: number; // 階段一寫完現有 TKD 後回傳的草稿 id
   tabName: string;
   pageCount: number;
   wroteCount: number;
   suggested?: number;
   matched: Record<string, boolean>;
   pages: PageTkd[];
+}
+
+// 草稿清單項（對應 /api/tkd/drafts）
+interface DraftItem {
+  id: number;
+  name: string;
+  siteUrl: string;
+  sheetUrl: string;
+  scope: "important" | "all";
+  pageCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 第①步 /api/tkd/collect 回傳的候選頁（AI 已判型態與建議勾選）
@@ -141,6 +155,10 @@ export default function TkdPage() {
   const [collectProgress, setCollectProgress] = useState(""); // 第①步背景任務的進度訊息
   const [progress, setProgress] = useState(""); // 第②步背景任務的進度訊息
   const [result, setResult] = useState<TkdResult | null>(null);
+  // 兩階段：階段一（寫現有 TKD）完成後 stage1Done=true，露出關鍵字＋階段二按鈕
+  const [stage1Done, setStage1Done] = useState(false);
+  const [draftId, setDraftId] = useState<number | null>(null); // 目前這批對應的草稿 id
+  const [drafts, setDrafts] = useState<DraftItem[]>([]); // 「我的草稿」清單
 
   // 第①步：蒐集候選頁＋AI 分類，列出勾選清單
   async function handleCollect(e: React.FormEvent) {
@@ -149,6 +167,8 @@ export default function TkdPage() {
     setError("");
     setCandidates(null);
     setResult(null);
+    setStage1Done(false); // 重新蒐集＝重來一批，回到階段一
+    setDraftId(null);
     setCollectProgress("任務啟動中…");
     try {
       const res = await fetch("/api/tkd/collect", {
@@ -185,8 +205,36 @@ export default function TkdPage() {
     }
   }
 
-  // 第②步：把勾選的頁面送去爬 TKD＋AI 建議＋寫回登記表
-  async function handleGenerate() {
+  // 讀「我的草稿」清單
+  async function loadDrafts() {
+    try {
+      const res = await fetch("/api/tkd/drafts");
+      const data = await safeJson(res);
+      if (res.ok && Array.isArray(data.drafts)) setDrafts(data.drafts as DraftItem[]);
+    } catch {
+      /* 草稿讀取失敗不擋畫面 */
+    }
+  }
+  useEffect(() => {
+    loadDrafts();
+  }, []);
+
+  // 打 /api/tkd 背景任務並輪詢，回傳結果（兩階段共用）
+  async function runTkdJob(body: Record<string, unknown>): Promise<TkdResult> {
+    const res = await fetch("/api/tkd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(String(data.error || "發生錯誤"));
+    const jobId = String(data.jobId || "");
+    if (!jobId) throw new Error("伺服器沒有回傳任務 id");
+    return pollJob<TkdResult>("/api/tkd", jobId, setProgress);
+  }
+
+  // 階段一：把勾選頁的「現有 TKD」寫入登記表，並存成草稿
+  async function handleWriteExisting() {
     if (!candidates) return;
     const selected = candidates.filter((p) => p.include);
     if (selected.length === 0) {
@@ -198,27 +246,91 @@ export default function TkdPage() {
     setResult(null);
     setProgress("任務啟動中…");
     try {
-      // 啟動背景任務（伺服器立刻回 jobId，避免長時間請求被 Zeabur 閘道切斷回 502）
-      const res = await fetch("/api/tkd", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          siteUrl,
-          sheetUrl,
-          pages: selected.map((p) => ({ url: p.url, label: p.label })),
-          extraKeywords,
-        }),
+      const r = await runTkdJob({
+        stage: "existing",
+        siteUrl,
+        sheetUrl,
+        pages: selected.map((p) => ({ url: p.url, label: p.label, type: p.type })),
       });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(String(data.error || "發生錯誤"));
-      const jobId = String(data.jobId || "");
-      if (!jobId) throw new Error("伺服器沒有回傳任務 id");
-      setResult(await pollJob<TkdResult>("/api/tkd", jobId, setProgress));
+      // 收斂成「已追蹤的頁」（只留勾選的，全部標記 include），進入階段二
+      setCandidates(selected.map((p) => ({ ...p, include: true })));
+      setDraftId(typeof r.draftId === "number" ? r.draftId : null);
+      setStage1Done(true);
+      loadDrafts();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setGenerating(false);
       setProgress("");
+    }
+  }
+
+  // 階段二：對已追蹤的頁生成建議 TKD，寫回建議欄
+  async function handleGenerateSuggest() {
+    if (!candidates) return;
+    const selected = candidates.filter((p) => p.include);
+    if (selected.length === 0) {
+      setError("至少要有一頁");
+      return;
+    }
+    setGenerating(true);
+    setError("");
+    setResult(null);
+    setProgress("任務啟動中…");
+    try {
+      const r = await runTkdJob({
+        stage: "suggest",
+        siteUrl,
+        sheetUrl,
+        // 有草稿就用 draftId 讓後端從草稿載入；沒有就直接帶勾選頁
+        draftId: draftId ?? undefined,
+        pages: draftId ? undefined : selected.map((p) => ({ url: p.url, label: p.label, type: p.type })),
+        extraKeywords,
+      });
+      setResult(r);
+      // 建議已生成＝這批草稿的任務完成，從待辦清單移除
+      if (draftId) removeDraft(draftId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenerating(false);
+      setProgress("");
+    }
+  }
+
+  // 開啟草稿：載入該草稿的頁面清單，直接進階段二（填關鍵字 → 生建議）
+  async function openDraft(id: number) {
+    setError("");
+    setResult(null);
+    try {
+      const res = await fetch(`/api/tkd/drafts?id=${id}`);
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(String(data.error || "讀取草稿失敗"));
+      const d = data.draft as {
+        siteUrl: string;
+        sheetUrl: string;
+        scope: "important" | "all";
+        pages: { url: string; label?: string; type?: string }[];
+      };
+      setSiteUrl(d.siteUrl);
+      setSheetUrl(d.sheetUrl);
+      setScope(d.scope);
+      setCandidates(d.pages.map((p) => ({ url: p.url, label: p.label, type: p.type || "其他", include: true })));
+      setDraftId(id);
+      setStage1Done(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // 刪除草稿
+  async function removeDraft(id: number) {
+    try {
+      await fetch(`/api/tkd/drafts?id=${id}`, { method: "DELETE" });
+      if (draftId === id) setDraftId(null);
+      loadDrafts();
+    } catch {
+      /* 刪除失敗不擋畫面 */
     }
   }
 
@@ -264,6 +376,39 @@ export default function TkdPage() {
           輸入客戶網址 → AI 蒐集並判斷要收錄的頁面 → 勾選確認 → 爬每頁現有 TKD、AI 生成建議 → 一次寫回登記表
         </p>
       </div>
+
+      {/* 我的草稿：階段一存下的批次，點「續做」直接進階段二 */}
+      {drafts.length > 0 && !stage1Done && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <h2 className="text-sm font-bold text-gray-800 mb-2">我的草稿（現有 TKD 已寫入，待生成建議）</h2>
+          <ul className="divide-y divide-amber-100">
+            {drafts.map((d) => (
+              <li key={d.id} className="flex items-center justify-between py-1.5 text-sm">
+                <span className="text-gray-700 min-w-0">
+                  <span className="font-medium">{d.name}</span>
+                  <span className="text-xs text-gray-400 ml-2">{d.updatedAt}</span>
+                </span>
+                <span className="flex gap-3 text-xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openDraft(d.id)}
+                    className="text-orange-500 hover:text-orange-600 font-medium"
+                  >
+                    續做（生成建議）
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeDraft(d.id)}
+                    className="text-gray-400 hover:text-red-500"
+                  >
+                    刪除
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 表單（第①步） */}
       <form onSubmit={handleCollect} className="space-y-4">
@@ -362,10 +507,14 @@ export default function TkdPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-800">
-                ② 確認要收錄的頁面（已勾 {selectedCount}／共 {candidates.length} 頁）
+                {stage1Done
+                  ? `填關鍵字 → 生成建議 TKD（已追蹤 ${candidates.length} 頁）`
+                  : `② 確認要收錄的頁面（已勾 ${selectedCount}／共 ${candidates.length} 頁）`}
               </h2>
               <p className="text-xs text-gray-400">
-                預設勾「主要目標頁」（網址層數最少的那層），子頁請自行勾選；點網址可開新分頁確認
+                {stage1Done
+                  ? "現有 TKD 已寫入；填指定關鍵字後生成建議，也可先離開之後從「我的草稿」續做"
+                  : "預設勾「主要目標頁」，子頁請自行勾選；點網址可開新分頁確認"}
               </p>
             </div>
 
@@ -430,33 +579,51 @@ export default function TkdPage() {
               );
             })}
 
-            {/* 指定關鍵字：送出前讓使用者確認是否要指定必含的關鍵字 */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                指定關鍵字（選填，逗號分隔）
-              </label>
-              <input
-                type="text"
-                value={extraKeywords}
-                onChange={(e) => setExtraKeywords(e.target.value)}
-                placeholder="例：台中網頁設計, SEO 優化, RWD 網站"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                可以一次給很多個，AI 會逐頁判斷相關性，只把跟該頁相關的詞納入建議 TKD，不會全部硬塞
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={generating || selectedCount === 0}
-              className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
-            >
-              {generating
-                ? progress || "處理中…"
-                : `③ 開始產生 TKD 並寫入登記表（${selectedCount} 頁）`}
-            </button>
+            {/* 階段一：只寫現有 TKD＋存草稿；階段二：填關鍵字 → 生建議 */}
+            {!stage1Done ? (
+              <button
+                type="button"
+                onClick={handleWriteExisting}
+                disabled={generating || selectedCount === 0}
+                className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
+              >
+                {generating
+                  ? progress || "處理中…"
+                  : `① 寫入現有 TKD（追蹤 ${selectedCount} 頁）`}
+              </button>
+            ) : (
+              <>
+                <div className="bg-green-50 border border-green-200 text-green-700 text-xs rounded-lg px-3 py-2">
+                  ✓ 現有 TKD 已寫入登記表、已存成草稿。可以馬上生成建議，也可以之後從「我的草稿」續做。
+                </div>
+                {/* 指定關鍵字：階段二送出前讓使用者確認要納入建議的必含關鍵字 */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    指定關鍵字（選填，逗號分隔）
+                  </label>
+                  <input
+                    type="text"
+                    value={extraKeywords}
+                    onChange={(e) => setExtraKeywords(e.target.value)}
+                    placeholder="例：台中網頁設計, SEO 優化, RWD 網站"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    可以一次給很多個，AI 會逐頁判斷相關性，只把跟該頁相關的詞納入建議 TKD，不會全部硬塞
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGenerateSuggest}
+                  disabled={generating || selectedCount === 0}
+                  className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
+                >
+                  {generating
+                    ? progress || "處理中…"
+                    : `② 生成建議 TKD（${selectedCount} 頁）`}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
