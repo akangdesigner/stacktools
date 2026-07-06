@@ -32,7 +32,7 @@ export default function SiteAuditPage() {
   const [result, setResult] = useState<AuditResult | null>(null);
   // 寫回進度表用
   const [sheetUrl, setSheetUrl] = useState("");
-  const [tab, setTab] = useState("網站技術優化進度");
+  const [tab, setTab] = useState(""); // 留空則用網址 gid 自動辨識分頁
   const [writing, setWriting] = useState(false);
   const [writeMsg, setWriteMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -70,15 +70,21 @@ export default function SiteAuditPage() {
         body: JSON.stringify({
           sheetUrl,
           tab,
-          checks: result.checks.map((c) => ({ item: c.item, status: c.status })),
+          checks: result.checks.map((c) => ({
+            level: c.level,
+            category: c.category,
+            item: c.item,
+            status: c.status,
+            advice: c.advice,
+          })),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "寫入失敗");
-      const nf = data.notFound?.length
-        ? `，另有 ${data.notFound.length} 項在表上找不到對應列（${data.notFound.join("、")}）`
+      const ap = data.appended
+        ? `，另補上 ${data.appended} 列新項目（${data.appendedItems.join("、")}）`
         : "";
-      setWriteMsg({ ok: true, text: `已更新 ${data.updated} 列狀態${nf}` });
+      setWriteMsg({ ok: true, text: `已更新 ${data.updated} 列狀態${ap}` });
     } catch (err) {
       setWriteMsg({ ok: false, text: err instanceof Error ? err.message : "寫入失敗" });
     } finally {
@@ -132,13 +138,13 @@ export default function SiteAuditPage() {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
           </div>
-          <div className="sm:w-72">
-            <label className="block text-xs font-medium text-gray-600 mb-1">分頁名稱</label>
+          <div className="sm:w-96">
+            <label className="block text-xs font-medium text-gray-600 mb-1">分頁名稱（選填）</label>
             <input
               type="text"
               value={tab}
               onChange={(e) => setTab(e.target.value)}
-              placeholder="分頁名稱"
+              placeholder="留空則用網址的 gid 自動辨識分頁"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
           </div>
@@ -215,14 +221,14 @@ export default function SiteAuditPage() {
               <div>
                 <div className="text-sm font-medium text-gray-700">寫回進度表</div>
                 <p className="text-xs text-gray-400 mt-1">
-                  依「確認事項」比對，把上面的狀態寫進進度表的「狀態」欄（只動狀態欄）；工具沒測的項目不會動到。
+                  依「確認事項」比對更新「狀態」欄；表上沒有的項目會補一整列到分頁尾端。
                   {!sheetUrl.trim() && <span className="text-amber-600">　請先於上方填進度表網址。</span>}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleWrite}
-                disabled={writing || !sheetUrl.trim() || !tab.trim()}
+                disabled={writing || !sheetUrl.trim()}
                 className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2 whitespace-nowrap"
               >
                 {writing ? "寫入中…" : "寫入進度表"}
