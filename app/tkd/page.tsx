@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // 單頁 TKD 結果（對應後端 PageTkd）
 interface PageTkd {
@@ -156,6 +157,7 @@ async function pollJob<T>(endpoint: string, jobId: string, onProgress: (msg: str
 }
 
 export default function TkdPage() {
+  const router = useRouter();
   const [siteUrl, setSiteUrl] = useState("");
   const [sheetUrl, setSheetUrl] = useState("");
   const [limit, setLimit] = useState(100);
@@ -296,6 +298,8 @@ export default function TkdPage() {
       setDraftId(typeof data.id === "number" ? data.id : null);
       setDraftSaved(true);
       loadDrafts();
+      // 存好草稿就跳回網站健檢工具 hub
+      router.push("/seo-check");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

@@ -26,6 +26,16 @@ const PATH_LABELS: Record<string, string> = {
   '/page-tracker':          '網頁改動追蹤',
   '/page-tracker/all':      '全部追蹤',
   '/products':              '產品連結',
+  '/seo-check':             '網站健檢工具',
+  '/tkd':                   'TKD 現況產生器',
+  '/site-audit':            '網站技術健檢',
+};
+
+// 概念上的上層（網址是扁平的，但工具掛在某個 hub 底下）：
+// TKD 產生器與網站技術健檢都收在「網站健檢工具」(/seo-check) 之下
+const PATH_PARENTS: Record<string, string> = {
+  '/tkd':        '/seo-check',
+  '/site-audit': '/seo-check',
 };
 
 function getLabel(fullPath: string, seg: string): string {
@@ -43,6 +53,12 @@ export default function Breadcrumb() {
     const fullPath = '/' + segments.slice(0, i + 1).join('/');
     return { href: fullPath, label: getLabel(fullPath, seg) };
   });
+
+  // 扁平網址的工具補上概念上的 hub 上層（如 /tkd → 先插入 網站健檢工具）
+  const parent = crumbs.length > 0 ? PATH_PARENTS[crumbs[0].href] : undefined;
+  if (parent) {
+    crumbs.unshift({ href: parent, label: getLabel(parent, parent.slice(1)) });
+  }
 
   return (
     <nav className="flex items-center gap-1 px-8 py-2.5 border-b border-gray-100 bg-white text-sm text-gray-400 flex-wrap">
