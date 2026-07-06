@@ -1,43 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAccessToken } from '@/lib/gscAuth';
 
-// 把網站技術健檢結果寫回進度表：
-//  - 確認事項對到既有列 → 更新該列「狀態」欄（含底色、下拉）
-//  - 找不到對應列 → 在分頁尾端補列，前面加一列「日期：」分隔，
-//    補的列自帶下拉選單（資料驗證）與膠囊底色，格式跟人工建的一致
-// 帳號共用 GSC 那組 OAuth（SEO 信箱），scope 已含 spreadsheets 讀寫。
+// 把網站技術健檢結果寫回進度表——比照 n8n「只填值、不碰格式」：
+//  - 確認事項對到既有列 → 只更新該列「狀態」欄的值（保留原本的晶片下拉樣式）
+//  - 找不到對應列 → 填進表格「預留的空白列」（那些已設好晶片格式的列），只填值，
+//    值自動繼承格子既有的下拉晶片樣式；預留列不足時才在尾端 append 純值列
+//  - 補的區塊前加一列「日期：」分隔列
+// 工具完全不設 dataValidation / 顯示樣式（API 無法設定晶片顯示樣式，須由表格本身預先設好）。
 export const maxDuration = 60;
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
-
-// 狀態代碼 → 表上中文用語
 const STATUS_TEXT: Record<string, string> = { ok: '正常', warn: '可優化', fail: '需處理' };
-
-// 各欄膠囊底色（RGB 0~1，對齊進度表既有配色）
 const rgb = (red: number, green: number, blue: number) => ({ red, green, blue });
-const LEVEL_COLORS: Record<string, ReturnType<typeof rgb>> = {
-  '直接影響收錄 / 排名': rgb(0.96, 0.83, 0.80),
-  '影響效率 / 放大成效': rgb(1, 0.90, 0.75),
-  '品質優化 / 中長期': rgb(0.87, 0.93, 0.83),
-};
-const CATEGORY_COLORS: Record<string, ReturnType<typeof rgb>> = {
-  '成效與追蹤': rgb(0.82, 0.89, 0.95),
-  '技術面': rgb(1, 0.95, 0.75),
-  '在地與品牌': rgb(1, 0.88, 0.75),
-  '網站結構': rgb(0.90, 0.85, 0.95),
-  '內容與頁面': rgb(0.97, 0.88, 0.82),
-  '外部權重': rgb(0.97, 0.80, 0.80),
-};
-const STATUS_COLORS: Record<string, ReturnType<typeof rgb>> = {
-  '正常': rgb(0.85, 0.93, 0.83),
-  '需處理': rgb(0.97, 0.80, 0.80),
-  '可優化': rgb(1, 0.95, 0.70),
-};
 const DATE_COLOR = rgb(0.99, 0.87, 0.76); // 日期分隔列橘底
-
-const LEVEL_OPTIONS = Object.keys(LEVEL_COLORS);
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_COLORS);
-const STATUS_OPTIONS = ['正常', '需處理', '可優化'];
 
 // 從進度表網址解析 spreadsheetId
 function extractSheetId(input: string): string | null {
@@ -52,7 +27,7 @@ function extractGid(input: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-// 用 gid 查分頁名稱（讀值用）
+// 用 gid 查分頁名稱
 async function resolveTabByGid(sheetId: string, gid: number, accessToken: string): Promise<string | null> {
   const res = await fetch(`${SHEETS_BASE}/${sheetId}?fields=sheets.properties(sheetId,title)`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -62,21 +37,14 @@ async function resolveTabByGid(sheetId: string, gid: number, accessToken: string
   return data.sheets?.find((s) => s.properties?.sheetId === gid)?.properties?.title ?? null;
 }
 
-// 一個儲存格：值＋底色＋下拉選單＋可選粗體
+// 純值儲存格（可選底色、粗體）；不含 dataValidation，寫入時保留格子既有的下拉晶片樣式
 type Color = ReturnType<typeof rgb>;
-function cell(value: string, bg?: Color, options?: string[], bold = false) {
+function cell(value: string, bg?: Color, bold = false) {
   const cd: Record<string, unknown> = { userEnteredValue: { stringValue: value } };
-  const fmt: Record<string, unknown> = { verticalAlignment: 'MIDDLE', wrapStrategy: 'WRAP' };
+  const fmt: Record<string, unknown> = {};
   if (bg) fmt.backgroundColor = bg;
   if (bold) fmt.textFormat = { bold: true };
-  cd.userEnteredFormat = fmt;
-  if (options) {
-    cd.dataValidation = {
-      condition: { type: 'ONE_OF_LIST', values: options.map((o) => ({ userEnteredValue: o })) },
-      strict: false,
-      showCustomUi: true,
-    };
-  }
+  if (bg || bold) cd.userEnteredFormat = fmt;
   return cd;
 }
 
@@ -112,7 +80,7 @@ export async function POST(req: NextRequest) {
   }
   const rows = ((await readRes.json()) as { values?: string[][] }).values ?? [];
 
-  // 找標題列（含「確認事項」）與各欄位置
+  // 找標題列與各欄位置
   let headerRowIdx = -1;
   let itemCol = -1;
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
@@ -135,58 +103,93 @@ export async function POST(req: NextRequest) {
   const adviceCol = header.findIndex((c) => c?.trim() === 'SEO 建議事項');
   const maxCol = Math.max(levelCol, categoryCol, statusCol, itemCol, adviceCol);
 
-  // 確認事項 → 列號
+  // 確認事項 → 列號；同時收集「確認事項為空」的預留列（給補列填值用）
   const itemToRow = new Map<string, number>();
+  const blankRows: number[] = [];
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const name = rows[r][itemCol]?.trim();
     if (name) itemToRow.set(name, r);
+    else blankRows.push(r);
   }
 
-  // 逐項比對：找到→更新狀態欄；找不到→組整列準備補
+  // 針對某列的某些欄，組 updateCells 純值請求（fields 只動值，保留格子既有下拉晶片樣式）
   const requests: unknown[] = [];
+  const setRowValues = (rowIdx: number, cells: { col: number; cd: Record<string, unknown> }[], withFormat = false) => {
+    for (const { col, cd } of cells) {
+      requests.push({
+        updateCells: {
+          range: { sheetId: gid, startRowIndex: rowIdx, endRowIndex: rowIdx + 1, startColumnIndex: col, endColumnIndex: col + 1 },
+          rows: [{ values: [cd] }],
+          fields: withFormat ? 'userEnteredValue,userEnteredFormat.backgroundColor,userEnteredFormat.textFormat' : 'userEnteredValue',
+        },
+      });
+    }
+  };
+  // 補列時把一整列的欄位湊起來（只填值，不動格式）
+  const rowCells = (check: { level: string; category: string; item: string; status: string; advice: string }, text: string) => {
+    const cs: { col: number; cd: Record<string, unknown> }[] = [];
+    if (levelCol !== -1) cs.push({ col: levelCol, cd: cell(check.level) });
+    if (categoryCol !== -1) cs.push({ col: categoryCol, cd: cell(check.category) });
+    cs.push({ col: statusCol, cd: cell(text) });
+    cs.push({ col: itemCol, cd: cell(check.item, undefined, true) });
+    if (adviceCol !== -1) cs.push({ col: adviceCol, cd: cell(check.advice) });
+    return cs;
+  };
+
+  let updated = 0;
+  let filled = 0; // 填進預留列
   const appendRows: { values: unknown[] }[] = [];
   const appendedItems: string[] = [];
-  let updated = 0;
+  let bi = 0; // 預留列指標
+
+  // 先預留一列給「日期：」分隔（放在補列區最前面）
+  const needDateRow = body.checks.some((c) => !itemToRow.has(c.item.trim()));
+
+  if (needDateRow) {
+    const today = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
+    if (bi < blankRows.length) {
+      const r = blankRows[bi++];
+      setRowValues(r, [
+        { col: Math.max(levelCol, 0), cd: cell('日期：', DATE_COLOR, true) },
+        { col: Math.max(categoryCol, 1), cd: cell(today, DATE_COLOR, true) },
+        { col: itemCol, cd: cell('網站技術健檢報告', DATE_COLOR, true) },
+      ], true);
+    } else {
+      const values: unknown[] = Array.from({ length: maxCol + 1 }, () => ({ userEnteredFormat: { backgroundColor: DATE_COLOR } }));
+      values[Math.max(levelCol, 0)] = cell('日期：', DATE_COLOR, true);
+      values[Math.max(categoryCol, 1)] = cell(today, DATE_COLOR, true);
+      values[itemCol] = cell('網站技術健檢報告', DATE_COLOR, true);
+      appendRows.push({ values });
+    }
+  }
 
   for (const check of body.checks) {
     const text = STATUS_TEXT[check.status] ?? check.status;
     const rowIdx = itemToRow.get(check.item.trim());
     if (rowIdx !== undefined) {
-      // 更新既有列的狀態欄（值＋底色＋下拉）
-      requests.push({
-        updateCells: {
-          range: { sheetId: gid, startRowIndex: rowIdx, endRowIndex: rowIdx + 1, startColumnIndex: statusCol, endColumnIndex: statusCol + 1 },
-          rows: [{ values: [cell(text, STATUS_COLORS[text], STATUS_OPTIONS)] }],
-          fields: 'userEnteredValue,userEnteredFormat.backgroundColor,dataValidation',
-        },
-      });
+      // 既有列：只改狀態欄的值
+      setRowValues(rowIdx, [{ col: statusCol, cd: cell(text) }]);
       updated++;
       continue;
     }
-    // 補列：整列自帶膠囊底色＋下拉
-    const values: unknown[] = Array.from({ length: maxCol + 1 }, () => ({}));
-    if (levelCol !== -1) values[levelCol] = cell(check.level, LEVEL_COLORS[check.level], LEVEL_OPTIONS);
-    if (categoryCol !== -1) values[categoryCol] = cell(check.category, CATEGORY_COLORS[check.category], CATEGORY_OPTIONS);
-    values[statusCol] = cell(text, STATUS_COLORS[text], STATUS_OPTIONS);
-    values[itemCol] = cell(check.item, undefined, undefined, true);
-    if (adviceCol !== -1) values[adviceCol] = cell(check.advice);
-    appendRows.push({ values });
+    // 補列：優先填進預留空列（繼承晶片樣式），不足才 append
+    if (bi < blankRows.length) {
+      setRowValues(blankRows[bi++], rowCells(check, text));
+      filled++;
+    } else {
+      const values: unknown[] = Array.from({ length: maxCol + 1 }, () => ({}));
+      for (const { col, cd } of rowCells(check, text)) values[col] = cd;
+      appendRows.push({ values });
+    }
     appendedItems.push(check.item);
   }
 
-  // 有要補的列時，前面加一列「日期：」分隔列
   if (appendRows.length > 0) {
-    const today = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
-    const dateValues: unknown[] = Array.from({ length: maxCol + 1 }, () => ({ userEnteredFormat: { backgroundColor: DATE_COLOR } }));
-    dateValues[Math.max(levelCol, 0)] = cell('日期：', DATE_COLOR, undefined, true);
-    dateValues[Math.max(categoryCol, 1)] = cell(today, DATE_COLOR, undefined, true);
-    dateValues[itemCol] = cell('網站技術健檢報告', DATE_COLOR, undefined, true);
-    requests.push({ appendCells: { sheetId: gid, rows: [{ values: dateValues }, ...appendRows], fields: '*' } });
+    requests.push({ appendCells: { sheetId: gid, rows: appendRows, fields: 'userEnteredValue,userEnteredFormat.backgroundColor,userEnteredFormat.textFormat' } });
   }
 
   if (requests.length === 0) return NextResponse.json({ updated: 0, appended: 0, appendedItems: [] });
 
-  // 一次送出所有 updateCells / appendCells
   const batchRes = await fetch(`${SHEETS_BASE}/${sheetId}:batchUpdate`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -197,5 +200,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `寫入進度表失敗：${err.error?.message ?? batchRes.status}` }, { status: 502 });
   }
 
-  return NextResponse.json({ updated, appended: appendedItems.length, appendedItems });
+  return NextResponse.json({ updated, appended: appendedItems.length, appendedItems, filledBlankRows: filled });
 }

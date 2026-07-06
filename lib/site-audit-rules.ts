@@ -131,9 +131,21 @@ function checkImgAlt(root: NHTMLElement): CheckResult {
   }
 
   const empty = imgs.filter((img) => !(img.getAttribute('alt') ?? '').trim());
+  // 列出前幾張空白圖的檔名（去重），讓建議具體指出是哪些圖
+  const samples = [
+    ...new Set(
+      empty
+        .map((img) => {
+          const src = (img.getAttribute('src') || img.getAttribute('data-src') || '').split('?')[0];
+          return src.split('/').pop() || src;
+        })
+        .filter(Boolean),
+    ),
+  ].slice(0, 5);
+  const sampleText = samples.length ? `，例如：${samples.join('、')}${empty.length > samples.length ? ' 等' : ''}` : '';
   const evidence = `${empty.length}/${imgs.length} 張圖 alt 空白`;
   return empty.length
-    ? { ...base, status: 'fail', advice: '有圖片 alt 留空，Google 圖片搜尋無法抓取', evidence }
+    ? { ...base, status: 'fail', advice: `有 ${empty.length}/${imgs.length} 張圖 alt 留空${sampleText}，Google 圖片搜尋無法抓取，建議補上描述性 alt`, evidence }
     : { ...base, status: 'ok', advice: '所有圖片皆有 alt', evidence };
 }
 
