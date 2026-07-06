@@ -277,15 +277,44 @@ async function collectMenuPages(
   add(base, '首頁'); // 首頁一定放進去（記轉址後的網址）
 
   if (root) {
-    // 只抓主選單（header 與 nav）內的連結——這些通常是網站的重點頁。
+    // 先抓語意化主選單（header 與 nav）內的連結——這些通常是網站的重點頁。
     // 刻意不掃全頁連結，才不會把首頁列出的一篇篇文章也撈進來。
+    let menuLinks = 0;
     for (const a of root.querySelectorAll('header a, nav a')) {
       const href = a.getAttribute('href');
       if (!href) continue;
       try {
         add(new URL(href, base).href, a.text); // a.text 就是選單顯示文字
+        menuLinks++;
       } catch {
         /* 略過無法解析的連結 */
+      }
+    }
+
+    // 退路：有些模板平台（Vue SPA 等）選單不放在語意化 <header>/<nav>，而是掛在
+    // <ul class="_header_nav"> 這類容器，上面會抓到 0、選單名全空、登記表只能顯示網址。
+    // 改用「選單結構」判斷：取呈「<ul>/<nav> 裡有 ≥3 個 <li>、且 a 文字短」的連結當選單名
+    // （文字長的多半是文章標題，用長度上限濾掉；圖片連結沒文字也濾掉）。
+    // 只在語意化選單幾乎抓不到（<3）時才啟動，不動原本正常的站。
+    if (menuLinks < 3) {
+      for (const ul of root.querySelectorAll('ul, nav')) {
+        const liCount = ul.querySelectorAll('li').length;
+        const links = ul
+          .querySelectorAll('a')
+          .filter((a) => {
+            const t = a.text.replace(/\s+/g, ' ').trim();
+            return t && !t.startsWith('<') && t.length <= 20; // 有短文字、非圖片
+          });
+        if (liCount < 3 || links.length < 3 || links.length > 20) continue;
+        for (const a of links) {
+          const href = a.getAttribute('href');
+          if (!href) continue;
+          try {
+            add(new URL(href, base).href, a.text);
+          } catch {
+            /* 略過無法解析的連結 */
+          }
+        }
       }
     }
   }
