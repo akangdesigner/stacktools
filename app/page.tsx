@@ -106,8 +106,8 @@ const hrTools: Tool[] = [
 const techTools: Tool[] = [
   {
     href: "/dev",
-    title: "會議記錄與開發進度",
-    description: "技術部內部會議討論紀錄，以及個人開發進度表，方便團隊掌握討論內容與任務追蹤。",
+    title: "技術部開發日程安排",
+    description: "技術部內部會議討論紀錄、成員任務清單，以及從客戶進度追蹤撈任務分配給成員的工具。",
     icon: "🛠️",
     color: "bg-slate-50 border-slate-200 hover:border-slate-400",
     iconBg: "bg-slate-100",

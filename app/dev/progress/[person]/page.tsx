@@ -4,10 +4,12 @@ import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
 
 interface CurrentTask {
-  id: number; person: string; title: string; content: string; note: string; created_at: string;
+  id: number; person: string; title: string; content: string; note: string;
+  start_date: string; due_date: string; created_at: string;
 }
 interface CompletedTask {
-  id: number; person: string; title: string; content: string; note: string; completed_at: string; created_at: string;
+  id: number; person: string; title: string; content: string; note: string;
+  start_date: string; due_date: string; completed_at: string; created_at: string;
 }
 
 const MEMBERS = ['nana', 'todd', 'steven', 'emma'];
@@ -45,13 +47,18 @@ export default function PersonProgressPage() {
   const [title,      setTitle]      = useState('');
   const [content,    setContent]    = useState('');
   const [note,       setNote]       = useState('');
+  const [startDate,  setStartDate]  = useState('');  // 預計開始日
+  const [dueDate,    setDueDate]    = useState('');  // 預計完成日
   const [submitting, setSubmitting] = useState(false);
 
   const [editId,      setEditId]      = useState<number | null>(null);
+  const [editType,    setEditType]    = useState<'current' | 'completed'>('completed');
   const [editTitle,   setEditTitle]   = useState('');
   const [editContent, setEditContent] = useState('');
   const [editNote,    setEditNote]    = useState('');
   const [editDate,    setEditDate]    = useState('');
+  const [editStart,   setEditStart]   = useState('');  // 編輯中的預計開始日
+  const [editDue,     setEditDue]     = useState('');  // 編輯中的預計完成日
   const [saving,      setSaving]      = useState(false);
 
   if (!MEMBERS.includes(person)) notFound();
@@ -73,9 +80,9 @@ export default function PersonProgressPage() {
     await fetch('/api/dev/progress', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ person, title: title.trim(), content: content.trim(), note: note.trim() }),
+      body: JSON.stringify({ person, title: title.trim(), content: content.trim(), note: note.trim(), start_date: startDate, due_date: dueDate }),
     });
-    setTitle(''); setContent(''); setNote('');
+    setTitle(''); setContent(''); setNote(''); setStartDate(''); setDueDate('');
     setShowForm(false); setSubmitting(false);
     load();
   }
@@ -101,20 +108,35 @@ export default function PersonProgressPage() {
 
   function startEdit(task: CompletedTask) {
     setEditId(task.id);
+    setEditType('completed');
     setEditTitle(task.title);
     setEditContent(task.content);
     setEditNote(task.note);
     setEditDate(task.completed_at.slice(0, 10));
   }
 
+  // 編輯進行中任務（含日程日期）
+  function startEditCurrent(task: CurrentTask) {
+    setEditId(task.id);
+    setEditType('current');
+    setEditTitle(task.title);
+    setEditContent(task.content);
+    setEditNote(task.note);
+    setEditStart(task.start_date);
+    setEditDue(task.due_date);
+  }
+
   async function handleSaveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editTitle.trim()) return;
     setSaving(true);
+    const payload = editType === 'current'
+      ? { id: editId, type: 'current', title: editTitle.trim(), content: editContent.trim(), note: editNote.trim(), start_date: editStart, due_date: editDue }
+      : { id: editId, title: editTitle.trim(), content: editContent.trim(), note: editNote.trim(), completed_at: editDate };
     await fetch('/api/dev/progress', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: editId, title: editTitle.trim(), content: editContent.trim(), note: editNote.trim(), completed_at: editDate }),
+      body: JSON.stringify(payload),
     });
     setSaving(false); setEditId(null);
     load();
@@ -168,7 +190,7 @@ export default function PersonProgressPage() {
             </div>
             <div>
               <h1 className="text-lg font-black text-gray-900 uppercase tracking-widest">{person}</h1>
-              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wide">開發進度</p>
+              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wide">開發日程</p>
             </div>
           </div>
 
@@ -253,6 +275,27 @@ export default function PersonProgressPage() {
                 onChange={e => setNote(e.target.value)}
                 className="w-full text-xs text-gray-400 bg-transparent outline-none placeholder:text-gray-200"
               />
+              {/* 日程安排：預計開始／完成日 */}
+              <div className="flex items-center gap-3 pt-1">
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-gray-400">預計開始</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-0.5 bg-white outline-none font-mono"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono text-gray-400">預計完成</span>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-0.5 bg-white outline-none font-mono"
+                  />
+                </label>
+              </div>
               <div className="flex justify-end">
                 <button
                   type="submit"
@@ -274,26 +317,82 @@ export default function PersonProgressPage() {
           ) : (
             <div className="space-y-1">
               {current.map(task => (
-                <div
-                  key={task.id}
-                  className="group flex items-start gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <button
-                    onClick={() => handleComplete(task.id)}
-                    className="mt-0.5 w-4 h-4 rounded border border-gray-200 shrink-0 hover:border-emerald-400 hover:bg-emerald-50 transition-colors"
-                    title="標記完成"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800">{task.title}</p>
-                    {task.content && <p className="text-xs text-gray-400 mt-0.5 whitespace-pre-wrap leading-relaxed">{task.content}</p>}
-                    {task.note && <p className="text-xs text-gray-300 italic mt-0.5">{task.note}</p>}
-                  </div>
-                  <button
-                    onClick={() => handleDelete(task.id, 'current')}
-                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 text-xs font-mono shrink-0 pt-0.5 transition-all"
-                  >
-                    ✕
-                  </button>
+                <div key={task.id}>
+                  {editId === task.id && editType === 'current' ? (
+                    <form onSubmit={handleSaveEdit} className="border border-dashed border-gray-200 rounded-xl p-3 space-y-2 mb-1 bg-gray-50">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        className="w-full text-sm font-medium text-gray-900 bg-transparent outline-none"
+                      />
+                      <textarea
+                        value={editContent}
+                        onChange={e => setEditContent(e.target.value)}
+                        rows={2}
+                        placeholder="任務內容"
+                        className="w-full text-sm text-gray-500 bg-transparent outline-none resize-none placeholder:text-gray-300"
+                      />
+                      <input
+                        type="text"
+                        value={editNote}
+                        onChange={e => setEditNote(e.target.value)}
+                        placeholder="備註"
+                        className="w-full text-xs text-gray-400 bg-transparent outline-none placeholder:text-gray-200"
+                      />
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono text-gray-400">預計開始</span>
+                            <input
+                              type="date"
+                              value={editStart}
+                              onChange={e => setEditStart(e.target.value)}
+                              className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-0.5 bg-white outline-none font-mono"
+                            />
+                          </label>
+                          <label className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-mono text-gray-400">預計完成</span>
+                            <input
+                              type="date"
+                              value={editDue}
+                              onChange={e => setEditDue(e.target.value)}
+                              className="text-xs text-gray-600 border border-gray-200 rounded px-2 py-0.5 bg-white outline-none font-mono"
+                            />
+                          </label>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setEditId(null)} className="text-xs font-mono text-gray-400 hover:text-gray-600">取消</button>
+                          <button type="submit" disabled={saving || !editTitle.trim()} className="px-2.5 py-1 text-xs font-mono bg-gray-900 text-white rounded hover:bg-gray-700 disabled:opacity-30 transition-colors">儲存</button>
+                        </div>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="group flex items-start gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors">
+                      <button
+                        onClick={() => handleComplete(task.id)}
+                        className="mt-0.5 w-4 h-4 rounded border border-gray-200 shrink-0 hover:border-emerald-400 hover:bg-emerald-50 transition-colors"
+                        title="標記完成"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800">{task.title}</p>
+                        {task.content && <p className="text-xs text-gray-400 mt-0.5 whitespace-pre-wrap leading-relaxed">{task.content}</p>}
+                        {task.note && <p className="text-xs text-gray-300 italic mt-0.5">{task.note}</p>}
+                        {(task.start_date || task.due_date) ? (
+                          <p className="text-[10px] font-mono text-gray-400 mt-1 tabular-nums">
+                            📅 {task.start_date || '?'} → {task.due_date || '?'}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] font-mono text-amber-400 mt-1">未排程・按「編輯」補上日期</p>
+                        )}
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-2 shrink-0 pt-0.5 transition-all">
+                        <button onClick={() => startEditCurrent(task)} className="text-[10px] font-mono text-gray-300 hover:text-gray-600 uppercase">編輯</button>
+                        <button onClick={() => handleDelete(task.id, 'current')} className="text-gray-300 hover:text-red-400 text-xs font-mono">✕</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -325,7 +424,7 @@ export default function PersonProgressPage() {
                   <div className="space-y-px pl-1">
                     {grouped[date].map(task => (
                       <div key={task.id}>
-                        {editId === task.id ? (
+                        {editId === task.id && editType === 'completed' ? (
                           <form onSubmit={handleSaveEdit} className="border border-dashed border-gray-200 rounded-xl p-3 space-y-2 mb-1 bg-gray-50">
                             <input
                               autoFocus

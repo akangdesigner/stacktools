@@ -11,8 +11,8 @@ const sections = [
   },
   {
     href: "/dev/progress",
-    title: "個人開發進度",
-    description: "每位工程師登記目前進行中的任務、預計完成時間與阻礙，方便彼此掌握整體進度。",
+    title: "開發日程安排",
+    description: "每位工程師的任務清單與完成紀錄，登記進行中的任務、預計日期，方便彼此掌握進度。",
     icon: "📋",
     color: "bg-blue-50 border-blue-200 hover:border-blue-400",
     iconBg: "bg-blue-100",
@@ -23,7 +23,7 @@ export default function DevPage() {
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">會議記錄與開發進度</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">技術部開發日程安排</h1>
         <p className="text-sm text-gray-500">技術部內部協作工具</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

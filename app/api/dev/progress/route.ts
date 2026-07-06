@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentTasks, getCompletedTasks, addTask, completeTask, deleteCurrentTask, deleteCompletedTask, updateCompletedTask } from '@/lib/devDb';
+import { getCurrentTasks, getCompletedTasks, addTask, completeTask, deleteCurrentTask, deleteCompletedTask, updateCompletedTask, updateCurrentTask } from '@/lib/devDb';
 
 export async function GET() {
   return NextResponse.json({
@@ -9,11 +9,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { person, title, content, note } = await req.json();
+  const { person, title, content, note, start_date, due_date } = await req.json();
   if (!person?.trim() || !title?.trim()) {
     return NextResponse.json({ error: '人員與標題為必填' }, { status: 400 });
   }
-  addTask(person.trim(), title.trim(), (content ?? '').trim(), (note ?? '').trim());
+  addTask(person.trim(), title.trim(), (content ?? '').trim(), (note ?? '').trim(), (start_date ?? '').trim(), (due_date ?? '').trim());
   return NextResponse.json({ ok: true });
 }
 
@@ -24,9 +24,14 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, title, content, note, completed_at } = await req.json();
+  const { id, type, title, content, note, completed_at, start_date, due_date } = await req.json();
   if (!id || !title?.trim()) return NextResponse.json({ error: '必填欄位缺失' }, { status: 400 });
-  updateCompletedTask(Number(id), title.trim(), (content ?? '').trim(), (note ?? '').trim(), completed_at);
+  if (type === 'current') {
+    // 更新進行中任務（含日程安排日期）
+    updateCurrentTask(Number(id), title.trim(), (content ?? '').trim(), (note ?? '').trim(), (start_date ?? '').trim(), (due_date ?? '').trim());
+  } else {
+    updateCompletedTask(Number(id), title.trim(), (content ?? '').trim(), (note ?? '').trim(), completed_at);
+  }
   return NextResponse.json({ ok: true });
 }
 

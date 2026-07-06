@@ -1,6 +1,5 @@
 import { getCurrentTasks, getCompletedTasks } from '@/lib/devDb';
 import Link from 'next/link';
-import CompletedItem from './CompletedItem';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +59,7 @@ export default async function DevProgressPage({
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-[10px] font-mono tracking-[0.2em] text-gray-400 uppercase mb-1">Dev Workspace</p>
-          <h1 className="text-xl font-bold text-gray-900">個人開發進度</h1>
+          <h1 className="text-xl font-bold text-gray-900">開發日程安排</h1>
         </div>
 
         {/* Month switcher */}
@@ -90,16 +89,28 @@ export default async function DevProgressPage({
         </div>
       </div>
 
+      {/* 任務分配入口卡片 */}
+      <Link
+        href="/dev/progress/assign"
+        className="group flex items-center gap-4 bg-amber-50 border-2 border-amber-200 hover:border-amber-400 rounded-xl px-5 py-4 mb-8 transition-all"
+      >
+        <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center text-xl shrink-0">📌</div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">任務分配</h3>
+          <p className="text-sm text-gray-500">從客戶進度追蹤撈出本月的 SEO 里程碑與網站任務，指派給成員（可一次派給多人）</p>
+        </div>
+        <span className="text-sm font-mono text-amber-400 group-hover:text-amber-600 transition-colors shrink-0">→</span>
+      </Link>
+
       <div className="h-px bg-gray-100 mb-5" />
 
       {/* Member cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {MEMBERS.map(member => {
           const accent       = ACCENT[member];
-          const myTasks      = current.filter(c => c.person === member);
-          const myDone       = monthCompleted.filter(c => c.person === member)
-                                .sort((a, b) => b.completed_at.localeCompare(a.completed_at));
-          const maxBar       = Math.max(...MEMBERS.map(m => current.filter(c => c.person === m).length), 1);
+          const myTasks      = current.filter(c => c.person === member)
+                                .sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'));
+          const myDone       = monthCompleted.filter(c => c.person === member);
 
           return (
             <Link
@@ -116,33 +127,35 @@ export default async function DevProgressPage({
                   <span className="text-xs font-black text-gray-800 uppercase tracking-widest">{member}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {myTasks.length > 0 && (
+                  {myDone.length > 0 && (
                     <span className="text-[10px] font-mono text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
-                      {myTasks.length} 進行中
+                      {myDone.length} 本月完成
                     </span>
                   )}
                   <span className="text-xs font-mono text-gray-300 group-hover:text-gray-500 transition-colors">→</span>
                 </div>
               </div>
 
-              {/* Completed this month */}
+              {/* 待辦中任務清單 */}
               <div className="px-5 py-4">
-                {myDone.length === 0 ? (
-                  <p className="text-xs text-gray-300 font-mono py-3 text-center">— 本月尚無完成事項</p>
+                {myTasks.length === 0 ? (
+                  <p className="text-xs text-gray-300 font-mono py-3 text-center">— 目前沒有待辦任務</p>
                 ) : (
                   <div className="space-y-2.5">
-                    {myDone.slice(0, 5).map(t => (
-                      <CompletedItem
-                        key={t.id}
-                        id={t.id}
-                        title={t.title}
-                        content={t.content}
-                        completedAt={t.completed_at}
-                      />
+                    {myTasks.slice(0, 5).map(t => (
+                      <div key={t.id} className="flex items-start gap-2.5">
+                        <span className="mt-1 w-3.5 h-3.5 rounded border border-gray-200 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 truncate">{t.title}</p>
+                          {t.due_date && (
+                            <p className="text-[10px] font-mono text-gray-400 tabular-nums">📅 {t.due_date}</p>
+                          )}
+                        </div>
+                      </div>
                     ))}
-                    {myDone.length > 5 && (
-                      <p className="text-[11px] font-mono text-gray-400 pl-[7.75rem]">
-                        +{myDone.length - 5} 項…
+                    {myTasks.length > 5 && (
+                      <p className="text-[11px] font-mono text-gray-400 pl-6">
+                        +{myTasks.length - 5} 項…
                       </p>
                     )}
                   </div>
@@ -152,15 +165,15 @@ export default async function DevProgressPage({
               {/* Footer bar */}
               <div className="px-5 pb-4">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wide">本月完成</span>
-                  <span className={`text-sm font-bold font-mono tabular-nums ${myDone.length > 0 ? accent.text : 'text-gray-200'}`}>
-                    {myDone.length}
+                  <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wide">待辦中</span>
+                  <span className={`text-sm font-bold font-mono tabular-nums ${myTasks.length > 0 ? accent.text : 'text-gray-200'}`}>
+                    {myTasks.length}
                   </span>
                 </div>
                 <div className="h-1 rounded-full bg-gray-100 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${accent.bar} transition-all duration-500`}
-                    style={{ width: totalMonthDone > 0 ? `${(myDone.length / totalMonthDone) * 100}%` : '0%' }}
+                    style={{ width: totalCurrent > 0 ? `${(myTasks.length / totalCurrent) * 100}%` : '0%' }}
                   />
                 </div>
               </div>
