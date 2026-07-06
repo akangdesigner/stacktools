@@ -12,6 +12,7 @@ interface PageTkd {
   keywords: string;
   h1: string;
   error?: string;
+  suggest?: { title: string; description: string; keywords: string; h1: string }; // 這次生成的建議值
 }
 
 // 後端 /api/tkd 的成功回傳
@@ -167,6 +168,7 @@ export default function TkdPage() {
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<CandidatePage[] | null>(null);
   const [extraKeywords, setExtraKeywords] = useState(""); // 指定關鍵字（逗號分隔，全站共用）
+  const [notes, setNotes] = useState(""); // 微調：修正指示（自由文字）
   const [collectProgress, setCollectProgress] = useState(""); // 第①步背景任務的進度訊息
   const [progress, setProgress] = useState(""); // 第②步背景任務的進度訊息
   const [result, setResult] = useState<TkdResult | null>(null);
@@ -315,8 +317,7 @@ export default function TkdPage() {
     }
     setGenerating(true);
     setError("");
-    setResult(null);
-    setProgress("任務啟動中…");
+    setProgress("任務啟動中…"); // 不清舊 result：微調重跑時畫面不會閃回勾選區
     try {
       const r = await runTkdJob({
         stage: "suggest",
@@ -326,6 +327,7 @@ export default function TkdPage() {
         draftId: draftId ?? undefined,
         pages: draftId ? undefined : selected.map((p) => ({ url: p.url, label: p.label, type: p.type })),
         extraKeywords,
+        notes,
       });
       setResult(r);
       // 建議已生成＝這批草稿的任務完成，從待辦清單移除
@@ -704,10 +706,10 @@ export default function TkdPage() {
               <thead className="bg-gray-50 text-gray-500">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">頁面</th>
-                  <th className="text-left px-3 py-2 font-medium">現有 title</th>
-                  <th className="text-left px-3 py-2 font-medium">現有 description</th>
-                  <th className="text-left px-3 py-2 font-medium">現有 keywords</th>
-                  <th className="text-left px-3 py-2 font-medium">現有 H1</th>
+                  <th className="text-left px-3 py-2 font-medium">建議 title</th>
+                  <th className="text-left px-3 py-2 font-medium">建議 description</th>
+                  <th className="text-left px-3 py-2 font-medium">建議 keywords</th>
+                  <th className="text-left px-3 py-2 font-medium">建議 H1</th>
                 </tr>
               </thead>
               <tbody>
@@ -725,14 +727,50 @@ export default function TkdPage() {
                       </a>
                       {p.error && <span className="block text-red-400">抓取失敗：{p.error}</span>}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{p.title}</td>
-                    <td className="px-3 py-2 text-gray-600">{p.description}</td>
-                    <td className="px-3 py-2 text-gray-600">{p.keywords}</td>
-                    <td className="px-3 py-2 text-gray-600">{p.h1}</td>
+                    <td className="px-3 py-2 text-gray-700">{p.suggest?.title}</td>
+                    <td className="px-3 py-2 text-gray-700">{p.suggest?.description}</td>
+                    <td className="px-3 py-2 text-gray-700">{p.suggest?.keywords}</td>
+                    <td className="px-3 py-2 text-gray-700">{p.suggest?.h1}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* 微調重生：補關鍵字 / 給修正指示，讓 AI 重新生成並覆寫建議欄 */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h3 className="text-sm font-bold text-gray-800">微調重生（補關鍵字 / 修正錯字）</h3>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">補充關鍵字（選填，逗號分隔）</label>
+              <input
+                type="text"
+                value={extraKeywords}
+                onChange={(e) => setExtraKeywords(e.target.value)}
+                placeholder="例：GIA, 求婚戒指, 八心八箭"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">修正指示（選填）</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="例：正確用詞是「八心八箭」，不是「8新8戒」；品牌名保留 Polello"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                會對同一批已追蹤的頁重新生成建議、覆寫登記表的建議欄；優先權高於一切，AI 一定遵守。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateSuggest}
+              disabled={generating}
+              className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2"
+            >
+              {generating ? progress || "處理中…" : "重新生成建議（微調）"}
+            </button>
           </div>
         </div>
       )}

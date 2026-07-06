@@ -8,7 +8,7 @@ import {
   appendRows,
   clearRowsOfSite,
 } from '@/lib/tkd-sheet';
-import { generateSuggestion } from '@/lib/tkd-suggest';
+import { generateSuggestion, type TkdSuggestion } from '@/lib/tkd-suggest';
 import { createTkdJob, progressTkdJob, completeTkdJob, failTkdJob, getTkdJob } from '@/lib/tkd-jobs';
 import { getDraft, type DraftPage } from '@/lib/tkdDb';
 
@@ -47,12 +47,13 @@ async function runPipeline(
     scope: 'important' | 'all';
     dryRun: boolean;
     extraKeywords: string;
+    notes: string;
     stage: 'existing' | 'suggest';
     draftId?: number;
     pages?: DraftPage[];
   },
 ): Promise<void> {
-  const { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, stage } = params;
+  const { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, notes, stage } = params;
 
   // 頁面清單來源優先序：draftId（階段二從草稿載入）＞ 直接帶的勾選頁 ＞ 自己蒐集（舊用法）
   const draftPages = params.draftId ? getDraft(params.draftId)?.pages : undefined;
@@ -100,6 +101,7 @@ async function runPipeline(
 
   // 5. 逐頁組列：現有欄直接填；非預覽時再逐頁「依序」呼叫 AI 生成建議欄（不可並行，並行會被截短）
   const rows: string[][] = [];
+  const sugList: (TkdSuggestion | undefined)[] = []; // 每頁的建議值，跟 pages 同順序，回傳給前端顯示
   let suggested = 0;
   let doneCount = 0;
   for (const p of pages) {
@@ -112,11 +114,12 @@ async function runPipeline(
     if (idxDesc >= 0) row[idxDesc] = p.description;
     if (idxKw >= 0) row[idxKw] = p.keywords;
     if (idxH1 >= 0) row[idxH1] = p.h1;
+    let sug: TkdSuggestion | undefined;
     // 只有階段二（suggest）才生建議；階段一（existing）只寫現有欄
     if (stage === 'suggest' && !dryRun) {
       progressTkdJob(jobId, `AI 生成建議中（${doneCount + 1}／${pages.length} 頁）`, doneCount, pages.length);
       try {
-        const sug = await generateSuggestion({
+        sug = await generateSuggestion({
           url: p.url,
           label: p.label,
           title: p.title,
@@ -125,6 +128,7 @@ async function runPipeline(
           h1: p.h1,
           content: p.content,
           extraKeywords: extraKeywords || undefined,
+          notes: notes || undefined,
         });
         if (idxSugT >= 0) row[idxSugT] = sug.title;
         if (idxSugD >= 0) row[idxSugD] = sug.description;
@@ -137,6 +141,7 @@ async function runPipeline(
     }
     doneCount++;
     rows.push(row);
+    sugList.push(sug);
   }
 
   // 寫入前先清掉這個登記表裡「同一網站」的舊列，避免重跑時重複疊加
@@ -172,7 +177,7 @@ async function runPipeline(
         現有keywords: idxKw >= 0,
         現有H1: idxH1 >= 0,
       },
-      pages: pages.map((p) => ({ ...p, url: prettyUrl(p.url) })),
+      pages: pages.map((p, i) => ({ ...p, url: prettyUrl(p.url), suggest: sugList[i] })),
     },
     `已完成，共寫入 ${dryRun ? 0 : rows.length} 列`,
   );
@@ -195,6 +200,8 @@ export async function POST(req: NextRequest) {
       pages?: DraftPage[];
       // 使用者指定要納入建議 TKD 的關鍵字（逗號分隔，全站每頁共用）
       extraKeywords?: string;
+      // 微調：使用者的修正指示（自由文字），生建議時 AI 必須遵守
+      notes?: string;
     };
     const siteUrl = body.siteUrl?.trim();
     const sheetUrl = body.sheetUrl?.trim();
@@ -213,10 +220,11 @@ export async function POST(req: NextRequest) {
       .map((s) => s.trim())
       .filter(Boolean)
       .join(', ');
+    const notes = (body.notes || '').trim();
 
     const job = createTkdJob('準備頁面清單中…');
     // 刻意不 await：讓管線在背景跑完，進度與結果都寫回任務表
-    runPipeline(job.id, { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, stage, draftId, pages: body.pages })
+    runPipeline(job.id, { siteUrl, sheetUrl, limit, scope, dryRun, extraKeywords, notes, stage, draftId, pages: body.pages })
       .catch((e) => failTkdJob(job.id, e instanceof Error ? e.message : String(e)));
 
     return NextResponse.json({ ok: true, jobId: job.id });
