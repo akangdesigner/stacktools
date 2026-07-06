@@ -31,8 +31,7 @@ export default function SiteAuditPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<AuditResult | null>(null);
   // 寫回進度表用
-  const [sheetUrl, setSheetUrl] = useState("");
-  const [tab, setTab] = useState(""); // 留空則用網址 gid 自動辨識分頁
+  const [sheetUrl, setSheetUrl] = useState(""); // 分頁靠網址的 gid 自動辨識
   const [writing, setWriting] = useState(false);
   const [writeMsg, setWriteMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -69,7 +68,6 @@ export default function SiteAuditPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sheetUrl,
-          tab,
           checks: result.checks.map((c) => ({
             level: c.level,
             category: c.category,
@@ -134,19 +132,10 @@ export default function SiteAuditPage() {
               type="text"
               value={sheetUrl}
               onChange={(e) => setSheetUrl(e.target.value)}
-              placeholder="要把健檢結果寫回進度表時填 Google Sheet 網址"
+              placeholder="要寫回結果時填含分頁 gid 的 Google Sheet 網址"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
-          </div>
-          <div className="sm:w-96">
-            <label className="block text-xs font-medium text-gray-600 mb-1">分頁名稱（選填）</label>
-            <input
-              type="text"
-              value={tab}
-              onChange={(e) => setTab(e.target.value)}
-              placeholder="留空則用網址的 gid 自動辨識分頁"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-            />
+            <p className="text-xs text-gray-400 mt-1">從瀏覽器切到目標分頁後直接複製網址即可，會自動辨識要寫入的分頁。</p>
           </div>
 
           <button

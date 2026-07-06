@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
   }
   if (!tab) {
-    return NextResponse.json({ error: '無法判斷分頁：請貼含 gid 的網址，或手動填分頁名稱' }, { status: 400 });
+    return NextResponse.json({ error: '無法辨識分頁：請切到目標分頁後複製含 gid 的網址' }, { status: 400 });
   }
 
   // 讀整個分頁
