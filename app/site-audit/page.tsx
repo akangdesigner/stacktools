@@ -30,6 +30,11 @@ export default function SiteAuditPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<AuditResult | null>(null);
+  // 寫回進度表用
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [tab, setTab] = useState("網站技術優化進度");
+  const [writing, setWriting] = useState(false);
+  const [writeMsg, setWriteMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function handleAudit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +55,34 @@ export default function SiteAuditPage() {
       setError(err instanceof Error ? err.message : "健檢失敗");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // 依「確認事項」比對，把狀態寫回進度表的狀態欄
+  async function handleWrite() {
+    if (!result) return;
+    setWriting(true);
+    setWriteMsg(null);
+    try {
+      const res = await fetch("/api/site-audit/write", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sheetUrl,
+          tab,
+          checks: result.checks.map((c) => ({ item: c.item, status: c.status })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "寫入失敗");
+      const nf = data.notFound?.length
+        ? `，另有 ${data.notFound.length} 項在表上找不到對應列（${data.notFound.join("、")}）`
+        : "";
+      setWriteMsg({ ok: true, text: `已更新 ${data.updated} 列狀態${nf}` });
+    } catch (err) {
+      setWriteMsg({ ok: false, text: err instanceof Error ? err.message : "寫入失敗" });
+    } finally {
+      setWriting(false);
     }
   }
 
@@ -151,6 +184,49 @@ export default function SiteAuditPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* 寫回進度表：依「確認事項」比對，只更新狀態欄 */}
+          <div className="mt-4 bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="text-sm font-medium text-gray-700">寫回進度表</div>
+            <p className="text-xs text-gray-400">
+              依「確認事項」名稱比對，把上面的狀態寫進進度表的「狀態」欄（只動狀態欄，其他欄位不變）；工具沒測的項目不會動到。
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                placeholder="進度表 Google Sheet 網址"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              <input
+                type="text"
+                value={tab}
+                onChange={(e) => setTab(e.target.value)}
+                placeholder="分頁名稱"
+                className="sm:w-52 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              <button
+                type="button"
+                onClick={handleWrite}
+                disabled={writing || !sheetUrl.trim() || !tab.trim()}
+                className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-5 py-2 whitespace-nowrap"
+              >
+                {writing ? "寫入中…" : "寫入進度表"}
+              </button>
+            </div>
+            {writeMsg && (
+              <div
+                className={`text-sm rounded-lg px-4 py-2 ${
+                  writeMsg.ok
+                    ? "bg-green-50 border border-green-200 text-green-700"
+                    : "bg-red-50 border border-red-200 text-red-600"
+                }`}
+              >
+                {writeMsg.text}
+              </div>
+            )}
           </div>
         </div>
       )}
