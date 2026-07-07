@@ -330,7 +330,7 @@ function InsertDivider({ onInsert, onInsertH2 }: { onInsert: (md: string) => voi
 
   return (
     <div ref={containerRef} className="relative flex items-center justify-center py-2 group/divider">
-      <div className="absolute left-4 right-4 top-1/2 h-px bg-gray-200 transition-colors" />
+      <div className="absolute left-4 right-4 top-1/2 h-0.5 bg-gray-300 group-hover/divider:bg-blue-300 transition-colors" />
       {/* file input 常駐 DOM，確保 ref 穩定可重複選檔 */}
       <input
         ref={fileInputRef}
@@ -345,7 +345,7 @@ function InsertDivider({ onInsert, onInsertH2 }: { onInsert: (md: string) => voi
         className={`relative z-10 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold border shadow-sm transition-all duration-150 ${
           open
             ? 'bg-blue-500 text-white border-blue-500 opacity-100'
-            : 'bg-white text-gray-400 border-gray-200 hover:border-blue-300 hover:text-blue-500 opacity-0 group-hover/divider:opacity-100'
+            : 'bg-white text-gray-400 border-gray-300 hover:border-blue-400 hover:text-blue-500 opacity-0 group-hover/divider:opacity-100'
         }`}
       >+</button>
 

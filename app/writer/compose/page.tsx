@@ -672,6 +672,108 @@ function PromptEditModal({ defaultText, currentOverride, onSave, onClose }: {
   );
 }
 
+// ── WpPublishModal（發布到 WordPress／Elementor）──────────────────────
+// 校稿站是固定一台，連線資訊放在後端 .env（WRITER_WP_URL / _USER / _APP_PASSWORD），
+// 前端不用填任何東西，選好草稿／發布就一鍵送出。
+
+function WpPublishModal({ title, markdown, onClose }: {
+  title: string;
+  markdown: string;
+  onClose: () => void;
+}) {
+  const [status, setStatus] = useState<'draft' | 'publish'>('draft');
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ id?: number; editUrl?: string; viewUrl?: string } | null>(null);
+
+  async function handlePublish() {
+    if (!markdown.trim()) { setError('文章內容是空的'); return; }
+    setPublishing(true); setError(''); setResult(null);
+    try {
+      const res = await fetch('/api/writer/publish-wp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, markdown, status }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data?.error || `發布失敗（HTTP ${res.status}）`); return; }
+      // WP 端點回傳欄位命名不一定，這裡容錯抓幾種常見寫法
+      setResult({
+        id: data.id ?? data.post_id,
+        editUrl: data.edit_link ?? data.editUrl ?? data.edit_url,
+        viewUrl: data.link ?? data.viewUrl ?? data.permalink,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '發布失敗');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">發布到校稿站</p>
+            <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[300px]">{title || '未命名文章'}</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 text-lg leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {result ? (
+            <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl px-4 py-4 space-y-2 text-sm">
+              <p className="font-semibold text-emerald-700">已成功送出（{status === 'publish' ? '發布' : '草稿'}）✓</p>
+              {result.id != null && <p className="text-xs text-gray-500">文章 ID：{result.id}</p>}
+              <div className="flex flex-col gap-1.5 pt-1">
+                {result.editUrl && (
+                  <a href={result.editUrl} target="_blank" rel="noreferrer"
+                    className="text-xs text-violet-600 hover:underline break-all">→ 用 Elementor 編輯</a>
+                )}
+                {result.viewUrl && (
+                  <a href={result.viewUrl} target="_blank" rel="noreferrer"
+                    className="text-xs text-violet-600 hover:underline break-all">→ 查看文章</a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                會把左側文章（含已採用的修改）以 Elementor 格式送到固定校稿站，連線資訊已在伺服器設定，不用填。
+              </p>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">發布狀態</label>
+                <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 text-xs">
+                  <button onClick={() => setStatus('draft')}
+                    className={`flex-1 px-2.5 py-1.5 rounded-md transition-colors ${status === 'draft' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>存為草稿</button>
+                  <button onClick={() => setStatus('publish')}
+                    className={`flex-1 px-2.5 py-1.5 rounded-md transition-colors ${status === 'publish' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>直接發布</button>
+                </div>
+              </div>
+              {error && <Err msg={error} onDismiss={() => setError('')} />}
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          {result ? (
+            <button onClick={onClose} className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">完成</button>
+          ) : (
+            <>
+              <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors text-gray-600">取消</button>
+              <button onClick={handlePublish} disabled={publishing}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors">
+                {publishing && <Spinner />}{publishing ? '發布中…' : '發布'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── SystemPromptModal（Stage 3 寫作規則 = 完整 system prompt）─────────
 
 function SystemPromptModal({ writingGuide, clientWritingRules, brandDescription, currentOverride, onSave, onClose }: {
@@ -2391,8 +2493,8 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
               <div className={`flex items-start justify-between gap-4 px-5 py-3.5 ${sec.content.trim() ? 'bg-emerald-50/50' : 'bg-gray-50/50'}`}>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-500">{sec.h2}</p>
-                  {/* H3 列表 + per-H3 深度（僅一般段落需要） */}
-                  {sec.h3s.length > 0 && sec.promptStyle === 'info' && (
+                  {/* H3 列表 + per-H3 深度（僅一般段落需要）；產生完就收起，點「編輯」才再出現 */}
+                  {sec.h3s.length > 0 && sec.promptStyle === 'info' && (!sec.content.trim() || sec.isEditing) && (
                     <div className="mt-1.5 space-y-1">
                       {sec.h3s.map((h3, hi) => (
                         <div key={hi} className="flex items-center gap-2">
@@ -2448,8 +2550,8 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                  {/* 無 H3 的一般段落才顯示 section-level 深度 */}
-                  {sec.h3s.length === 0 && sec.promptStyle === 'info' && (
+                  {/* 無 H3 的一般段落才顯示 section-level 深度；產生完收起，編輯時再出現 */}
+                  {sec.h3s.length === 0 && sec.promptStyle === 'info' && (!sec.content.trim() || sec.isEditing) && (
                     <select
                       value={sec.contentDepth}
                       onChange={e => setSections(prev => prev.map(s => s.id === sec.id
@@ -2463,8 +2565,8 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
                       ))}
                     </select>
                   )}
-                  {/* 插入表格（有 H3 的一般段落已改成逐個 H3 控制，這裡不重複顯示） */}
-                  {!(sec.h3s.length > 0 && sec.promptStyle === 'info') && (
+                  {/* 插入表格（有 H3 的一般段落已改成逐個 H3 控制，這裡不重複顯示）；產生完收起 */}
+                  {!(sec.h3s.length > 0 && sec.promptStyle === 'info') && (!sec.content.trim() || sec.isEditing) && (
                   <button
                     type="button"
                     disabled={sec.generating}
@@ -2855,6 +2957,12 @@ ${article}
 
 type ReviewMode = 'quality' | 'violation';
 
+// 送去給 AI 校稿前，把 base64 圖片抽成佔位符，避免超長 data URI 灌爆 prompt、
+// 干擾判讀；圖片本身仍完整留在編輯器與發布用的 articleText 裡，不受影響
+function stripImagesForAI(md: string): string {
+  return md.replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, '![$1][圖片]');
+}
+
 function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, reviewOverride, violationOverride, onSaveReviewOverride, onSaveViolationOverride, onBack }: {
   title: string; keyword: string;
   sections: Section[];
@@ -2874,11 +2982,14 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
   const [finalScore, setFinalScore] = useState('');
   const [finalScoring, setFinalScoring] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false); // 校稿提示詞公開檢視
+  const [showPublishModal, setShowPublishModal] = useState(false); // 發布到 WP
   const runIdRef = useRef(0);
 
+  // 保留完整圖片（含 base64），這樣校稿頁看得到圖、發布到 WP 也帶得出圖；
+  // 只有在「送去給 AI 校稿」那一步才用 stripImagesForAI 臨時把 base64 抽掉
   const initArticle = sections
     .filter(s => s.content.trim())
-    .map(s => s.content.trim().replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, '![$1][圖片]'))
+    .map(s => s.content.trim())
     .join('\n\n');
   const [articleText, setArticleText] = useState(initArticle);
 
@@ -2904,9 +3015,10 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
       const sys = reviewMode === 'violation'
         ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
         : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
+      const forAI = stripImagesForAI(articleText);
       const prompt = reviewMode === 'violation'
-        ? buildViolationReviewPrompt(articleText, { title, keyword })
-        : buildReviewPrompt(articleText, { title, keyword });
+        ? buildViolationReviewPrompt(forAI, { title, keyword })
+        : buildReviewPrompt(forAI, { title, keyword });
       await streamAPI([
         { role: 'system', content: sys },
         { role: 'user', content: prompt },
@@ -2932,7 +3044,7 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
       const sys = reviewMode === 'violation'
         ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
         : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
-      const prompt = buildFinalScorePrompt(articleText, { title, keyword, initialEval: overallEval });
+      const prompt = buildFinalScorePrompt(stripImagesForAI(articleText), { title, keyword, initialEval: overallEval });
       await streamAPI([
         { role: 'system', content: sys },
         { role: 'user', content: prompt },
@@ -3083,6 +3195,11 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 shrink-0">
           {reviewing && <Spinner />}{reviewing ? (reviewMode === 'violation' ? '檢查中…' : '校稿中…') : (reviewMode === 'violation' ? '開始檢查' : (overallEval ? '重新校稿' : '開始校稿'))}
         </button>
+        <button onClick={() => setShowPublishModal(true)} disabled={!articleText.trim()}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          發布到 WP
+        </button>
       </div>
 
       <div className="flex-1 overflow-hidden">
@@ -3214,6 +3331,14 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
           currentOverride={reviewMode === 'violation' ? violationOverride : reviewOverride}
           onSave={reviewMode === 'violation' ? onSaveViolationOverride : onSaveReviewOverride}
           onClose={() => setShowPromptModal(false)}
+        />
+      )}
+
+      {showPublishModal && (
+        <WpPublishModal
+          title={title}
+          markdown={articleText}
+          onClose={() => setShowPublishModal(false)}
         />
       )}
     </div>
