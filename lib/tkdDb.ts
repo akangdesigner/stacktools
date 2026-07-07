@@ -18,10 +18,18 @@ db.exec(`
     scope TEXT NOT NULL DEFAULT 'important',
     pages TEXT NOT NULL DEFAULT '[]',
     page_count INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
   );
 `);
+
+// 舊資料庫補上 pinned 欄位（常駐草稿：測完生成建議後不自動刪，永久留著當固定測試用）
+try {
+  db.exec(`ALTER TABLE tkd_drafts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
+} catch {
+  /* 欄位已存在就略過 */
+}
 
 // 草稿裡的一頁：網址＋選單名（顯示用）＋AI 判的型態（顯示用）
 export type DraftPage = { url: string; label?: string; type?: string };
@@ -35,6 +43,7 @@ interface DraftRow {
   scope: string;
   pages: string;
   page_count: number;
+  pinned: number; // 1＝常駐（測完不自動刪）
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +57,7 @@ export interface TkdDraft {
   scope: 'important' | 'all';
   pages: DraftPage[];
   pageCount: number;
+  pinned: boolean; // 常駐草稿：測完不自動刪
   createdAt: string;
   updatedAt: string;
 }
@@ -69,6 +79,7 @@ function toDraft(r: DraftRow): TkdDraft {
     scope: r.scope === 'all' ? 'all' : 'important',
     pages,
     pageCount: r.page_count,
+    pinned: r.pinned === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -81,11 +92,12 @@ export function createDraft(input: {
   sheetUrl: string;
   scope: 'important' | 'all';
   pages: DraftPage[];
+  pinned?: boolean; // 常駐草稿：測完不自動刪
 }): number {
   const info = db
     .prepare(
-      `INSERT INTO tkd_drafts (name, site_url, sheet_url, scope, pages, page_count)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tkd_drafts (name, site_url, sheet_url, scope, pages, page_count, pinned)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.name,
@@ -94,6 +106,7 @@ export function createDraft(input: {
       input.scope,
       JSON.stringify(input.pages),
       input.pages.length,
+      input.pinned ? 1 : 0,
     );
   return Number(info.lastInsertRowid);
 }
@@ -102,8 +115,8 @@ export function createDraft(input: {
 export function listDrafts(): Omit<TkdDraft, 'pages'>[] {
   const rows = db
     .prepare(
-      `SELECT id, name, site_url, sheet_url, scope, page_count, created_at, updated_at
-       FROM tkd_drafts ORDER BY updated_at DESC, id DESC`,
+      `SELECT id, name, site_url, sheet_url, scope, page_count, pinned, created_at, updated_at
+       FROM tkd_drafts ORDER BY pinned DESC, updated_at DESC, id DESC`,
     )
     .all() as Omit<DraftRow, 'pages'>[];
   return rows.map((r) => ({
@@ -113,6 +126,7 @@ export function listDrafts(): Omit<TkdDraft, 'pages'>[] {
     sheetUrl: r.sheet_url,
     scope: r.scope === 'all' ? 'all' : 'important',
     pageCount: r.page_count,
+    pinned: r.pinned === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));

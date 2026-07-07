@@ -19,6 +19,7 @@ interface PageTkd {
 interface TkdResult {
   ok: boolean;
   stage?: "existing" | "suggest";
+  previewOnly?: boolean; // 只預覽模式（sheet 留空）：只生成、未寫回登記表
   draftId?: number; // 階段一寫完現有 TKD 後回傳的草稿 id
   tabName: string;
   pageCount: number;
@@ -36,6 +37,7 @@ interface DraftItem {
   sheetUrl: string;
   scope: "important" | "all";
   pageCount: number;
+  pinned?: boolean; // 常駐草稿：測完不自動刪
   createdAt: string;
   updatedAt: string;
 }
@@ -175,6 +177,7 @@ export default function TkdPage() {
   // 兩階段：階段一（寫現有 TKD）完成後 stage1Done=true，露出關鍵字＋階段二按鈕
   const [stage1Done, setStage1Done] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null); // 目前這批對應的草稿 id
+  const [currentPinned, setCurrentPinned] = useState(false); // 目前這批草稿是否常駐（常駐＝生成後不自動刪）
   const [draftSaved, setDraftSaved] = useState(false); // 這批是否已按「儲存草稿」存過
   const [drafts, setDrafts] = useState<DraftItem[]>([]); // 「我的草稿」清單
 
@@ -330,8 +333,8 @@ export default function TkdPage() {
         notes,
       });
       setResult(r);
-      // 建議已生成＝這批草稿的任務完成，從待辦清單移除
-      if (draftId) removeDraft(draftId);
+      // 建議已生成＝這批草稿的任務完成，從待辦清單移除；但常駐草稿要留著（固定測試用）
+      if (draftId && !currentPinned) removeDraft(draftId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -352,6 +355,7 @@ export default function TkdPage() {
         siteUrl: string;
         sheetUrl: string;
         scope: "important" | "all";
+        pinned?: boolean;
         pages: { url: string; label?: string; type?: string }[];
       };
       setSiteUrl(d.siteUrl);
@@ -359,6 +363,7 @@ export default function TkdPage() {
       setScope(d.scope);
       setCandidates(d.pages.map((p) => ({ url: p.url, label: p.label, type: p.type || "其他", include: true })));
       setDraftId(id);
+      setCurrentPinned(!!d.pinned); // 常駐草稿：生成後不自動刪
       setDraftSaved(true); // 從草稿載入的本來就是已存的
       setStage1Done(true);
     } catch (err) {
@@ -427,6 +432,11 @@ export default function TkdPage() {
             {drafts.map((d) => (
               <li key={d.id} className="flex items-center justify-between py-1.5 text-sm">
                 <span className="text-gray-700 min-w-0">
+                  {d.pinned && (
+                    <span className="text-xs bg-orange-100 text-orange-600 rounded px-1.5 py-0.5 mr-2 font-medium">
+                      📌 常駐
+                    </span>
+                  )}
                   <span className="font-medium">{d.name}</span>
                   <span className="text-xs text-gray-400 ml-2">{d.updatedAt}</span>
                 </span>
@@ -438,13 +448,16 @@ export default function TkdPage() {
                   >
                     續做（生成建議）
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => removeDraft(d.id)}
-                    className="text-gray-400 hover:text-red-500"
-                  >
-                    刪除
-                  </button>
+                  {/* 常駐草稿（固定測試用）不給刪除鈕，避免誤刪 */}
+                  {!d.pinned && (
+                    <button
+                      type="button"
+                      onClick={() => removeDraft(d.id)}
+                      className="text-gray-400 hover:text-red-500"
+                    >
+                      刪除
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
@@ -641,13 +654,13 @@ export default function TkdPage() {
                 {/* 指定關鍵字：階段二送出前讓使用者確認要納入建議的必含關鍵字 */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    指定關鍵字（選填，逗號分隔）
+                    指定關鍵字（選填，逗號或空格分隔）
                   </label>
                   <input
                     type="text"
                     value={extraKeywords}
                     onChange={(e) => setExtraKeywords(e.target.value)}
-                    placeholder="例：台中網頁設計, SEO 優化, RWD 網站"
+                    placeholder="例：台中網頁設計 SEO優化 RWD網站"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                   />
                   <p className="text-xs text-gray-400 mt-1">
@@ -683,22 +696,29 @@ export default function TkdPage() {
       {/* 第②步結果 */}
       {result && (
         <div className="mt-6 space-y-4">
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
-            已寫入分頁「{result.tabName}」，共 {result.wroteCount} 列（掃描 {result.pageCount} 頁）
-            {result.suggested ? `，其中 ${result.suggested} 頁已生成建議 TKD` : ""}。
-            {Object.entries(result.matched)
-              .filter(([, ok]) => !ok)
-              .map(([k]) => k).length > 0 && (
-              <span className="block text-amber-600 mt-1">
-                未對應到的欄位：
-                {Object.entries(result.matched)
-                  .filter(([, ok]) => !ok)
-                  .map(([k]) => k)
-                  .join("、")}
-                （這些欄位留空未寫入，請確認表頭）
-              </span>
-            )}
-          </div>
+          {result.previewOnly ? (
+            <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg px-4 py-3">
+              🔍 只預覽模式（sheet 留空，未寫回登記表）：掃描 {result.pageCount} 頁，以下為 AI 生成的建議
+              TKD，可直接在這裡檢查關鍵字使用狀況。要正式寫回時再填入 sheet 網址即可。
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
+              已寫入分頁「{result.tabName}」，共 {result.wroteCount} 列（掃描 {result.pageCount} 頁）
+              {result.suggested ? `，其中 ${result.suggested} 頁已生成建議 TKD` : ""}。
+              {Object.entries(result.matched)
+                .filter(([, ok]) => !ok)
+                .map(([k]) => k).length > 0 && (
+                <span className="block text-amber-600 mt-1">
+                  未對應到的欄位：
+                  {Object.entries(result.matched)
+                    .filter(([, ok]) => !ok)
+                    .map(([k]) => k)
+                    .join("、")}
+                  （這些欄位留空未寫入，請確認表頭）
+                </span>
+              )}
+            </div>
+          )}
 
           {/* 逐頁結果表格 */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
@@ -741,12 +761,12 @@ export default function TkdPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <h3 className="text-sm font-bold text-gray-800">微調重生（補關鍵字 / 修正錯字）</h3>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">補充關鍵字（選填，逗號分隔）</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">補充關鍵字（選填，逗號或空格分隔）</label>
               <input
                 type="text"
                 value={extraKeywords}
                 onChange={(e) => setExtraKeywords(e.target.value)}
-                placeholder="例：GIA, 求婚戒指, 八心八箭"
+                placeholder="例：GIA 求婚戒指 八心八箭"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
             </div>

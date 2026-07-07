@@ -72,31 +72,50 @@ async function runPipeline(
   progressTkdJob(jobId, `爬取 ${urls.length} 頁的現有 TKD 中…`, 0, urls.length);
   const pages = await fetchAllTkd(urls);
 
-  // 3. 解析登記表：找到分頁與表頭
-  const sheetId = extractSheetId(sheetUrl);
-  const gid = extractGid(sheetUrl);
-  const tabName = await resolveTabName(sheetId, gid);
-  const headers = await readHeaders(sheetId, tabName);
-  if (headers.length === 0) {
-    throw new Error('讀不到登記表表頭，請確認分頁與網址是否正確');
-  }
+  // 只預覽模式：sheet 網址留空＝只跑 AI 生成、結果顯示在畫面上，完全不讀/寫登記表（測試用）
+  const previewOnly = !sheetUrl || sheetUrl.trim() === '';
 
-  // 4. 對應各欄位索引（依表頭關鍵字，容忍空白與大小寫）
-  const idxPage = findCol(headers, (h) => h.includes('頁面') || h.includes('網址') || h.includes('url'));
-  // 「#」序號欄（也接受 編號／序號／項次／no）：照寫入順序填 1、2、3…
-  const idxNum = findCol(headers, (h) => h === '#' || h.includes('編號') || h.includes('序號') || h.includes('項次') || h === 'no');
-  const idxTitle = findCol(headers, (h) => h.includes('現有') && h.includes('title'));
-  const idxDesc = findCol(headers, (h) => h.includes('現有') && h.includes('description'));
-  const idxKw = findCol(headers, (h) => h.includes('現有') && h.includes('keywords'));
-  const idxH1 = findCol(headers, (h) => h.includes('現有') && h.includes('h1'));
-  // 建議欄索引
-  const idxSugT = findCol(headers, (h) => h.includes('建議') && h.includes('title'));
-  const idxSugD = findCol(headers, (h) => h.includes('建議') && h.includes('description'));
-  const idxSugK = findCol(headers, (h) => h.includes('建議') && h.includes('keywords'));
-  const idxSugH = findCol(headers, (h) => h.includes('建議') && h.includes('h1'));
+  // 3. 解析登記表：找到分頁與表頭（只預覽模式跳過，欄位索引全給 -1）
+  let sheetId = '';
+  let tabName = '';
+  let idxPage = -1;
+  let idxNum = -1;
+  let idxTitle = -1;
+  let idxDesc = -1;
+  let idxKw = -1;
+  let idxH1 = -1;
+  let idxSugT = -1;
+  let idxSugD = -1;
+  let idxSugK = -1;
+  let idxSugH = -1;
+  let headerLen = 0; // 登記表欄數（只預覽模式無表頭＝0，組出的列不會寫回）
+  if (!previewOnly) {
+    sheetId = extractSheetId(sheetUrl);
+    const gid = extractGid(sheetUrl);
+    tabName = await resolveTabName(sheetId, gid);
+    const headers = await readHeaders(sheetId, tabName);
+    if (headers.length === 0) {
+      throw new Error('讀不到登記表表頭，請確認分頁與網址是否正確');
+    }
+    headerLen = headers.length;
 
-  if (idxPage < 0) {
-    throw new Error('登記表找不到「頁面」欄位，無法寫回，請確認表頭');
+    // 4. 對應各欄位索引（依表頭關鍵字，容忍空白與大小寫）
+    idxPage = findCol(headers, (h) => h.includes('頁面') || h.includes('網址') || h.includes('url'));
+    // 「#」序號欄（也接受 編號／序號／項次／no）：照寫入順序填 1、2、3…
+    idxNum = findCol(headers, (h) => h === '#' || h.includes('編號') || h.includes('序號') || h.includes('項次') || h === 'no');
+    idxTitle = findCol(headers, (h) => h.includes('現有') && h.includes('title'));
+    idxDesc = findCol(headers, (h) => h.includes('現有') && h.includes('description'));
+    idxKw = findCol(headers, (h) => h.includes('現有') && h.includes('keywords'));
+    idxH1 = findCol(headers, (h) => h.includes('現有') && h.includes('h1'));
+    // 建議欄索引
+    idxSugT = findCol(headers, (h) => h.includes('建議') && h.includes('title'));
+    idxSugD = findCol(headers, (h) => h.includes('建議') && h.includes('description'));
+    idxSugK = findCol(headers, (h) => h.includes('建議') && h.includes('keywords'));
+    idxSugH = findCol(headers, (h) => h.includes('建議') && h.includes('h1'));
+
+    if (idxPage < 0) {
+      throw new Error('登記表找不到「頁面」欄位，無法寫回，請確認表頭');
+    }
   }
 
   // 5. 逐頁組列：現有欄直接填；非預覽時再逐頁「依序」呼叫 AI 生成建議欄（不可並行，並行會被截短）
@@ -105,7 +124,7 @@ async function runPipeline(
   let suggested = 0;
   let doneCount = 0;
   for (const p of pages) {
-    const row = new Array(headers.length).fill('');
+    const row = new Array(headerLen).fill('');
     // 「#」欄照寫入順序放流水號（1 起算）
     if (idxNum >= 0) row[idxNum] = String(rows.length + 1);
     // 頁面欄寫成「選單名＋超連結」；沒有選單名（全站模式）就用可讀網址當顯示文字
@@ -146,7 +165,7 @@ async function runPipeline(
 
   // 寫入前先清掉這個登記表裡「同一網站」的舊列，避免重跑時重複疊加
   let cleared = 0;
-  if (!dryRun) {
+  if (!dryRun && !previewOnly) {
     progressTkdJob(jobId, '寫入登記表中…', pages.length, pages.length);
     const host = (() => {
       try { return new URL(normalizeSite(siteUrl)).host; } catch { return ''; }
@@ -163,12 +182,13 @@ async function runPipeline(
     {
       ok: true,
       dryRun,
+      previewOnly, // 只預覽模式（sheet 留空）：只生成、沒寫回
       stage,
       draftId,
       tabName,
       cleared,
       pageCount: urls.length,
-      wroteCount: dryRun ? 0 : rows.length,
+      wroteCount: dryRun || previewOnly ? 0 : rows.length,
       suggested: dryRun ? 0 : suggested,
       matched: {
         頁面: idxPage >= 0,
@@ -179,7 +199,7 @@ async function runPipeline(
       },
       pages: pages.map((p, i) => ({ ...p, url: prettyUrl(p.url), suggest: sugList[i] })),
     },
-    `已完成，共寫入 ${dryRun ? 0 : rows.length} 列`,
+    previewOnly ? '僅預覽完成（未寫回登記表）' : `已完成，共寫入 ${dryRun ? 0 : rows.length} 列`,
   );
 }
 
@@ -214,9 +234,9 @@ export async function POST(req: NextRequest) {
     const dryRun = body.dryRun === true; // 只抓取預覽、不寫回 sheet
     const stage = body.stage === 'existing' ? 'existing' : 'suggest';
     const draftId = typeof body.draftId === 'number' ? body.draftId : undefined;
-    // 指定關鍵字：整理成「半形逗號＋空格」分隔，去掉空項
+    // 指定關鍵字：逗號（半形/全形）或空白（含換行）都可分隔，整理成「半形逗號＋空格」，去掉空項
     const extraKeywords = (body.extraKeywords || '')
-      .split(/[,，]/)
+      .split(/[,，\s]+/)
       .map((s) => s.trim())
       .filter(Boolean)
       .join(', ');
