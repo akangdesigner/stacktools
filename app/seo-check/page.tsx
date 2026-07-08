@@ -20,6 +20,15 @@ const tools = [
     color: "bg-emerald-50 border-emerald-200 hover:border-emerald-400",
     iconBg: "bg-emerald-100",
   },
+  {
+    href: "/llms-generate",
+    title: "llms.txt 產生器",
+    description:
+      "輸入網址自動爬全站，把每頁的 title / description 整理成符合 llmstxt.org 格式的 llms.txt，讓 AI 更好地理解你的網站，可直接複製或下載。",
+    icon: "🤖",
+    color: "bg-sky-50 border-sky-200 hover:border-sky-400",
+    iconBg: "bg-sky-100",
+  },
 ];
 
 export default function SeoCheckHubPage() {

@@ -286,3 +286,101 @@ export async function runGscChecks(
 
   return result;
 }
+
+// ── Search Analytics（搜尋成效）：給 llms.txt 產生器排序與豐富描述用 ──────
+// 一次 query 拿近 90 天各頁的點擊/曝光/平均排名與熱門搜尋詞。
+// 未授權 / 找不到 property / 無資料時回空 Map，讓上層照常用純爬蟲結果。
+
+export interface PageSearchStat {
+  clicks: number;
+  impressions: number;
+  position: number;     // 依曝光加權的平均排名
+  topQueries: string[]; // 依曝光排序的前幾個搜尋詞
+}
+
+// 回傳同時帶 property 名稱，讓前端能即時回饋「有沒有找到 GSC 資源」
+export interface PageStatsResult {
+  property: string | null;             // 找到的 GSC property（sc-domain:xxx 或網址）；null＝沒授權/找不到
+  stats: Map<string, PageSearchStat>;  // 各頁搜尋成效（找不到或無資料時為空 Map）
+}
+
+export async function fetchPageSearchStats(origin: string): Promise<PageStatsResult> {
+  const empty = new Map<string, PageSearchStat>();
+
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken();
+  } catch {
+    return { property: null, stats: empty }; // 未授權 → 退回純爬蟲
+  }
+  const property = await resolveGscProperty(origin, accessToken);
+  if (!property) return { property: null, stats: empty }; // 這個網域不在授權帳號的 GSC 資源裡
+
+  // 近 90 天（GSC 有 2～3 天延遲，直接用今天往前算，API 會回實際有的資料）
+  const end = new Date();
+  const start = new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  interface Row {
+    keys?: string[];
+    clicks?: number;
+    impressions?: number;
+    position?: number;
+  }
+  let rows: Row[] = [];
+  try {
+    const res = await fetch(`${SC_BASE}/webmasters/v3/sites/${encodeURIComponent(property)}/searchAnalytics/query`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      // page×query 兩維度一次撈，程式端再依頁彙整（省一次呼叫）
+      body: JSON.stringify({ startDate: fmt(start), endDate: fmt(end), dimensions: ['page', 'query'], rowLimit: 5000 }),
+    });
+    if (!res.ok) return { property, stats: empty }; // property 有找到、只是查詢失敗
+    const data = (await res.json()) as { rows?: Row[] };
+    rows = data.rows ?? [];
+  } catch {
+    return { property, stats: empty };
+  }
+
+  // 依「正規化後網址」彙整：加總點擊/曝光、依曝光加權算平均排名、蒐集搜尋詞
+  const acc = new Map<
+    string,
+    { clicks: number; impressions: number; posWsum: number; queries: { q: string; impressions: number }[] }
+  >();
+  for (const r of rows) {
+    const page = r.keys?.[0];
+    if (!page) continue;
+    const query = r.keys?.[1] ?? '';
+    const impressions = r.impressions ?? 0;
+    let key: string;
+    try {
+      key = normalizeUrl(page);
+    } catch {
+      continue;
+    }
+    let e = acc.get(key);
+    if (!e) {
+      e = { clicks: 0, impressions: 0, posWsum: 0, queries: [] };
+      acc.set(key, e);
+    }
+    e.clicks += r.clicks ?? 0;
+    e.impressions += impressions;
+    e.posWsum += (r.position ?? 0) * impressions;
+    if (query) e.queries.push({ q: query, impressions });
+  }
+
+  const out = new Map<string, PageSearchStat>();
+  for (const [key, e] of acc) {
+    const topQueries = e.queries
+      .sort((a, b) => b.impressions - a.impressions)
+      .slice(0, 3)
+      .map((x) => x.q);
+    out.set(key, {
+      clicks: e.clicks,
+      impressions: e.impressions,
+      position: e.impressions > 0 ? e.posWsum / e.impressions : 0,
+      topQueries,
+    });
+  }
+  return { property, stats: out };
+}
