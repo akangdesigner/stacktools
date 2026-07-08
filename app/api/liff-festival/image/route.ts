@@ -1,37 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 節慶生圖：LIFF 網頁按「生成圖片」時呼叫，直接打 OpenRouter gpt-5.4-image-2
-// （跟 n8n 原本的生圖節點同模型、同回傳格式；差別只是搬到網頁端、沒有 LINE 60 秒限制）
+// 節慶生圖：改「送出→輪詢」以避開 Cloudflare 對長請求的 504。
+// POST 立刻回 jobId、背景生圖；GET ?jobId 查進度。每個請求都很快、不會被切。
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // gpt-5.4-image-2 約 200 秒，放寬到 300 秒
+export const maxDuration = 300;
 
-export async function POST(req: NextRequest) {
-  const { imagePrompt, adjustment } = (await req.json()) as {
-    imagePrompt?: string;
-    adjustment?: string; // 使用者的定向改圖需求（中文，如「把背景換成海邊」）
-  };
-  if (!imagePrompt || !imagePrompt.trim()) {
-    return NextResponse.json({ error: '缺少 imagePrompt' }, { status: 400 });
+type Job = { status: 'pending' | 'done' | 'error'; dataUrl?: string; error?: string; ts: number };
+
+// 模組層 job 表；Zeabur 是常駐 Node process，跨請求存活（process 重啟會清空，可接受）
+const g = globalThis as unknown as { __festivalImageJobs?: Map<string, Job> };
+const jobs: Map<string, Job> = (g.__festivalImageJobs ??= new Map());
+
+function prune() {
+  const now = Date.now();
+  for (const [k, v] of jobs) if (now - v.ts > 15 * 60 * 1000) jobs.delete(k);
+}
+
+// 背景生圖：完成/失敗都寫回 job 表
+async function generate(jobId: string, imagePrompt: string, adjustment?: string) {
+  const apiKey = process.env.OPENROUTER_IMAGE_API_KEY || process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    jobs.set(jobId, { status: 'error', error: '伺服器尚未設定 OPENROUTER_IMAGE_API_KEY 或 OPENROUTER_API_KEY 環境變數', ts: Date.now() });
+    return;
   }
 
-  // 有定向修改需求就把它接在原提示詞後面，強調務必套用（gpt-5.4-image-2 中文 OK）
+  // 有定向修改需求就接在原提示詞後面，強調務必套用（gpt-5.4-image-2 中文 OK）
   const finalPrompt = adjustment?.trim()
     ? `${imagePrompt}\n\n[Adjustment — must apply exactly, this overrides conflicting parts above]: ${adjustment.trim()}`
     : imagePrompt;
 
-  // 生圖優先用專用 key（跟 n8n 生圖同一把帳號），沒設就退回一般 OpenRouter key
-  const apiKey = process.env.OPENROUTER_IMAGE_API_KEY || process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: '伺服器尚未設定 OPENROUTER_IMAGE_API_KEY 或 OPENROUTER_API_KEY 環境變數' },
-      { status: 500 }
-    );
-  }
-
-  // 生圖慢，給 285 秒的中止保護，避免無限掛住
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 285_000);
-
   try {
     const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -50,36 +49,65 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const raw = await upstream.text();
-      let msg: string;
+      let m: string;
       try {
-        msg = (JSON.parse(raw) as { error?: { message?: string } }).error?.message ?? raw;
+        m = (JSON.parse(raw) as { error?: { message?: string } }).error?.message ?? raw;
       } catch {
-        msg = raw || String(upstream.status);
+        m = raw || String(upstream.status);
       }
-      return NextResponse.json({ error: `OpenRouter 生圖錯誤：${msg}` }, { status: 502 });
+      jobs.set(jobId, { status: 'error', error: `OpenRouter 生圖錯誤：${m}`, ts: Date.now() });
+      return;
     }
 
     const data = (await upstream.json()) as {
       choices?: { message?: { images?: { image_url?: { url?: string } }[] } }[];
     };
-
-    // 回傳格式跟 n8n Edit Fields3 讀的路徑一致：choices[0].message.images[0].image_url.url = data URL
     const dataUrl = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
     if (!dataUrl) {
-      return NextResponse.json(
-        { error: '生圖回傳沒有圖片（模型可能抽風，請重試）' },
-        { status: 502 }
-      );
+      jobs.set(jobId, { status: 'error', error: '生圖回傳沒有圖片（模型可能抽風，請重試）', ts: Date.now() });
+      return;
     }
-
-    return NextResponse.json({ dataUrl });
+    jobs.set(jobId, { status: 'done', dataUrl, ts: Date.now() });
   } catch (err) {
     const aborted = err instanceof Error && err.name === 'AbortError';
-    return NextResponse.json(
-      { error: aborted ? '生圖逾時（超過 285 秒），請重試' : `生圖失敗：${String(err)}` },
-      { status: 504 }
-    );
+    jobs.set(jobId, {
+      status: 'error',
+      error: aborted ? '生圖逾時（超過 285 秒），請重試' : `生圖失敗：${String(err)}`,
+      ts: Date.now(),
+    });
   } finally {
     clearTimeout(timer);
   }
+}
+
+// 送出生圖任務 → 立刻回 jobId
+export async function POST(req: NextRequest) {
+  const { imagePrompt, adjustment } = (await req.json()) as { imagePrompt?: string; adjustment?: string };
+  if (!imagePrompt || !imagePrompt.trim()) {
+    return NextResponse.json({ error: '缺少 imagePrompt' }, { status: 400 });
+  }
+  prune();
+  const jobId = crypto.randomUUID();
+  jobs.set(jobId, { status: 'pending', ts: Date.now() });
+  void generate(jobId, imagePrompt, adjustment); // 背景跑，不 await
+  return NextResponse.json({ jobId });
+}
+
+// 輪詢進度
+export async function GET(req: NextRequest) {
+  const jobId = req.nextUrl.searchParams.get('jobId');
+  if (!jobId) return NextResponse.json({ error: '缺少 jobId' }, { status: 400 });
+  const job = jobs.get(jobId);
+  if (!job) {
+    return NextResponse.json({ status: 'error', error: '找不到此生圖任務（可能已過期，請重試）' }, { status: 404 });
+  }
+  if (job.status === 'done') {
+    jobs.delete(jobId);
+    return NextResponse.json({ status: 'done', dataUrl: job.dataUrl });
+  }
+  if (job.status === 'error') {
+    jobs.delete(jobId);
+    return NextResponse.json({ status: 'error', error: job.error });
+  }
+  return NextResponse.json({ status: 'pending' });
 }

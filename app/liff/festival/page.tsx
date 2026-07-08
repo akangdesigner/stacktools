@@ -133,16 +133,40 @@ export default function FestivalLiffPage() {
     }
     setPhase('image');
     try {
-      const r = await fetch('/api/liff-festival/image', {
+      // ① 送出生圖任務（立刻回 jobId，避開 Cloudflare 對長請求的 504）
+      const startRes = await fetch('/api/liff-festival/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imagePrompt: prompt, adjustment: adj }),
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      setImageUrl(d.dataUrl);
-      setProgress(100); // 圖片真的回來 → 100%
-      setPhase('ready');
+      const startData = await startRes.json().catch(() => ({}));
+      if (!startRes.ok || !startData.jobId) {
+        throw new Error(startData.error || `HTTP ${startRes.status}`);
+      }
+      const jobId = startData.jobId as string;
+
+      // ② 每 3.5 秒輪詢一次，最多等 6 分鐘
+      const deadline = Date.now() + 6 * 60 * 1000;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 3500));
+        const pr = await fetch(`/api/liff-festival/image?jobId=${encodeURIComponent(jobId)}`);
+        let pd: { status?: string; dataUrl?: string; error?: string };
+        try {
+          pd = await pr.json();
+        } catch {
+          if (Date.now() > deadline) throw new Error('生圖等待逾時，請重試');
+          continue; // 暫時性非 JSON 回應 → 繼續輪詢
+        }
+        if (pd.status === 'done' && pd.dataUrl) {
+          setImageUrl(pd.dataUrl);
+          setProgress(100); // 圖片真的回來 → 100%
+          setPhase('ready');
+          return;
+        }
+        if (pd.status === 'error') throw new Error(pd.error || '生圖失敗');
+        if (Date.now() > deadline) throw new Error('生圖等待逾時，請重試');
+      }
     } catch (e) {
       setError(`生圖失敗：${msg(e)}`);
       setPhase('error');
