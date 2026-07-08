@@ -38,7 +38,7 @@ async function generate(jobId: string, imagePrompt: string, adjustment?: string)
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://tool.dg166.com',
-        'X-Title': 'Stacktools 節慶生圖',
+        'X-Title': 'Stacktools Festival Image', // header 只能 Latin1，別放中文
       },
       body: JSON.stringify({
         model: 'openai/gpt-5.4-image-2',
