@@ -5,6 +5,12 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
   const { pathname } = req.nextUrl
 
+  // LIFF 頁（/liff 開頭）從 LINE App 內開啟，靠 LINE 自身登入取得使用者，
+  // 不該被網站的 Google 登入擋 → 一律公開放行
+  if (pathname.startsWith("/liff")) {
+    return NextResponse.next()
+  }
+
   if (!isLoggedIn && pathname !== "/login") {
     return NextResponse.redirect(new URL("/login", req.nextUrl.origin))
   }
