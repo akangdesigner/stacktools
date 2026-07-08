@@ -6,10 +6,18 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // gpt-5.4-image-2 約 200 秒，放寬到 300 秒
 
 export async function POST(req: NextRequest) {
-  const { imagePrompt } = (await req.json()) as { imagePrompt?: string };
+  const { imagePrompt, adjustment } = (await req.json()) as {
+    imagePrompt?: string;
+    adjustment?: string; // 使用者的定向改圖需求（中文，如「把背景換成海邊」）
+  };
   if (!imagePrompt || !imagePrompt.trim()) {
     return NextResponse.json({ error: '缺少 imagePrompt' }, { status: 400 });
   }
+
+  // 有定向修改需求就把它接在原提示詞後面，強調務必套用（gpt-5.4-image-2 中文 OK）
+  const finalPrompt = adjustment?.trim()
+    ? `${imagePrompt}\n\n[Adjustment — must apply exactly, this overrides conflicting parts above]: ${adjustment.trim()}`
+    : imagePrompt;
 
   // 生圖優先用專用 key（跟 n8n 生圖同一把帳號），沒設就退回一般 OpenRouter key
   const apiKey = process.env.OPENROUTER_IMAGE_API_KEY || process.env.OPENROUTER_API_KEY;
@@ -35,7 +43,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: 'openai/gpt-5.4-image-2',
-        messages: [{ role: 'user', content: [{ type: 'text', text: imagePrompt }] }],
+        messages: [{ role: 'user', content: [{ type: 'text', text: finalPrompt }] }],
       }),
       signal: controller.signal,
     });

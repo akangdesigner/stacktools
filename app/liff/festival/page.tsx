@@ -33,6 +33,7 @@ export default function FestivalLiffPage() {
   const [imageUrl, setImageUrl] = useState('');
 
   const [textDone, setTextDone] = useState(false);
+  const [adjustment, setAdjustment] = useState(''); // 定向改圖的需求文字
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
@@ -115,11 +116,11 @@ export default function FestivalLiffPage() {
     setTextDone(true); // 文案真的完成（進度條不跳，繼續依時間爬）
 
     // ② 生圖（延續同一輪計時，不重置）
-    await genImage(tData.imagePrompt || '', false);
+    await genImage(tData.imagePrompt || '', '', false);
   }
 
-  // ── 生圖（restart=true 時單獨重生，重置計時）──────────────
-  async function genImage(prompt: string, restart = true) {
+  // ── 生圖（adjustment=定向改圖需求；restart=true 單獨重生、重置計時）──
+  async function genImage(prompt: string, adj = '', restart = true) {
     if (!prompt) {
       setError('沒有圖片提示詞，請重新生成');
       setPhase('error');
@@ -135,7 +136,7 @@ export default function FestivalLiffPage() {
       const r = await fetch('/api/liff-festival/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePrompt: prompt }),
+        body: JSON.stringify({ imagePrompt: prompt, adjustment: adj }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -271,17 +272,31 @@ export default function FestivalLiffPage() {
           <>
             {/* 配圖 */}
             <section className="mb-5 rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-gray-400">配圖</p>
+              <p className="text-xs font-semibold text-gray-400 mb-3">配圖</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="節慶配圖" className="w-full rounded-xl mb-3" />
+
+              {/* 定向改圖：描述要調整的地方 → 依需求重生 */}
+              <p className="text-xs text-gray-400 mb-1.5">想改這張圖？描述要調整的地方</p>
+              <div className="flex gap-2">
+                <input
+                  value={adjustment}
+                  onChange={(e) => setAdjustment(e.target.value)}
+                  placeholder="例：把背景換成海邊、人物只要一個、色調暖一點"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-amber-400"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && adjustment.trim()) genImage(imagePrompt, adjustment.trim(), true);
+                  }}
+                />
                 <button
-                  onClick={() => genImage(imagePrompt)}
-                  className="text-xs text-amber-600 font-medium"
+                  onClick={() => adjustment.trim() && genImage(imagePrompt, adjustment.trim(), true)}
+                  disabled={!adjustment.trim()}
+                  className="px-4 rounded-lg bg-amber-500 text-white text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100 whitespace-nowrap"
                 >
-                  ↻ 重新生成圖片
+                  套用修改
                 </button>
               </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt="節慶配圖" className="w-full rounded-xl" />
+              <p className="mt-1.5 text-[11px] text-gray-400">依你描述的方向重新生成；每次修改都以原圖情境為基準</p>
             </section>
 
             {/* 文案（可編輯）*/}
