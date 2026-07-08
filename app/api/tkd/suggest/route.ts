@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collectUrls, fetchAllTkd } from '@/lib/tkd-crawler';
+import { detectPlatform, extract91appH1 } from '@/lib/tkd-platform';
 import {
   extractSheetId,
   extractGid,
@@ -52,7 +53,13 @@ export async function POST(req: NextRequest) {
     const scope = body.scope === 'all' ? 'all' : 'important';
 
     // 重爬每頁：取得正文 content 與現有 TKD（建議生成要靠正文）
-    const pages = await fetchAllTkd(await collectUrls(siteUrl, limit, scope));
+    // 91APP 的 h1 由 JS 渲染 server 讀不到，偵測到就注入 extract91appH1 還原，讓 AI 生建議時看得到現有 h1
+    const platform = await detectPlatform(siteUrl);
+    const pages = await fetchAllTkd(
+      await collectUrls(siteUrl, limit, scope),
+      6,
+      platform === '91app' ? extract91appH1 : undefined,
+    );
     if (pages.length === 0) {
       return NextResponse.json({ error: '找不到任何頁面，請確認網址' }, { status: 400 });
     }
