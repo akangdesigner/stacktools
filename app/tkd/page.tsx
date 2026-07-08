@@ -50,6 +50,15 @@ interface CandidatePage {
   include: boolean;
 }
 
+// 偵測到的網站平台（後端 lib/tkd-platform 判定，這裡只做顯示；不 import 後端模組避免把 node 依賴打進前端）
+type Platform = "91app" | "shopline" | "wordpress" | "generic";
+const PLATFORM_BADGE: Record<Platform, { label: string; cls: string }> = {
+  "91app": { label: "91APP", cls: "bg-blue-50 text-blue-600 border-blue-200" },
+  shopline: { label: "SHOPLINE", cls: "bg-green-50 text-green-600 border-green-200" },
+  wordpress: { label: "WordPress", cls: "bg-sky-50 text-sky-600 border-sky-200" },
+  generic: { label: "自架", cls: "bg-gray-50 text-gray-500 border-gray-200" },
+};
+
 // 網址顯示用：還原中文 slug，失敗就原樣
 function pretty(u: string): string {
   try {
@@ -121,6 +130,64 @@ function pickIsMain(
   return (p) => isMainPage(p.url, mainDepth, keySet);
 }
 
+// 批量勾選的分組維度
+export type PageGroup = { key: string; tag?: string; pages: CandidatePage[] };
+
+// 某頁的「網址目錄」key：去掉最後一段當目錄（/SalePage/Index/123 → /salepage/index）；
+// 首頁回特殊值、只有一段的頁（/about）自己當目錄
+function dirKeyOf(url: string): string {
+  const segs = pathSegs(url);
+  if (segs.length === 0) return "__home__";
+  if (segs.length === 1) return "/" + segs[0];
+  return "/" + segs.slice(0, -1).join("/");
+}
+
+// 一組頁面裡數量最多的型態（當目錄組的輔助標籤）
+function majorType(pages: CandidatePage[]): string {
+  const cnt: Record<string, number> = {};
+  for (const p of pages) cnt[p.type] = (cnt[p.type] ?? 0) + 1;
+  return Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+}
+
+// 智慧分組：優先「依網址目錄」——能分出 ≥2 個多頁目錄組才用（91APP 這種分層網址會命中）；
+// 分不出來（中文 slug 站全擠根目錄）就退回「依型態」分組。兩種站都好用、使用者零操作。
+function buildGroups(cands: CandidatePage[]): PageGroup[] {
+  // 先試依目錄分組
+  const byDir = new Map<string, CandidatePage[]>();
+  for (const p of cands) {
+    const k = dirKeyOf(p.url);
+    if (!byDir.has(k)) byDir.set(k, []);
+    byDir.get(k)!.push(p);
+  }
+  const multiDirCount = [...byDir.values()].filter((a) => a.length >= 2).length;
+
+  if (multiDirCount >= 2) {
+    const groups: PageGroup[] = [];
+    const others: CandidatePage[] = [];
+    for (const [k, pages] of byDir) {
+      if (k === "__home__") groups.push({ key: "首頁", pages });
+      else if (pages.length >= 2) groups.push({ key: k, tag: majorType(pages), pages });
+      else others.push(...pages); // 只有 1 頁的目錄併「其他」，避免一堆單頁小組
+    }
+    // 首頁排最前，其餘依頁數多寡，「其他」墊底
+    groups.sort((a, b) =>
+      a.key === "首頁" ? -1 : b.key === "首頁" ? 1 : b.pages.length - a.pages.length,
+    );
+    if (others.length) groups.push({ key: "其他", pages: others });
+    return groups;
+  }
+
+  // 退回依型態分組（順序同 PAGE_TYPES）
+  const TYPE_ORDER = ["首頁", "形象頁", "分類頁", "產品頁", "部落格", "促銷", "功能頁", "其他"];
+  const byType = new Map<string, CandidatePage[]>();
+  for (const p of cands) {
+    const t = p.type || "其他";
+    if (!byType.has(t)) byType.set(t, []);
+    byType.get(t)!.push(p);
+  }
+  return TYPE_ORDER.filter((t) => byType.has(t)).map((t) => ({ key: t, pages: byType.get(t)! }));
+}
+
 // 背景任務進度（對應 lib/tkd-jobs.ts 的 TkdJob）
 interface TkdJob {
   status: "running" | "completed" | "failed";
@@ -169,6 +236,7 @@ export default function TkdPage() {
   const [generating, setGenerating] = useState(false); // 第②步爬取＋寫入中
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState<CandidatePage[] | null>(null);
+  const [platform, setPlatform] = useState<Platform | null>(null); // 偵測到的網站平台（顯示徽章用）
   const [extraKeywords, setExtraKeywords] = useState(""); // 指定關鍵字（逗號分隔，全站共用）
   const [notes, setNotes] = useState(""); // 微調：修正指示（自由文字）
   const [collectProgress, setCollectProgress] = useState(""); // 第①步背景任務的進度訊息
@@ -187,6 +255,7 @@ export default function TkdPage() {
     setCollecting(true);
     setError("");
     setCandidates(null);
+    setPlatform(null);
     setResult(null);
     setStage1Done(false); // 重新蒐集＝重來一批，回到階段一
     setDraftId(null);
@@ -202,18 +271,24 @@ export default function TkdPage() {
       if (!res.ok) throw new Error(String(data.error || "發生錯誤"));
       const jobId = String(data.jobId || "");
       if (!jobId) throw new Error("伺服器沒有回傳任務 id");
-      const collected = await pollJob<{ pages: CandidatePage[] }>(
+      const collected = await pollJob<{ pages: CandidatePage[]; platform?: Platform }>(
         "/api/tkd/collect",
         jobId,
         setCollectProgress,
       );
-      // 預設勾選規則：pickIsMain 先看架構自動選規則——有抓到選單就以「選單名＝主要目標頁」，
-      // 抓不到選單才退回麵包屑結構判斷；再排除 AI 判為促銷/功能頁的（收錄意義低）。
+      const plat = collected.platform ?? "generic";
+      setPlatform(plat);
+      // 預設勾選：91APP 直接用後端 adapter 給的精準 include（產品/分類/首頁/形象=勾、
+      // 部落格單篇/功能頁=不勾）；91APP 沒選單名，用 pickIsMain 反而會被數字 ID 深路徑判亂。
+      // 其他平台維持原本規則：pickIsMain 依架構自動選，再排除促銷/功能頁。
       const isMain = pickIsMain(collected.pages);
       setCandidates(
         collected.pages.map((p) => ({
           ...p,
-          include: isMain(p) && p.type !== "促銷" && p.type !== "功能頁",
+          include:
+            plat === "91app"
+              ? p.include
+              : isMain(p) && p.type !== "促銷" && p.type !== "功能頁",
         })),
       );
     } catch (err) {
@@ -362,6 +437,7 @@ export default function TkdPage() {
       setSheetUrl(d.sheetUrl);
       setScope(d.scope);
       setCandidates(d.pages.map((p) => ({ url: p.url, label: p.label, type: p.type || "其他", include: true })));
+      setPlatform(null); // 草稿沒存平台，續做時不顯示徽章
       setDraftId(id);
       setCurrentPinned(!!d.pinned); // 常駐草稿：生成後不自動刪
       setDraftSaved(true); // 從草稿載入的本來就是已存的
@@ -397,21 +473,8 @@ export default function TkdPage() {
     );
   }
 
-  // 分兩組：主要目標頁／子頁（判斷同 handleCollect，由 pickIsMain 依架構自動選規則）。
-  // AI 判的型態（形象/產品/分類…）降為每頁旁的小標籤，不再拿來分大組
-  const isMainOf = candidates ? pickIsMain(candidates) : () => false;
-  const groups = candidates
-    ? [
-        {
-          key: "主要目標頁",
-          pages: candidates.filter((p) => isMainOf(p)),
-        },
-        {
-          key: "子頁",
-          pages: candidates.filter((p) => !isMainOf(p)),
-        },
-      ].filter((g) => g.pages.length > 0)
-    : [];
+  // 批量勾選分組：智慧選維度（多頁目錄夠多→依網址目錄，否則→依型態），每組都有全選/全不選
+  const groups = candidates ? buildGroups(candidates) : [];
   const selectedCount = candidates ? candidates.filter((p) => p.include).length : 0;
 
   return (
@@ -561,7 +624,15 @@ export default function TkdPage() {
         <div className="mt-6 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-gray-800">
+              <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                {/* 偵測到的平台徽章（91APP 走專屬精準分類，其餘走通用流程） */}
+                {platform && (
+                  <span
+                    className={`inline-block text-[10px] font-medium border rounded px-1.5 py-0.5 ${PLATFORM_BADGE[platform].cls}`}
+                  >
+                    {PLATFORM_BADGE[platform].label}
+                  </span>
+                )}
                 {stage1Done
                   ? `填關鍵字 → 生成建議 TKD（已追蹤 ${candidates.length} 頁）`
                   : `② 確認要收錄的頁面（已勾 ${selectedCount}／共 ${candidates.length} 頁）`}
@@ -569,7 +640,7 @@ export default function TkdPage() {
               <p className="text-xs text-gray-400">
                 {stage1Done
                   ? "現有 TKD 已寫入；填指定關鍵字後生成建議，也可先離開之後從「我的草稿」續做"
-                  : "預設勾「主要目標頁」，子頁請自行勾選；點網址可開新分頁確認"}
+                  : "可用各組「全選/全不選」批量勾選；點網址可開新分頁確認"}
               </p>
             </div>
 
@@ -579,8 +650,14 @@ export default function TkdPage() {
               return (
                 <div key={g.key} className="border border-gray-100 rounded-lg">
                   <div className="flex items-center justify-between bg-gray-50 rounded-t-lg px-3 py-2">
-                    <span className="text-xs font-bold text-gray-700">
-                      {g.key}（{checkedCount}／{g.pages.length}）
+                    <span className="text-xs font-bold text-gray-700 break-all">
+                      {g.key}
+                      {g.tag && (
+                        <span className="ml-1 text-[10px] font-normal text-gray-400 border border-gray-200 rounded px-1 align-middle">
+                          {g.tag}
+                        </span>
+                      )}
+                      （{checkedCount}／{g.pages.length}）
                     </span>
                     <div className="flex gap-2 text-xs">
                       <button

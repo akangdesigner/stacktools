@@ -1,5 +1,9 @@
-import { parse } from 'node-html-parser';
+import { parse, type HTMLElement } from 'node-html-parser';
 import { gunzipSync } from 'node:zlib';
+
+// h1 精修 callback：原始 <h1> 讀不到時，由呼叫端（平台 adapter）從 server 端最佳來源還原 h1。
+// 用注入方式而非直接 import 平台模組，讓 crawler 不依賴 tkd-platform（避免循環相依）
+export type RefineH1 = (root: HTMLElement, url: string) => string;
 
 // 單一頁面的現有 TKD 資料（現有 title / description / keywords / h1）
 export type PageTkd = {
@@ -428,7 +432,8 @@ export async function collectUrls(
 }
 
 // 抓單一頁面的現有 TKD
-export async function fetchPageTkd(page: PageRef): Promise<PageTkd> {
+// refineH1：原始 <h1> 讀不到時的還原 callback（如 91APP 的 h1 由 JS 渲染，改從 og:title／麵包屑還原）
+export async function fetchPageTkd(page: PageRef, refineH1?: RefineH1): Promise<PageTkd> {
   const { url, label } = page;
   const base: PageTkd = { url, label, title: '', description: '', keywords: '', h1: '' };
   try {
@@ -453,11 +458,14 @@ export async function fetchPageTkd(page: PageRef): Promise<PageTkd> {
       '';
     // 取第一個「有文字」的 h1：有些頁面用 Elementor 產生巢狀 h1（外層空殼、內層才是標題），
     // 只抓第一個 h1 會拿到空字串，改成找第一個非空的
-    const h1 =
+    const rawH1 =
       root
         .querySelectorAll('h1')
         .map((el) => el.text.replace(/\s+/g, ' ').trim())
         .find((t) => t) ?? '';
+    // 讀不到真正的 h1 時才用 callback 還原（91APP 等 SPA 的 h1 由 JS 渲染）；
+    // 必須在下面移除 script 前呼叫——麵包屑資料在 <script type="ld+json"> 裡，移掉就讀不到
+    const h1 = rawH1 || (refineH1 ? refineH1(root, url).replace(/\s+/g, ' ').trim() : '');
 
     // 抓頁面正文：移除選單/頁尾/腳本等雜訊後，取主要內容前 1500 字（供 AI 生成建議參考）
     root
@@ -477,9 +485,11 @@ export async function fetchPageTkd(page: PageRef): Promise<PageTkd> {
 }
 
 // 以並發池逐頁抓 TKD（預設一次 6 個），避免一次打太多請求
+// refineH1：h1 讀不到時的還原 callback，會傳給每一頁的 fetchPageTkd（91APP 才需要）
 export async function fetchAllTkd(
   pages: PageRef[],
   concurrency = 6,
+  refineH1?: RefineH1,
 ): Promise<PageTkd[]> {
   const results: PageTkd[] = new Array(pages.length);
   let cursor = 0;
@@ -487,7 +497,7 @@ export async function fetchAllTkd(
   async function worker() {
     while (cursor < pages.length) {
       const i = cursor++;
-      results[i] = await fetchPageTkd(pages[i]);
+      results[i] = await fetchPageTkd(pages[i], refineH1);
     }
   }
 

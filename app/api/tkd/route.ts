@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { collectUrls, fetchAllTkd, prettyUrl, normalizeSite } from '@/lib/tkd-crawler';
+import { detectPlatform, extract91appH1 } from '@/lib/tkd-platform';
 import {
   extractSheetId,
   extractGid,
@@ -69,8 +70,10 @@ async function runPipeline(
   }
 
   // 2. 逐頁抓現有 TKD
+  // 91APP 的 h1 由 JS 渲染、server 讀不到，偵測到就傳入 extract91appH1 從 og:title／麵包屑還原
+  const platform = await detectPlatform(siteUrl);
   progressTkdJob(jobId, `爬取 ${urls.length} 頁的現有 TKD 中…`, 0, urls.length);
-  const pages = await fetchAllTkd(urls);
+  const pages = await fetchAllTkd(urls, 6, platform === '91app' ? extract91appH1 : undefined);
 
   // 只預覽模式：sheet 網址留空＝只跑 AI 生成、結果顯示在畫面上，完全不讀/寫登記表（測試用）
   const previewOnly = !sheetUrl || sheetUrl.trim() === '';
@@ -127,8 +130,10 @@ async function runPipeline(
     const row = new Array(headerLen).fill('');
     // 「#」欄照寫入順序放流水號（1 起算）
     if (idxNum >= 0) row[idxNum] = String(rows.length + 1);
-    // 頁面欄寫成「選單名＋超連結」；沒有選單名（全站模式）就用可讀網址當顯示文字
-    row[idxPage] = sheetLink(p.url, p.label || prettyUrl(p.url));
+    // 頁面欄寫成「中文名＋超連結」：優先選單名，退頁面 h1（91APP 這類無選單名的站，
+    // h1 就是乾淨的中文頁名＝產品名／分類名／文章標題），再退 title（如品牌介紹頁沒 h1），
+    // 都沒有才退可讀網址
+    row[idxPage] = sheetLink(p.url, p.label || p.h1 || p.title || prettyUrl(p.url));
     if (idxTitle >= 0) row[idxTitle] = p.title;
     if (idxDesc >= 0) row[idxDesc] = p.description;
     if (idxKw >= 0) row[idxKw] = p.keywords;
