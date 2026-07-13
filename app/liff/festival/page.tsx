@@ -6,6 +6,8 @@ import type { Liff } from '@line/liff';
 // 節慶生圖 LIFF：一開頁就自動「生文案 → 生圖」一氣呵成，過程顯示進度條。
 // 進度條「階段」是真的（文案完成→跳 42%、圖片真的回來→跳 100%），
 // 階段內因為 API 是黑箱（不回報 %）改用時間平滑推進。
+// 視覺套 STACK AI 品牌色（冰藍底＋寶藍主色＋綠金點綴＋切角玻璃籤＋電路背景），
+// 樣式全 scoped 在 .fp 底下（見 FP_CSS），不外洩影響其他頁。
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID || '';
 
@@ -18,7 +20,7 @@ const PROGRESS_TAU_MS = 185_000;
 const PHASE_LABEL: Record<string, string> = {
   init: '連線中…',
   text: 'AI 生成貼文文案中…',
-  image: 'AI 生成配圖中…（請耐心等，別關閉頁面）',
+  image: 'AI 生成配圖中…',
 };
 
 export default function FestivalLiffPage() {
@@ -149,7 +151,6 @@ export default function FestivalLiffPage() {
 
       // ② 每 3.5 秒輪詢一次，最多等 6 分鐘
       const deadline = Date.now() + 6 * 60 * 1000;
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         await new Promise((r) => setTimeout(r, 3500));
         const pr = await fetch(`/api/liff-festival/image?jobId=${encodeURIComponent(jobId)}`);
@@ -234,202 +235,422 @@ export default function FestivalLiffPage() {
   // ── 完成畫面 ──────────────────────────────────────────────
   if (phase === 'done') {
     return (
-      <div className="min-h-screen bg-amber-50 flex flex-col items-center justify-center px-6 text-center">
-        <div className="text-5xl mb-4">✅</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">草稿已存好</h1>
-        <p className="text-sm text-gray-600 leading-relaxed mb-8">
-          回到 LINE 對話，按<span className="font-semibold text-amber-700">「確認發佈」</span>就會發到你的社群。
-        </p>
-        <button
-          onClick={closeLiff}
-          className="px-8 py-3 rounded-full bg-amber-500 text-white font-semibold shadow-sm active:scale-95 transition"
-        >
-          回到 LINE
-        </button>
-      </div>
+      <Shell center>
+        <div className="done">
+          <div className="done-badge">✓</div>
+          <h1 className="done-title">草稿已存好</h1>
+          <p className="done-sub">
+            回到 LINE 對話，按<b>「確認發佈」</b>就會發到你的社群。
+          </p>
+          <button className="confirm" onClick={closeLiff}>
+            回到 LINE
+          </button>
+        </div>
+      </Shell>
     );
   }
 
   // ── 生成中畫面（進度條）────────────────────────────────────
   if (phase === 'init' || phase === 'text' || phase === 'image') {
     return (
-      <div className="min-h-screen bg-amber-50 flex flex-col items-center justify-center px-6">
-        <div className="w-full max-w-sm text-center">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500 flex items-center justify-center text-3xl shadow-sm mb-4">
-            🎨
-          </div>
-          <h1 className="text-lg font-bold text-gray-900 mb-1">節慶主題生圖</h1>
-          <p className="text-xs text-gray-500 mb-8">
-            {customerName ? `${customerName} · ` : ''}AI 正在幫你準備節慶貼文
-          </p>
+      <Shell center>
+        <section className="card">
+          <div className="card-pad loading-card">
+            <div className="mark">🎨</div>
+            <div className="eyebrow eyebrow-muted">
+              {phase === 'init' ? 'Connecting' : 'Rendering'}
+            </div>
+            <h2 className="loading-h">
+              {customerName ? `正在準備 ${customerName} 的節慶貼文` : '正在準備你的節慶貼文'}
+            </h2>
 
-          {/* 進度條 */}
-          <div className="w-full h-3 rounded-full bg-amber-100 overflow-hidden">
-            <div
-              className="h-full bg-amber-500 rounded-full transition-[width] duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs">
-            <span className="text-amber-700 font-medium">{PHASE_LABEL[phase]}</span>
-            <span className="text-amber-600 font-semibold tabular-nums">{Math.round(progress)}%</span>
-          </div>
+            <div className="prog-track">
+              <div className="prog-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="prog-meta">
+              <span className="st">{PHASE_LABEL[phase]}</span>
+              <span className="pc">{Math.round(progress)}%</span>
+            </div>
 
-          {/* 兩步驟指示 */}
-          <div className="mt-8 flex items-center justify-center gap-6 text-xs">
-            <StepDot label="生成文案" active={phase === 'text'} done={textDone} />
-            <div className="w-8 h-px bg-amber-200" />
-            <StepDot label="生成配圖" active={phase === 'image'} done={progress >= 100} />
+            <div className="steps">
+              <Step label="TEXT" done={textDone} now={phase === 'text'} />
+              <div className="step-line" />
+              <Step label="IMAGE" done={progress >= 100} now={phase === 'image'} />
+            </div>
+
+            {phase === 'image' && <p className="waited">請耐心等，別關閉頁面</p>}
           </div>
-        </div>
-      </div>
+        </section>
+      </Shell>
     );
   }
 
   // ── 結果畫面（ready / error）──────────────────────────────
   return (
-    <div className="min-h-screen bg-amber-50">
-      <div className="w-full max-w-md mx-auto px-5 py-6">
-        <header className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 rounded-2xl bg-amber-500 flex items-center justify-center text-2xl shadow-sm">
-            🎨
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900 leading-tight">節慶主題生圖</h1>
-            <p className="text-xs text-gray-500">
-              {customerName ? `${customerName} · ` : ''}確認內容後送出存草稿
-            </p>
-          </div>
-        </header>
-
-        {error && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            {error}
+    <Shell>
+      <header className="head">
+        <div className="mark">🎐</div>
+        <div className="eyebrow">Festival Post Studio</div>
+        <h1 className="title">節慶貼文生成</h1>
+        <p className="sub">AI 幫你把節慶的心意，寫成一則貼文</p>
+        {customerName && (
+          <div className="tab">
+            <span className="dot" />
+            <span className="zh">{customerName}</span>
+            <span className="en">Festival</span>
           </div>
         )}
+      </header>
 
-        {/* 錯誤時給重試 */}
-        {phase === 'error' && (
-          <button
-            onClick={() => uid && runAll(uid)}
-            className="w-full mb-5 py-3 rounded-2xl bg-amber-500 text-white font-semibold shadow-sm active:scale-95 transition"
-          >
-            ↻ 重新生成
-          </button>
-        )}
+      {error && <div className="err">{error}</div>}
 
-        {phase === 'ready' && (
-          <>
-            {/* 貼文預覽：先文、接著圖（像真的社群貼文；文字可直接點改）*/}
-            <section className="mb-4 rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-gray-400">貼文預覽（可直接修改）</p>
-                <button
-                  onClick={() => uid && runAll(uid)}
-                  className="text-xs text-amber-600 font-medium"
-                >
+      {/* 錯誤時給重試 */}
+      {phase === 'error' && (
+        <button className="confirm" style={{ marginBottom: 16 }} onClick={() => uid && runAll(uid)}>
+          ↻ 重新生成
+        </button>
+      )}
+
+      {phase === 'ready' && (
+        <>
+          {/* 貼文預覽：先文、接著圖（文字可直接點改）*/}
+          <section className="card">
+            <div className="card-pad">
+              <div className="card-eyebrow">
+                <span className="lbl">Preview · 貼文預覽</span>
+                <button className="relink" onClick={() => uid && runAll(uid)}>
                   ↻ 整篇重生
                 </button>
               </div>
+
               <input
+                className="pv-title-input"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="標題"
-                className="w-full mb-2 px-1 py-1 font-bold text-gray-900 text-base focus:outline-none focus:bg-amber-50 rounded"
               />
               <textarea
+                className="pv-body-input"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="貼文內容"
                 rows={7}
-                className="w-full mb-3 px-1 py-1 text-sm text-gray-700 leading-relaxed resize-none focus:outline-none focus:bg-amber-50 rounded"
               />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt="節慶配圖" className="w-full rounded-xl" />
-            </section>
 
-            {/* 底部兩個輸入框：叫 AI 改文 / 改圖 */}
-            <section className="mb-5 rounded-2xl bg-white border border-gray-100 shadow-sm p-4 space-y-4">
+              <div className="imgwrap">
+                <span className="imgtag">IMG_GEN</span>
+                <span className="corner tl" />
+                <span className="corner tr" />
+                <span className="corner bl" />
+                <span className="corner br" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="genimg" src={imageUrl} alt="節慶配圖" />
+              </div>
+            </div>
+          </section>
+
+          {/* 底部兩個輸入框：叫 AI 改文 / 改圖 */}
+          <section className="card">
+            <div className="card-pad">
               {/* ✏️ 改文字 */}
-              <div>
-                <p className="text-xs text-gray-400 mb-1.5">✏️ 叫 AI 改文字</p>
-                <div className="flex gap-2">
+              <div className="ctl-row">
+                <div className="ctl-label">
+                  <span className="ic">✏️</span>
+                  <span className="zh">改文字</span>
+                  <span className="en">Edit Text</span>
+                </div>
+                <div className="field">
                   <input
                     value={textAdjust}
                     onChange={(e) => setTextAdjust(e.target.value)}
                     placeholder="例：口氣更親切、加點 emoji、縮短一半"
                     disabled={rewriteLoading}
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-amber-400 disabled:opacity-50"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && textAdjust.trim() && !rewriteLoading) rewriteText(textAdjust);
                     }}
                   />
                   <button
+                    className="send"
                     onClick={() => rewriteText(textAdjust)}
                     disabled={!textAdjust.trim() || rewriteLoading}
-                    className="px-4 rounded-lg bg-amber-500 text-white text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100 whitespace-nowrap"
                   >
                     {rewriteLoading ? '改…' : '送出'}
                   </button>
                 </div>
               </div>
 
+              <div className="divider-soft" />
+
               {/* 🎨 改圖 */}
-              <div>
-                <p className="text-xs text-gray-400 mb-1.5">🎨 叫 AI 改圖</p>
-                <div className="flex gap-2">
+              <div className="ctl-row">
+                <div className="ctl-label">
+                  <span className="ic">🎨</span>
+                  <span className="zh">改圖</span>
+                  <span className="en">Edit Image</span>
+                </div>
+                <div className="field">
                   <input
                     value={adjustment}
                     onChange={(e) => setAdjustment(e.target.value)}
-                    placeholder="例：換成海邊、改俯拍、只要桌面擺設不要人"
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-amber-400"
+                    placeholder="例：換成海邊、改俯拍、只要桌面不要人"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && adjustment.trim()) genImage(imagePrompt, adjustment.trim(), true);
                     }}
                   />
                   <button
+                    className="send"
                     onClick={() => adjustment.trim() && genImage(imagePrompt, adjustment.trim(), true)}
                     disabled={!adjustment.trim()}
-                    className="px-4 rounded-lg bg-amber-500 text-white text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100 whitespace-nowrap"
                   >
                     套用
                   </button>
                 </div>
-                <p className="mt-1.5 text-[11px] text-gray-400">改圖以原圖情境為基準重新生成</p>
+                <p className="hint">{'// 改圖以原圖情境為基準重新生成'}</p>
               </div>
-            </section>
+            </div>
+          </section>
 
-            {/* 確認送出 */}
-            <button
-              onClick={confirm}
-              disabled={confirmLoading || rewriteLoading}
-              className="w-full py-4 rounded-2xl bg-amber-500 text-white font-semibold text-base shadow-sm active:scale-95 transition disabled:opacity-40 disabled:active:scale-100"
-            >
-              {confirmLoading ? '存檔中…' : '✅ 確認使用這篇＋這張圖'}
-            </button>
-          </>
-        )}
-      </div>
-    </div>
+          {/* 確認送出 */}
+          <button className="confirm" onClick={confirm} disabled={confirmLoading || rewriteLoading}>
+            {confirmLoading ? '存檔中…' : '確認使用這篇 ＋ 這張圖'}
+          </button>
+        </>
+      )}
+    </Shell>
   );
 }
 
-// 兩步驟小圓點指示
-function StepDot({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+// ── 外殼：品牌色背景＋電路特效層＋置中容器；樣式 scoped 在 .fp ──
+function Shell({ children, center = false }: { children: React.ReactNode; center?: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div
-        className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
-          done
-            ? 'bg-amber-500 text-white'
-            : active
-              ? 'bg-amber-200 text-amber-700 animate-pulse'
-              : 'bg-amber-100 text-amber-400'
-        }`}
-      >
-        {done ? '✓' : active ? '…' : '•'}
+    <div className="fp">
+      <style>{FP_CSS}</style>
+      <div className="fx" aria-hidden="true">
+        <div className="grid" />
+        <svg viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice" fill="none">
+          <g stroke="rgba(43,92,230,.16)" strokeWidth="1">
+            <path d="M20 120 H120 L150 90 H240" />
+            <path d="M380 60 V160 L340 200 H300" />
+            <path d="M40 520 H100 L130 550 V640" />
+            <path d="M360 700 H280 L250 730 V820" />
+          </g>
+          <g fill="rgba(43,92,230,.5)">
+            <circle cx="120" cy="120" r="3" />
+            <circle cx="240" cy="90" r="3" />
+            <circle cx="300" cy="200" r="3" />
+            <circle cx="100" cy="520" r="3" />
+            <circle cx="280" cy="700" r="3" />
+          </g>
+          <g fill="rgba(35,174,110,.45)">
+            <circle cx="150" cy="90" r="3" />
+            <circle cx="130" cy="640" r="3" />
+          </g>
+        </svg>
+        <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
+        <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
+        <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
+        <div className="sheen" />
       </div>
-      <span className={active || done ? 'text-amber-700 font-medium' : 'text-gray-400'}>{label}</span>
+      <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
     </div>
   );
 }
+
+// 兩步驟指示珠子
+function Step({ label, done, now }: { label: string; done: boolean; now: boolean }) {
+  return (
+    <div className={`step ${done ? 'done' : now ? 'now' : ''}`}>
+      <div className="bead">{done ? '✓' : now ? '◍' : '•'}</div>
+      <span className="cap">{label}</span>
+    </div>
+  );
+}
+
+// ── 樣式（scoped 在 .fp；對齊 STACK AI 圖文選單品牌色）──
+const FP_CSS = `
+.fp {
+  --card: #FFFFFF;
+  --line: rgba(43,92,230,.14);
+  --line-2: rgba(43,92,230,.24);
+  --ink: #1D2942;
+  --ink-2: #5C6A85;
+  --ink-3: #94A0B8;
+  --blue: #2B5CE6;
+  --blue-deep: #1E48C8;
+  --blue-soft: #EAF0FE;
+  --green: #23AE6E;
+  --glow: rgba(43,92,230,.38);
+  --field: #F2F5FC;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  --chamfer: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  position: relative; min-height: 100vh; overflow: hidden;
+  font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased;
+  padding: 22px 0 44px;
+  background:
+    radial-gradient(680px 340px at 86% -6%, rgba(43,92,230,.16) 0%, transparent 60%),
+    radial-gradient(560px 360px at -10% 14%, rgba(35,174,110,.10) 0%, transparent 58%),
+    linear-gradient(180deg, #EEF3FD 0%, #D9E4F7 100%);
+}
+.fp * { box-sizing: border-box; }
+
+.fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.fp .fx .grid {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(43,92,230,.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
+          mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
+}
+.fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fp .fx .sheen {
+  position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
+  transform: skewX(-14deg); animation: fp-sheen 10s ease-in-out infinite;
+}
+.fp .cube { position: absolute; border-radius: 4px; transform: rotate(45deg);
+  background: linear-gradient(135deg, rgba(43,92,230,.28), rgba(43,92,230,.10)); }
+
+.fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
+.fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
+
+.fp .head { text-align: center; margin: 6px 0 20px; }
+.fp .mark {
+  position: relative; width: 56px; height: 56px; margin: 0 auto 13px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; font-size: 26px;
+  background: linear-gradient(150deg, #FFFFFF, #E7EEFE);
+  border: 1px solid rgba(43,92,230,.28);
+  box-shadow: 0 10px 24px -8px var(--glow), inset 0 1px 0 rgba(255,255,255,.9);
+}
+.fp .eyebrow { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--blue); }
+.fp .eyebrow-muted { color: var(--ink-3); }
+.fp .title { font-size: 24px; font-weight: 900; letter-spacing: .04em; margin: 7px 0 0; color: var(--ink); }
+.fp .sub { font-size: 11.5px; color: var(--ink-2); margin-top: 7px; letter-spacing: .02em; }
+
+.fp .tab {
+  display: inline-flex; align-items: center; gap: 7px; clip-path: var(--chamfer);
+  background: rgba(255,255,255,.72); border: 1px solid var(--line-2);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  padding: 6px 14px; margin-top: 12px;
+}
+.fp .tab .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--green); box-shadow: 0 0 8px 1px rgba(35,174,110,.55); animation: fp-blink 2s ease-in-out infinite; }
+.fp .tab .zh { font-size: 11px; font-weight: 800; color: var(--ink); letter-spacing: .02em; }
+.fp .tab .en { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--blue); }
+
+.fp .card {
+  position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 18px; margin-bottom: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.85) inset, 0 22px 44px -28px rgba(30,60,120,.45);
+}
+.fp .card-pad { padding: 16px 16px 18px; }
+.fp .card-eyebrow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+.fp .card-eyebrow .lbl { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+.fp .relink { border: 0; background: transparent; cursor: pointer; font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; color: var(--blue); display: inline-flex; align-items: center; gap: 4px; }
+
+.fp .pv-title-input {
+  width: 100%; border: 0; background: transparent; outline: none; font-family: var(--sans);
+  font-size: 17.5px; font-weight: 900; line-height: 1.42; color: var(--ink);
+  margin: 0 0 8px; padding: 3px 5px; border-radius: 8px;
+}
+.fp .pv-title-input:focus { background: var(--blue-soft); }
+.fp .pv-body-input {
+  width: 100%; border: 0; background: transparent; outline: none; resize: none; font-family: var(--sans);
+  font-size: 13.5px; line-height: 1.9; color: #46506A;
+  margin: 0 0 14px; padding: 3px 5px; border-radius: 8px;
+}
+.fp .pv-body-input:focus { background: var(--blue-soft); }
+
+.fp .imgwrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.fp .genimg { display: block; width: 100%; }
+.fp .imgtag {
+  position: absolute; top: 9px; left: 9px; z-index: 2; font-family: var(--mono);
+  font-size: 9px; font-weight: 600; letter-spacing: .12em; color: var(--blue-deep);
+  background: rgba(255,255,255,.85); border: 1px solid rgba(43,92,230,.3); padding: 3px 8px; border-radius: 6px;
+}
+.fp .corner { position: absolute; width: 16px; height: 16px; z-index: 2; border-color: rgba(43,92,230,.55); border-style: solid; border-width: 0; }
+.fp .corner.tl { top: 8px; left: 8px; border-top-width: 1.5px; border-left-width: 1.5px; border-top-left-radius: 4px; }
+.fp .corner.tr { top: 8px; right: 8px; border-top-width: 1.5px; border-right-width: 1.5px; border-top-right-radius: 4px; }
+.fp .corner.bl { bottom: 8px; left: 8px; border-bottom-width: 1.5px; border-left-width: 1.5px; border-bottom-left-radius: 4px; }
+.fp .corner.br { bottom: 8px; right: 8px; border-bottom-width: 1.5px; border-right-width: 1.5px; border-bottom-right-radius: 4px; }
+
+.fp .ctl-label {
+  display: inline-flex; align-items: center; gap: 7px; clip-path: var(--chamfer);
+  background: var(--blue-soft); padding: 5px 12px; margin: 0 0 9px;
+}
+.fp .ctl-label .ic { font-size: 12px; }
+.fp .ctl-label .zh { font-size: 11px; font-weight: 800; color: var(--ink); }
+.fp .ctl-label .en { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: .1em; color: var(--blue); }
+.fp .field {
+  display: flex; align-items: center; gap: 8px; background: var(--field);
+  border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 6px 13px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.fp .field:focus-within { border-color: rgba(43,92,230,.6); box-shadow: 0 0 0 3px rgba(43,92,230,.14); }
+.fp .field input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-family: var(--sans); font-size: 13px; color: var(--ink); }
+.fp .field input::placeholder { color: var(--ink-3); }
+.fp .field input:disabled { opacity: .5; }
+.fp .send {
+  flex-shrink: 0; border: 0; cursor: pointer; color: #FFFFFF; font-family: var(--mono);
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 8px 15px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+  box-shadow: 0 5px 14px -5px var(--glow); transition: transform .1s;
+}
+.fp .send:active { transform: scale(.96); }
+.fp .send:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.fp .send:disabled:active { transform: none; }
+.fp .hint { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin: 8px 2px 0; letter-spacing: .03em; }
+.fp .divider-soft { height: 1px; background: var(--line); margin: 16px 0; }
+
+.fp .confirm {
+  position: relative; width: 100%; border: 0; cursor: pointer; color: #FFFFFF;
+  font-family: var(--sans); font-size: 15px; font-weight: 800; letter-spacing: .04em;
+  padding: 15px; border-radius: 14px; margin-top: 2px;
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+  box-shadow: 0 14px 28px -12px var(--glow), inset 0 1px 0 rgba(255,255,255,.3);
+  transition: transform .1s;
+}
+.fp .confirm:active { transform: scale(.98); }
+.fp .confirm:disabled { opacity: .4; cursor: default; }
+.fp .confirm:disabled:active { transform: none; }
+
+.fp .err {
+  margin-bottom: 14px; border-radius: 12px; background: #FEF2F2; border: 1px solid #FBD5D5;
+  padding: 12px 14px; font-size: 13px; color: #B42318; line-height: 1.6;
+}
+
+.fp .loading-card { text-align: center; }
+.fp .loading-h { font-size: 16px; font-weight: 900; color: var(--ink); margin: 5px 0 20px; letter-spacing: .02em; }
+.fp .prog-track { height: 7px; border-radius: 999px; background: #DDE6F6; overflow: hidden; margin: 2px 0 0; border: 1px solid var(--line); }
+.fp .prog-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--blue-deep), #5B87F2); box-shadow: 0 0 12px 0 var(--glow); transition: width .5s ease-out; }
+.fp .prog-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.fp .prog-meta .st { flex: 1; text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; color: var(--ink-2); line-height: 1.5; }
+.fp .prog-meta .pc { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--blue); }
+.fp .steps { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 22px; }
+.fp .step { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; }
+.fp .step .bead { width: 27px; height: 27px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; border: 1px solid var(--line); color: var(--ink-3); background: var(--field); }
+.fp .step .cap { color: var(--ink-3); }
+.fp .step.done .bead { background: linear-gradient(135deg, var(--green), #1B9760); color: #fff; border-color: transparent; box-shadow: 0 4px 12px -3px rgba(35,174,110,.5); }
+.fp .step.done .cap { color: var(--green); }
+.fp .step.now .bead { border-color: rgba(43,92,230,.6); color: var(--blue); animation: fp-pulse 1.6s ease-in-out infinite; }
+.fp .step.now .cap { color: var(--blue); }
+.fp .step-line { width: 30px; height: 1.5px; background: var(--line); border-radius: 2px; }
+.fp .waited { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); margin-top: 18px; letter-spacing: .05em; text-align: center; }
+
+.fp .done { text-align: center; }
+.fp .done-badge {
+  width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; font-size: 30px; color: #fff;
+  background: linear-gradient(135deg, var(--green), #1B9760);
+  box-shadow: 0 14px 30px -10px rgba(35,174,110,.6);
+}
+.fp .done-title { font-size: 20px; font-weight: 900; color: var(--ink); margin: 0 0 10px; }
+.fp .done-sub { font-size: 13px; color: var(--ink-2); line-height: 1.8; margin: 0 0 26px; }
+.fp .done-sub b { color: var(--blue-deep); font-weight: 800; }
+
+@keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
+@keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@keyframes fp-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(43,92,230,.4); } 50% { box-shadow: 0 0 0 6px rgba(43,92,230,0); } }
+@media (prefers-reduced-motion: reduce) {
+  .fp .fx .sheen, .fp .tab .dot, .fp .step.now .bead { animation: none; }
+  .fp .fx .sheen { display: none; }
+}
+`;
