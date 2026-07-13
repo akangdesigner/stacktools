@@ -34,6 +34,8 @@ export default function FestivalLiffPage() {
 
   const [textDone, setTextDone] = useState(false);
   const [adjustment, setAdjustment] = useState(''); // 定向改圖的需求文字
+  const [textAdjust, setTextAdjust] = useState(''); // 定向改文案的需求文字
+  const [rewriteLoading, setRewriteLoading] = useState(false); // AI 改文案中
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
@@ -173,6 +175,30 @@ export default function FestivalLiffPage() {
     }
   }
 
+  // ── AI 改文案：依指示改寫現有標題/內文（不重生圖，只改文字）──
+  async function rewriteText(instruction: string) {
+    const instr = instruction.trim();
+    if (!instr) return;
+    setError('');
+    setRewriteLoading(true);
+    try {
+      const res = await fetch('/api/liff-festival/rewrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content, instruction: instr }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setTitle(data.title || title);
+      setContent(data.content || content);
+      setTextAdjust('');
+    } catch (e) {
+      setError(`改文案失敗：${msg(e)}`);
+    } finally {
+      setRewriteLoading(false);
+    }
+  }
+
   // ── 確認送出 ──────────────────────────────────────────────
   async function confirm() {
     if (!title.trim() || !content.trim() || !imageUrl) {
@@ -294,65 +320,89 @@ export default function FestivalLiffPage() {
 
         {phase === 'ready' && (
           <>
-            {/* 配圖 */}
-            <section className="mb-5 rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <p className="text-xs font-semibold text-gray-400 mb-3">配圖</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imageUrl} alt="節慶配圖" className="w-full rounded-xl mb-3" />
-
-              {/* 定向改圖：描述要調整的地方 → 依需求重生 */}
-              <p className="text-xs text-gray-400 mb-1.5">想改這張圖？描述要調整的地方</p>
-              <div className="flex gap-2">
-                <input
-                  value={adjustment}
-                  onChange={(e) => setAdjustment(e.target.value)}
-                  placeholder="例：把背景換成海邊、人物只要一個、色調暖一點"
-                  className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-amber-400"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && adjustment.trim()) genImage(imagePrompt, adjustment.trim(), true);
-                  }}
-                />
-                <button
-                  onClick={() => adjustment.trim() && genImage(imagePrompt, adjustment.trim(), true)}
-                  disabled={!adjustment.trim()}
-                  className="px-4 rounded-lg bg-amber-500 text-white text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100 whitespace-nowrap"
-                >
-                  套用修改
-                </button>
-              </div>
-              <p className="mt-1.5 text-[11px] text-gray-400">依你描述的方向重新生成；每次修改都以原圖情境為基準</p>
-            </section>
-
-            {/* 文案（可編輯）*/}
-            <section className="mb-5 rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-gray-400">貼文文案（可直接修改）</p>
+            {/* 貼文預覽：先文、接著圖（像真的社群貼文；文字可直接點改）*/}
+            <section className="mb-4 rounded-2xl bg-white border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-400">貼文預覽（可直接修改）</p>
                 <button
                   onClick={() => uid && runAll(uid)}
                   className="text-xs text-amber-600 font-medium"
                 >
-                  ↻ 換一篇
+                  ↻ 整篇重生
                 </button>
               </div>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="標題"
-                className="w-full mb-3 px-3 py-2 rounded-lg border border-gray-200 font-bold text-gray-900 focus:outline-none focus:border-amber-400"
+                className="w-full mb-2 px-1 py-1 font-bold text-gray-900 text-base focus:outline-none focus:bg-amber-50 rounded"
               />
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="貼文內容"
-                rows={8}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 leading-relaxed resize-none focus:outline-none focus:border-amber-400"
+                rows={7}
+                className="w-full mb-3 px-1 py-1 text-sm text-gray-700 leading-relaxed resize-none focus:outline-none focus:bg-amber-50 rounded"
               />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="節慶配圖" className="w-full rounded-xl" />
+            </section>
+
+            {/* 底部兩個輸入框：叫 AI 改文 / 改圖 */}
+            <section className="mb-5 rounded-2xl bg-white border border-gray-100 shadow-sm p-4 space-y-4">
+              {/* ✏️ 改文字 */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1.5">✏️ 叫 AI 改文字</p>
+                <div className="flex gap-2">
+                  <input
+                    value={textAdjust}
+                    onChange={(e) => setTextAdjust(e.target.value)}
+                    placeholder="例：口氣更親切、加點 emoji、縮短一半"
+                    disabled={rewriteLoading}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && textAdjust.trim() && !rewriteLoading) rewriteText(textAdjust);
+                    }}
+                  />
+                  <button
+                    onClick={() => rewriteText(textAdjust)}
+                    disabled={!textAdjust.trim() || rewriteLoading}
+                    className="px-4 rounded-lg bg-amber-500 text-white text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100 whitespace-nowrap"
+                  >
+                    {rewriteLoading ? '改…' : '送出'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 🎨 改圖 */}
+              <div>
+                <p className="text-xs text-gray-400 mb-1.5">🎨 叫 AI 改圖</p>
+                <div className="flex gap-2">
+                  <input
+                    value={adjustment}
+                    onChange={(e) => setAdjustment(e.target.value)}
+                    placeholder="例：換成海邊、改俯拍、只要桌面擺設不要人"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 focus:outline-none focus:border-amber-400"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && adjustment.trim()) genImage(imagePrompt, adjustment.trim(), true);
+                    }}
+                  />
+                  <button
+                    onClick={() => adjustment.trim() && genImage(imagePrompt, adjustment.trim(), true)}
+                    disabled={!adjustment.trim()}
+                    className="px-4 rounded-lg bg-amber-500 text-white text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100 whitespace-nowrap"
+                  >
+                    套用
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11px] text-gray-400">改圖以原圖情境為基準重新生成</p>
+              </div>
             </section>
 
             {/* 確認送出 */}
             <button
               onClick={confirm}
-              disabled={confirmLoading}
+              disabled={confirmLoading || rewriteLoading}
               className="w-full py-4 rounded-2xl bg-amber-500 text-white font-semibold text-base shadow-sm active:scale-95 transition disabled:opacity-40 disabled:active:scale-100"
             >
               {confirmLoading ? '存檔中…' : '✅ 確認使用這篇＋這張圖'}
