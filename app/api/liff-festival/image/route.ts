@@ -5,6 +5,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+// 生圖模型：測試期先用 Gemini 2.5 Flash Image（快，約數秒～十幾秒）。
+// 正式版可換回 'openai/gpt-5.4-image-2'（中文正確但慢~200 秒）。
+// 註：節慶配圖是英文提示詞的生活風照片、圖上不渲染中文，故 Gemini 沒中文問題。
+const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
+
 type Job = { status: 'pending' | 'done' | 'error'; dataUrl?: string; error?: string; ts: number };
 
 // 模組層 job 表；Zeabur 是常駐 Node process，跨請求存活（process 重啟會清空，可接受）
@@ -41,7 +46,8 @@ async function generate(jobId: string, imagePrompt: string, adjustment?: string)
         'X-Title': 'Stacktools Festival Image', // header 只能 Latin1，別放中文
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5.4-image-2',
+        model: IMAGE_MODEL,
+        modalities: ['image', 'text'], // 告訴 OpenRouter 要圖片輸出（Gemini 生圖需要）
         messages: [{ role: 'user', content: [{ type: 'text', text: finalPrompt }] }],
       }),
       signal: controller.signal,
