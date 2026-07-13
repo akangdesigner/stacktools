@@ -47,6 +47,7 @@ export default function AccountSettingsLiffPage() {
 
   const [connections, setConnections] = useState<Connections | null>(null);
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [legacyRaw, setLegacyRaw] = useState('');
 
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -91,6 +92,7 @@ export default function AccountSettingsLiffPage() {
           setIgPass(data.igPass || '');
           setConnections(data.connections || null);
           setBilling(data.billing || null);
+          setLegacyRaw(data.legacyRaw || '');
         } else {
           setIsEdit(false);
         }
@@ -240,6 +242,14 @@ export default function AccountSettingsLiffPage() {
             </div>
           </div>
           <p className="field-hint">{'// 三個平台至少填寫一種，僅供小編後台設定使用，請小心保管'}</p>
+
+          {legacyRaw && (
+            <div className="legacy-box">
+              <p className="legacy-title">⚠️ 偵測到舊格式資料，無法自動拆分到上面欄位</p>
+              <pre className="legacy-text">{legacyRaw}</pre>
+              <p className="legacy-hint">請對照上面原文，手動填入正確的平台帳號密碼欄位後存檔，之後就會存成新格式。</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -393,6 +403,14 @@ const FP_CSS = `
 .fp .field-row input:focus, .fp .field-row textarea:focus { border-color: rgba(43,92,230,.5); box-shadow: 0 0 0 3px rgba(43,92,230,.12); background: #fff; }
 .fp .field-row input::placeholder, .fp .field-row textarea::placeholder { color: var(--ink-3); }
 .fp .field-hint { font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin: 5px 2px 0; line-height: 1.5; }
+
+.fp .legacy-box { margin-top: 12px; padding: 11px 12px; border-radius: 10px; background: var(--amber-soft); border: 1px solid rgba(231,154,62,.35); }
+.fp .legacy-title { font-size: 11px; font-weight: 800; color: var(--amber); margin: 0 0 7px; }
+.fp .legacy-text {
+  font-family: var(--mono); font-size: 11px; color: var(--ink); background: #fff; border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; margin: 0 0 7px;
+}
+.fp .legacy-hint { font-size: 10.5px; color: var(--ink-2); line-height: 1.6; margin: 0; }
 
 .fp .plat-field { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 13px; }
 .fp .plat-field .ic { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-top: 1px; }

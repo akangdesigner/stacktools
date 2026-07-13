@@ -8,38 +8,60 @@ import { getClientByLineUid, upsertClientByLineUid } from '@/lib/aiEditorDb';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const PLATFORM_LABELS: { key: 'fb' | 'th' | 'ig'; label: string; match: RegExp }[] = [
-  { key: 'fb', label: 'FB', match: /FB|Facebook/i },
-  { key: 'th', label: 'Threads', match: /Threads/i },
-  { key: 'ig', label: 'IG', match: /IG|Instagram/i },
-];
+// 舊資料格式五花八門（半形/全形冒號、帳號密碼分行、空格分隔、甚至完全沒有標籤），
+// 不用固定分隔符切段，改成「找平台關鍵字出現的位置」切段——每個平台關鍵字到下一個
+// 平台關鍵字（或字串結尾）之間的整段文字都算它的，帳號/密碼不管在同一行還是換行都能對到。
+const PLATFORM_RE = /(Facebook|Threads|Instagram|FB|IG)/gi;
+
+function platformKey(word: string): 'fb' | 'th' | 'ig' | null {
+  const w = word.toLowerCase();
+  if (w === 'fb' || w === 'facebook') return 'fb';
+  if (w === 'threads') return 'th';
+  if (w === 'ig' || w === 'instagram') return 'ig';
+  return null;
+}
 
 function parseSocialAccount(raw: string) {
-  const result = { fbUser: '', fbPass: '', thUser: '', thPass: '', igUser: '', igPass: '', unparsed: '' };
+  const result = { fbUser: '', fbPass: '', thUser: '', thPass: '', igUser: '', igPass: '', legacyRaw: '' };
   if (!raw || !raw.trim()) return result;
-  const segments = raw.split(/[;；\n]+/).map((s) => s.trim()).filter(Boolean);
-  let matchedAny = false;
-  for (const seg of segments) {
-    const head = seg.split(/[:：]/)[0] || '';
-    const plat = PLATFORM_LABELS.find((p) => p.match.test(head));
-    if (!plat) continue;
-    const userMatch = seg.match(/帳號[:：\s]*([^，,]+)/);
-    const passMatch = seg.match(/密碼[:：\s]*([^，,]+)/);
-    if (userMatch || passMatch) {
-      matchedAny = true;
-      if (plat.key === 'fb') {
-        result.fbUser = userMatch?.[1].trim() || '';
-        result.fbPass = passMatch?.[1].trim() || '';
-      } else if (plat.key === 'th') {
-        result.thUser = userMatch?.[1].trim() || '';
-        result.thPass = passMatch?.[1].trim() || '';
-      } else {
-        result.igUser = userMatch?.[1].trim() || '';
-        result.igPass = passMatch?.[1].trim() || '';
-      }
+
+  const hits: { key: 'fb' | 'th' | 'ig'; index: number }[] = [];
+  let m: RegExpExecArray | null;
+  PLATFORM_RE.lastIndex = 0;
+  while ((m = PLATFORM_RE.exec(raw))) {
+    const key = platformKey(m[1]);
+    if (key) hits.push({ key, index: m.index });
+  }
+  if (hits.length === 0) {
+    result.legacyRaw = raw;
+    return result;
+  }
+
+  let anyOk = false;
+  for (let i = 0; i < hits.length; i++) {
+    const start = hits[i].index;
+    const end = i + 1 < hits.length ? hits[i + 1].index : raw.length;
+    const span = raw.slice(start, end);
+    // 帳號/密碼值：停在下一個空白、逗號或字串結尾（不是只有逗號），才能吃到換行或空格分隔的舊格式
+    const userMatch = span.match(/帳號[:：\s]*([^\s，,]+)/);
+    const passMatch = span.match(/密碼[:：\s]*([^\s，,]+)/);
+    const user = userMatch?.[1]?.trim() || '';
+    const pass = passMatch?.[1]?.trim() || '';
+    if (!user && !pass) continue;
+    anyOk = true;
+    const key = hits[i].key;
+    if (key === 'fb') {
+      result.fbUser = result.fbUser || user;
+      result.fbPass = result.fbPass || pass;
+    } else if (key === 'th') {
+      result.thUser = result.thUser || user;
+      result.thPass = result.thPass || pass;
+    } else {
+      result.igUser = result.igUser || user;
+      result.igPass = result.igPass || pass;
     }
   }
-  if (!matchedAny) result.unparsed = raw;
+  if (!anyOk) result.legacyRaw = raw;
   return result;
 }
 
