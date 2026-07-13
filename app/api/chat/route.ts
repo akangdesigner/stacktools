@@ -3,7 +3,15 @@ import Groq from 'groq-sdk';
 import fs from 'fs';
 import path from 'path';
 
-const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// 延遲建立 Groq client（lazy init）：
+// 不要在模組最外層 new，否則 build 時 Next.js 載入這支 route 會執行到，
+// 而 build 環境沒有 GROQ_API_KEY，groq-sdk 建構子會直接拋錯導致 build 失敗。
+// 改成第一次真正收到請求時才建立，build 階段就不會實例化。
+let client: Groq | null = null;
+function getClient(): Groq {
+  if (!client) client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return client;
+}
 
 function buildSystemPrompt(): string {
   const claudeMd = fs.readFileSync(path.join(process.cwd(), 'CHATBOT.md'), 'utf-8');
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '訊息格式錯誤' }, { status: 400 });
     }
 
-    const completion = await client.chat.completions.create({
+    const completion = await getClient().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       max_tokens: 512,
       messages: [
