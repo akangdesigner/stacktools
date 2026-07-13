@@ -45,7 +45,9 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
         openOnClick: false,
         HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
       }),
-      Image.configure({ inline: false, allowBase64: true }),
+      // inline:true — 圖片可留在段落文字流內。markdown-it 產出的圖片都是 inline（包在 <p> 裡），
+      // 若設 block(inline:false)，圖片夾在段落中會被 ProseMirror 丟棄，導致校稿階段看不到圖
+      Image.configure({ inline: true, allowBase64: true }),
       Table.configure({ resizable: false }),
       TableRow,
       TableCell,
