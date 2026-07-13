@@ -19,6 +19,14 @@ const categories = [
     color: "bg-emerald-50 border-emerald-200 hover:border-emerald-400",
     iconBg: "bg-emerald-100",
   },
+  {
+    href: "/knowledge/event",
+    title: "講座與活動分享",
+    description: "研討會、講座筆記與活動心得整理。",
+    icon: "🎤",
+    color: "bg-amber-50 border-amber-200 hover:border-amber-400",
+    iconBg: "bg-amber-100",
+  },
 ];
 
 export default function KnowledgePage() {

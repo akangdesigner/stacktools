@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '缺少必要欄位：category、title、content' }, { status: 400 });
     }
 
-    if (!['ai', 'seo'].includes(category)) {
-      return NextResponse.json({ error: 'category 只接受 "ai" 或 "seo"' }, { status: 400 });
+    if (!['ai', 'seo', 'event'].includes(category)) {
+      return NextResponse.json({ error: 'category 只接受 "ai"、"seo" 或 "event"' }, { status: 400 });
     }
 
     const db = getArticlesDb();
