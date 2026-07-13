@@ -42,8 +42,17 @@ export default function FestivalLiffPage() {
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
   const runStartRef = useRef<number>(0); // 本輪生成開始時間（毫秒）
+  const contentRef = useRef<HTMLTextAreaElement | null>(null);
 
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  // ── 內文框自動撐高：完整顯示全文，不要內部滑動 ──
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [content]);
 
   // ── 進度條：依「經過時間」漸近爬向 95%（單調遞增，不倒退）──
   useEffect(() => {
@@ -323,26 +332,32 @@ export default function FestivalLiffPage() {
                 </button>
               </div>
 
-              <input
-                className="pv-title-input"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="標題"
-              />
-              <textarea
-                className="pv-body-input"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="貼文內容"
-                rows={7}
-              />
+              <div className="pv-text">
+                <input
+                  className="pv-title-input"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="標題"
+                  disabled={rewriteLoading}
+                />
+                <textarea
+                  ref={contentRef}
+                  className="pv-body-input"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="貼文內容"
+                  rows={1}
+                  disabled={rewriteLoading}
+                />
+                {rewriteLoading && (
+                  <div className="pv-text-loading">
+                    <span className="spin" />
+                    AI 改寫中…
+                  </div>
+                )}
+              </div>
 
               <div className="imgwrap">
-                <span className="imgtag">IMG_GEN</span>
-                <span className="corner tl" />
-                <span className="corner tr" />
-                <span className="corner bl" />
-                <span className="corner br" />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img className="genimg" src={imageUrl} alt="節慶配圖" />
               </div>
@@ -546,6 +561,7 @@ const FP_CSS = `
 .fp .card-eyebrow .lbl { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
 .fp .relink { border: 0; background: transparent; cursor: pointer; font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; color: var(--blue); display: inline-flex; align-items: center; gap: 4px; }
 
+.fp .pv-text { position: relative; }
 .fp .pv-title-input {
   width: 100%; border: 0; background: transparent; outline: none; font-family: var(--sans);
   font-size: 17.5px; font-weight: 900; line-height: 1.42; color: var(--ink);
@@ -553,24 +569,24 @@ const FP_CSS = `
 }
 .fp .pv-title-input:focus { background: var(--blue-soft); }
 .fp .pv-body-input {
-  width: 100%; border: 0; background: transparent; outline: none; resize: none; font-family: var(--sans);
+  display: block; width: 100%; border: 0; background: transparent; outline: none;
+  resize: none; overflow: hidden; font-family: var(--sans);
   font-size: 13.5px; line-height: 1.9; color: #46506A;
   margin: 0 0 14px; padding: 3px 5px; border-radius: 8px;
 }
 .fp .pv-body-input:focus { background: var(--blue-soft); }
-
-.fp .imgwrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
-.fp .genimg { display: block; width: 100%; }
-.fp .imgtag {
-  position: absolute; top: 9px; left: 9px; z-index: 2; font-family: var(--mono);
-  font-size: 9px; font-weight: 600; letter-spacing: .12em; color: var(--blue-deep);
-  background: rgba(255,255,255,.85); border: 1px solid rgba(43,92,230,.3); padding: 3px 8px; border-radius: 6px;
+.fp .pv-text-loading {
+  position: absolute; inset: -6px; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(255,255,255,.9); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); border-radius: 12px;
+  font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--blue-deep); letter-spacing: .04em;
 }
-.fp .corner { position: absolute; width: 16px; height: 16px; z-index: 2; border-color: rgba(43,92,230,.55); border-style: solid; border-width: 0; }
-.fp .corner.tl { top: 8px; left: 8px; border-top-width: 1.5px; border-left-width: 1.5px; border-top-left-radius: 4px; }
-.fp .corner.tr { top: 8px; right: 8px; border-top-width: 1.5px; border-right-width: 1.5px; border-top-right-radius: 4px; }
-.fp .corner.bl { bottom: 8px; left: 8px; border-bottom-width: 1.5px; border-left-width: 1.5px; border-bottom-left-radius: 4px; }
-.fp .corner.br { bottom: 8px; right: 8px; border-bottom-width: 1.5px; border-right-width: 1.5px; border-bottom-right-radius: 4px; }
+.fp .pv-text-loading .spin {
+  width: 14px; height: 14px; border-radius: 999px; border: 2px solid var(--line-2); border-top-color: var(--blue);
+  animation: fp-spin .8s linear infinite;
+}
+
+.fp .imgwrap { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.fp .genimg { display: block; width: 100%; }
 
 .fp .ctl-label {
   display: inline-flex; align-items: center; gap: 7px; clip-path: var(--chamfer);
@@ -649,8 +665,9 @@ const FP_CSS = `
 @keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(43,92,230,.4); } 50% { box-shadow: 0 0 0 6px rgba(43,92,230,0); } }
+@keyframes fp-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .tab .dot, .fp .step.now .bead { animation: none; }
+  .fp .fx .sheen, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
   .fp .fx .sheen { display: none; }
 }
 `;
