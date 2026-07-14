@@ -26,7 +26,6 @@ export default function VideoPostLiffPage() {
   const [customerName, setCustomerName] = useState('');
 
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -117,7 +116,6 @@ export default function VideoPostLiffPage() {
       const tData = await tRes.json();
       if (!tRes.ok) throw new Error(tData.error || `HTTP ${tRes.status}`);
 
-      setTitle(tData.title || '');
       setContent(tData.content || '');
       setImagePrompt(tData.imagePrompt || '');
       setCustomerName(tData.customerName || '');
@@ -190,11 +188,10 @@ export default function VideoPostLiffPage() {
       const res = await fetch('/api/liff-videopost/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, instruction: instr }),
+        body: JSON.stringify({ content, instruction: instr }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setTitle(data.title || title);
       setContent(data.content || content);
       setTextAdjust('');
     } catch (e) {
@@ -206,8 +203,8 @@ export default function VideoPostLiffPage() {
 
   // ── 確認送出 ──
   async function confirm() {
-    if (!title.trim() || !content.trim() || !imageUrl) {
-      setError('標題、內文、圖片都要有才能送出');
+    if (!content.trim() || !imageUrl) {
+      setError('內文、圖片都要有才能送出');
       return;
     }
     setError('');
@@ -216,7 +213,7 @@ export default function VideoPostLiffPage() {
       const res = await fetch('/api/liff-videopost/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: uid, title, content, imageDataUrl: imageUrl }),
+        body: JSON.stringify({ line_uid: uid, content, imageDataUrl: imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -358,13 +355,6 @@ export default function VideoPostLiffPage() {
               </div>
 
               <div className="pv-text">
-                <input
-                  className="pv-title-input"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="標題"
-                  disabled={rewriteLoading}
-                />
                 <textarea
                   ref={contentRef}
                   className="pv-body-input"
