@@ -95,7 +95,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const invoice = getInvoice(id);
   if (!invoice) return NextResponse.json({ error: '找不到發票' }, { status: 404 });
-  if (invoice.invoice_number) return NextResponse.json({ error: '已開立的發票請使用作廢功能' }, { status: 400 });
+  // 直接從系統移除這筆紀錄（光貿那邊的發票號碼不受影響，需作廢請另外走作廢）
   deleteInvoice(id);
   return NextResponse.json({ ok: true });
 }
@@ -125,7 +125,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (action === 'void') {
       if (!invoice.invoice_number) return NextResponse.json({ error: '草稿無需作廢，請直接刪除' }, { status: 400 });
       if (invoice.status === 'voided') return NextResponse.json({ error: '此發票已作廢' }, { status: 400 });
-      if (invoice.status !== 'paid') return NextResponse.json({ error: '請先確認收款後，才能執行作廢' }, { status: 400 });
       await voidInvoice(invoice.invoice_number, invoice.invoice_date);
       updateInvoice(id, { status: 'voided' });
       return NextResponse.json(getInvoice(id));

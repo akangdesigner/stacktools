@@ -88,7 +88,10 @@ export default function FinancePage() {
 
   // ── 刪除草稿 ──────────────────────────────────────────────────────────────
   async function handleDelete(inv: InvoiceWithItems) {
-    if (!confirm(`確定要刪除「${inv.client_name}」的草稿？`)) return;
+    const msg = inv.invoice_number
+      ? `確定要從系統刪除「${inv.client_name}」這筆發票紀錄？（光貿發票號碼 ${inv.invoice_number} 不受影響，若需作廢請改用作廢功能）`
+      : `確定要刪除「${inv.client_name}」的草稿？`;
+    if (!confirm(msg)) return;
     setLoadingId(inv.id); setError("");
     const res = await fetch(`/api/finance/invoices/${inv.id}`, { method: "DELETE" });
     setLoadingId(null);
@@ -278,8 +281,11 @@ export default function FinancePage() {
                             <button onClick={() => openPayModal(inv)} disabled={busy} className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-40">
                               確認收款
                             </button>
-                            <button onClick={() => handleVoid(inv)} disabled={busy} className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">
+                            <button onClick={() => handleVoid(inv)} disabled={busy} className="text-xs text-amber-500 hover:text-amber-700 disabled:opacity-40">
                               {busy ? "..." : "作廢"}
+                            </button>
+                            <button onClick={() => handleDelete(inv)} disabled={busy} className="text-xs text-red-400 hover:text-red-600 disabled:opacity-40">
+                              刪除
                             </button>
                           </>
                         )}
