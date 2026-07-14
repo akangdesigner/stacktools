@@ -69,16 +69,16 @@ export default function HelpLiffPage() {
         點擊按鈕開啟頁面，上傳短影音影片（3 分鐘內），AI 自動轉逐字稿並依品牌人設寫成貼文＋配圖。頁面上可直接調整文字或圖片，存檔後回 LINE 確認發佈。
       </FaqItem>
 
+      <FaqItem hi id="fileimport" icon="📂" title="客戶資料文件導入" sub="上傳/刪除 PDF，頁面直接管理" open={openKey === 'fileimport'} onToggle={toggle}>
+        點擊按鈕開啟頁面，直接看到已匯入的文件清單，上傳新 PDF 或刪除舊文件都在頁面上點一點完成，不用再打字下指令。AI 生成內容時會參考裡面的品牌禁詞、口吻規範等資料（僅支援 PDF）。
+      </FaqItem>
+
       <div className="sec-title"><span className="badge">⚙️ 帳號與內容管理</span><span className="ln" /></div>
 
       <FaqItem id="account" icon="👤" title="客戶資料設定" sub="初次使用請先完成這步" open={openKey === 'account'} onToggle={toggle}>
         <div className="step"><span className="n">1</span><span>點擊圖文選單「客戶資料管理」開啟設定頁</span></div>
         <div className="step"><span className="n">2</span><span>第一次是空白表單，填寫品牌人設、關鍵字等資料後建立；之後點進去會直接看到現有資料，改完存檔即可</span></div>
         <div className="note">建立完成後需等待一個工作日將帳戶加入系統，才能開始使用其他功能。</div>
-      </FaqItem>
-
-      <FaqItem id="fileimport" icon="📂" title="客戶資料文件導入" sub="上傳品牌規範文件" open={openKey === 'fileimport'} onToggle={toggle}>
-        傳送 PDF 檔案即可完成導入，AI 生成內容時會參考裡面的品牌禁詞、口吻規範等資料。要刪除已上傳的文件，輸入「刪除:檔案名稱」即可（僅支援 PDF）。
       </FaqItem>
 
       <div className="sec-title"><span className="badge">🛠️ 其他功能</span><span className="ln" /></div>
