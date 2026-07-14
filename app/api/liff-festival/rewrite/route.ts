@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 節慶「AI 改文案」：帶現有標題/內文 + 使用者的修改指示 → 依指示改寫，回傳新的標題/內文。
-// 走 OpenRouter（跟生圖同一把 key），純文字改寫、快。
+// 節慶「AI 改文案」：帶現有內文 + 使用者的修改指示 → 依指示改寫，回傳新內文。
+// 走 OpenRouter（跟生圖同一把 key），純文字改寫、快。貼文不分標題，只有內文。
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -9,7 +9,7 @@ export const maxDuration = 60;
 const REWRITE_MODEL = 'google/gemini-2.5-flash';
 
 // 從模型回應抽出 JSON（容錯：去掉 ```json 圍欄、取第一個大括號區塊）
-function extractJson(raw: string): { title?: string; content?: string } | null {
+function extractJson(raw: string): { content?: string } | null {
   const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
@@ -22,8 +22,7 @@ function extractJson(raw: string): { title?: string; content?: string } | null {
 }
 
 export async function POST(req: NextRequest) {
-  const { title, content, instruction } = (await req.json()) as {
-    title?: string;
+  const { content, instruction } = (await req.json()) as {
     content?: string;
     instruction?: string;
   };
@@ -42,16 +41,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const system = `你是專業的社群小編。使用者會給你一篇現有的社群貼文（標題＋內文）和一個修改指示，請你依指示改寫。
+  const system = `你是專業的社群小編。使用者會給你一則現有的社群貼文內文和一個修改指示，請你依指示改寫。
 
 規則：
 - 全程使用繁體中文
 - 只依「修改指示」調整，其餘保持原貼文的主題、重點與品牌語氣
 - 保持適合社群平台的長度與可讀性
+- 社群貼文不分標題，直接寫成一段可發佈的內文
 - 不要加任何說明或前言
-- 只輸出 JSON，格式：{"title": "新標題", "content": "新內文"}`;
+- 只輸出 JSON，格式：{"content": "新內文"}`;
 
-  const user = `【現有標題】\n${title || '（無標題）'}\n\n【現有內文】\n${content.trim()}\n\n【修改指示】\n${instruction.trim()}`;
+  const user = `【現有內文】\n${content.trim()}\n\n【修改指示】\n${instruction.trim()}`;
 
   try {
     const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -92,10 +92,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '改文案回傳格式異常，請重試' }, { status: 502 });
     }
 
-    return NextResponse.json({
-      title: parsed.title || title || '',
-      content: parsed.content,
-    });
+    return NextResponse.json({ content: parsed.content });
   } catch (err) {
     return NextResponse.json({ error: `改文案連線失敗：${String(err)}` }, { status: 504 });
   }

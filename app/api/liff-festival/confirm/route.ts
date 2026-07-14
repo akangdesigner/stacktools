@@ -11,16 +11,15 @@ const N8N_CONFIRM_WEBHOOK =
   'https://stack.zeabur.app/webhook/festival-liff-confirm';
 
 export async function POST(req: NextRequest) {
-  const { line_uid, title, content, imageDataUrl } = (await req.json()) as {
+  const { line_uid, content, imageDataUrl } = (await req.json()) as {
     line_uid?: string;
-    title?: string;
     content?: string;
     imageDataUrl?: string;
   };
 
-  if (!line_uid || !title || !content || !imageDataUrl) {
+  if (!line_uid || !content || !imageDataUrl) {
     return NextResponse.json(
-      { error: '缺少必要欄位（line_uid / title / content / imageDataUrl）' },
+      { error: '缺少必要欄位（line_uid / content / imageDataUrl）' },
       { status: 400 }
     );
   }
@@ -40,7 +39,7 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(N8N_CONFIRM_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_data, title, content, imageDataUrl }),
+      body: JSON.stringify({ customer_data, content, imageDataUrl }),
     });
 
     if (!upstream.ok) {

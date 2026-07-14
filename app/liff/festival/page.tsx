@@ -29,7 +29,6 @@ export default function FestivalLiffPage() {
   const [uid, setUid] = useState('');
   const [customerName, setCustomerName] = useState('');
 
-  const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -122,7 +121,6 @@ export default function FestivalLiffPage() {
       setPhase('error');
       return;
     }
-    setTitle(tData.title || '');
     setContent(tData.content || '');
     setImagePrompt(tData.imagePrompt || '');
     setCustomerName(tData.customerName || '');
@@ -185,7 +183,7 @@ export default function FestivalLiffPage() {
     }
   }
 
-  // ── AI 改文案：依指示改寫現有標題/內文（不重生圖，只改文字）──
+  // ── AI 改文案：依指示改寫現有內文（不重生圖，只改文字）──
   async function rewriteText(instruction: string) {
     const instr = instruction.trim();
     if (!instr) return;
@@ -195,11 +193,10 @@ export default function FestivalLiffPage() {
       const res = await fetch('/api/liff-festival/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, instruction: instr }),
+        body: JSON.stringify({ content, instruction: instr }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setTitle(data.title || title);
       setContent(data.content || content);
       setTextAdjust('');
     } catch (e) {
@@ -211,8 +208,8 @@ export default function FestivalLiffPage() {
 
   // ── 確認送出 ──────────────────────────────────────────────
   async function confirm() {
-    if (!title.trim() || !content.trim() || !imageUrl) {
-      setError('標題、內文、圖片都要有才能送出');
+    if (!content.trim() || !imageUrl) {
+      setError('內文、圖片都要有才能送出');
       return;
     }
     setError('');
@@ -221,7 +218,7 @@ export default function FestivalLiffPage() {
       const res = await fetch('/api/liff-festival/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: uid, title, content, imageDataUrl: imageUrl }),
+        body: JSON.stringify({ line_uid: uid, content, imageDataUrl: imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -333,13 +330,6 @@ export default function FestivalLiffPage() {
               </div>
 
               <div className="pv-text">
-                <input
-                  className="pv-title-input"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="標題"
-                  disabled={rewriteLoading}
-                />
                 <textarea
                   ref={contentRef}
                   className="pv-body-input"

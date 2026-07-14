@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
     }
 
     const data = (await upstream.json()) as {
-      title?: string;
       content?: string;
       imagePrompt?: string;
     };
