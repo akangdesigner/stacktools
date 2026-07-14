@@ -14,12 +14,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string };
+  const body = await req.json() as { name?: string; social_account?: string; fb_user?: string; fb_pass?: string; th_user?: string; th_pass?: string; ig_user?: string; ig_pass?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string };
   const lineUid = body.line_uid?.trim() ?? '';
   if (lineUid) {
     const { client, action } = upsertClientByLineUid(lineUid, {
       ...(body.name !== undefined && { name: body.name!.trim() }),
       ...(body.social_account !== undefined && { social_account: body.social_account!.trim() }),
+      ...(body.fb_user !== undefined && { fb_user: body.fb_user!.trim() }),
+      ...(body.fb_pass !== undefined && { fb_pass: body.fb_pass!.trim() }),
+      ...(body.th_user !== undefined && { th_user: body.th_user!.trim() }),
+      ...(body.th_pass !== undefined && { th_pass: body.th_pass!.trim() }),
+      ...(body.ig_user !== undefined && { ig_user: body.ig_user!.trim() }),
+      ...(body.ig_pass !== undefined && { ig_pass: body.ig_pass!.trim() }),
       ...(body.keywords !== undefined && { keywords: body.keywords!.trim() }),
       ...(body.persona !== undefined && { persona: body.persona!.trim() }),
       ...(body.client_info !== undefined && { client_info: body.client_info!.trim() }),
@@ -34,6 +40,12 @@ export async function POST(req: NextRequest) {
   const client = createAiEditorClient({
     name: body.name?.trim() ?? '',
     social_account: body.social_account?.trim() ?? '',
+    fb_user: body.fb_user?.trim() ?? '',
+    fb_pass: body.fb_pass?.trim() ?? '',
+    th_user: body.th_user?.trim() ?? '',
+    th_pass: body.th_pass?.trim() ?? '',
+    ig_user: body.ig_user?.trim() ?? '',
+    ig_pass: body.ig_pass?.trim() ?? '',
     line_uid: '',
     keywords: body.keywords?.trim() ?? '',
     persona: body.persona?.trim() ?? '',
@@ -48,11 +60,17 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; social_account?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string; ig_access_token?: string };
+  const body = await req.json() as { id?: number; name?: string; social_account?: string; fb_user?: string; fb_pass?: string; th_user?: string; th_pass?: string; ig_user?: string; ig_pass?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string; ig_access_token?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
     ...(body.social_account !== undefined && { social_account: body.social_account }),
+    ...(body.fb_user !== undefined && { fb_user: body.fb_user }),
+    ...(body.fb_pass !== undefined && { fb_pass: body.fb_pass }),
+    ...(body.th_user !== undefined && { th_user: body.th_user }),
+    ...(body.th_pass !== undefined && { th_pass: body.th_pass }),
+    ...(body.ig_user !== undefined && { ig_user: body.ig_user }),
+    ...(body.ig_pass !== undefined && { ig_pass: body.ig_pass }),
     ...(body.line_uid !== undefined && { line_uid: body.line_uid }),
     ...(body.keywords !== undefined && { keywords: body.keywords }),
     ...(body.persona !== undefined && { persona: body.persona }),

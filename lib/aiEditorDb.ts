@@ -71,6 +71,13 @@ function getDb() {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN ig_access_token TEXT NOT NULL DEFAULT ''`);
   }
 
+  // 社群帳號密碼：改用真欄位取代 social_account 塞單一字串猜格式（舊資料留在 social_account 當備份）
+  for (const col of ['fb_user', 'fb_pass', 'th_user', 'th_pass', 'ig_user', 'ig_pass']) {
+    if (!cols.includes(col)) {
+      _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+    }
+  }
+
   // ── 金流（綠界信用卡定期定額 / 自動扣款）欄位 ──
   // 扣款狀態：none=未設定, pending=已產生連結待授權, active=授權成功扣款中, failed=扣款失敗, cancelled=已取消
   if (!cols.includes('billing_status')) {
@@ -103,7 +110,13 @@ function getDb() {
 export interface AiEditorClient {
   id: number;
   name: string;
-  social_account: string;
+  social_account: string;  // 舊格式備份用，新資料一律讀寫下面 6 個真欄位
+  fb_user: string;
+  fb_pass: string;
+  th_user: string;
+  th_pass: string;
+  ig_user: string;
+  ig_pass: string;
   line_uid: string;
   keywords: string;
   persona: string;
@@ -137,8 +150,8 @@ type NewAiEditorClient = Omit<AiEditorClient, 'id' | 'ig_access_token' | 'billin
 export function createAiEditorClient(data: NewAiEditorClient): AiEditorClient {
   const db = getDb();
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name, data.social_account, data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, fb_user, fb_pass, th_user, th_pass, ig_user, ig_pass, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.social_account ?? '', data.fb_user ?? '', data.fb_pass ?? '', data.th_user ?? '', data.th_pass ?? '', data.ig_user ?? '', data.ig_pass ?? '', data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 
@@ -191,7 +204,7 @@ export function upsertClientByLineUid(
     return { client: getAiEditorClient(existing.id)!, action: 'updated' };
   }
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name ?? '', data.social_account ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, fb_user, fb_pass, th_user, th_pass, ig_user, ig_pass, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name ?? '', data.social_account ?? '', data.fb_user ?? '', data.fb_pass ?? '', data.th_user ?? '', data.th_pass ?? '', data.ig_user ?? '', data.ig_pass ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '');
   return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
 }

@@ -2,13 +2,19 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { parseSocialAccount, buildSocialAccount } from '@/lib/socialAccount';
+import { parseSocialAccount } from '@/lib/socialAccount';
 
 interface AiEditorClient {
   id: number;
   name: string;
   site_url: string;
-  social_account: string;
+  social_account: string;  // 舊格式備份，新資料一律讀寫下面 6 個真欄位
+  fb_user: string;
+  fb_pass: string;
+  th_user: string;
+  th_pass: string;
+  ig_user: string;
+  ig_pass: string;
   line_uid: string;
   keywords: string;
   persona: string;
@@ -67,19 +73,17 @@ export default function AiEditorClientPage() {
 
   async function handleSave() {
     if (!client) return;
-    const hasAnyPlatform =
-      (editFbUser.trim() && editFbPass.trim()) ||
-      (editThUser.trim() && editThPass.trim()) ||
-      (editIgUser.trim() && editIgPass.trim());
-    // 有填任一平台帳密 → 組成新格式；沒填但有留舊格式原文 → 存原文；都沒動 → 保留原值，避免存檔時誤清空
-    const social_account = hasAnyPlatform
-      ? buildSocialAccount({ fb_user: editFbUser, fb_pass: editFbPass, th_user: editThUser, th_pass: editThPass, ig_user: editIgUser, ig_pass: editIgPass })
-      : (editLegacyRaw.trim() || client.social_account);
     setSaving(true);
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, social_account, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken, ig_access_token: editIgAccessToken }),
+      body: JSON.stringify({
+        id: client.id, name: editName,
+        fb_user: editFbUser, fb_pass: editFbPass,
+        th_user: editThUser, th_pass: editThPass,
+        ig_user: editIgUser, ig_pass: editIgPass,
+        line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken, ig_access_token: editIgAccessToken,
+      }),
     });
     setSaving(false);
     setEditing(false);
@@ -118,12 +122,12 @@ export default function AiEditorClientPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => {
-                  const parsed = parseSocialAccount(client.social_account ?? '');
+                  const accounts = getAccounts(client);
                   setEditName(client.name);
-                  setEditFbUser(parsed.fbUser); setEditFbPass(parsed.fbPass);
-                  setEditThUser(parsed.thUser); setEditThPass(parsed.thPass);
-                  setEditIgUser(parsed.igUser); setEditIgPass(parsed.igPass);
-                  setEditLegacyRaw(parsed.legacyRaw);
+                  setEditFbUser(accounts.fbUser); setEditFbPass(accounts.fbPass);
+                  setEditThUser(accounts.thUser); setEditThPass(accounts.thPass);
+                  setEditIgUser(accounts.igUser); setEditIgPass(accounts.igPass);
+                  setEditLegacyRaw(accounts.legacyRaw);
                   setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditIgAccessToken(client.ig_access_token ?? ''); setEditing(true);
                 }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
@@ -160,8 +164,8 @@ export default function AiEditorClientPage() {
               </div>
             </FieldCard>
             {editLegacyRaw && (
-              <FieldCard label="舊格式原文（解析不出來，改填上面欄位即可轉新格式）" className="col-span-2">
-                <AutoTextarea value={editLegacyRaw} onChange={e => setEditLegacyRaw(e.target.value)} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              <FieldCard label="舊格式原文（僅供對照，請自行拆填到上面 FB/Threads/IG 欄位後存檔即可轉正）" className="col-span-2">
+                <p className="text-xs text-gray-700 whitespace-pre-line">{editLegacyRaw}</p>
               </FieldCard>
             )}
             <FieldCard label="產業關鍵字">
@@ -206,7 +210,7 @@ export default function AiEditorClientPage() {
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
             </FieldCard>
             <FieldCard label="社群帳號" className="col-span-2">
-              <SocialAccountView raw={client.social_account} />
+              <SocialAccountView client={client} />
             </FieldCard>
             <FieldCard label="產業關鍵字">
               <p className="text-xs text-gray-700">{client.keywords || '—'}</p>
@@ -331,15 +335,25 @@ function BillingSection({ client }: { client: AiEditorClient }) {
   );
 }
 
-function SocialAccountView({ raw }: { raw: string }) {
-  const parsed = parseSocialAccount(raw ?? '');
-  if (parsed.legacyRaw) {
-    return <p className="text-xs text-gray-700 whitespace-pre-line">{parsed.legacyRaw}</p>;
+// 帳號密碼一律以 fb_user/fb_pass/th_user/th_pass/ig_user/ig_pass 真欄位為準；
+// 只有這 6 欄全空、social_account 還留著舊資料時，才暫時解析舊格式給顯示用。
+function getAccounts(client: AiEditorClient) {
+  const hasRealColumns = client.fb_user || client.fb_pass || client.th_user || client.th_pass || client.ig_user || client.ig_pass;
+  if (hasRealColumns) {
+    return { fbUser: client.fb_user, fbPass: client.fb_pass, thUser: client.th_user, thPass: client.th_pass, igUser: client.ig_user, igPass: client.ig_pass, legacyRaw: '' };
+  }
+  return parseSocialAccount(client.social_account ?? '');
+}
+
+function SocialAccountView({ client }: { client: AiEditorClient }) {
+  const accounts = getAccounts(client);
+  if (accounts.legacyRaw) {
+    return <p className="text-xs text-gray-700 whitespace-pre-line">{accounts.legacyRaw}</p>;
   }
   const rows: { label: string; user: string; pass: string }[] = [
-    { label: 'Facebook', user: parsed.fbUser, pass: parsed.fbPass },
-    { label: 'Threads', user: parsed.thUser, pass: parsed.thPass },
-    { label: 'Instagram', user: parsed.igUser, pass: parsed.igPass },
+    { label: 'Facebook', user: accounts.fbUser, pass: accounts.fbPass },
+    { label: 'Threads', user: accounts.thUser, pass: accounts.thPass },
+    { label: 'Instagram', user: accounts.igUser, pass: accounts.igPass },
   ].filter(r => r.user || r.pass);
   if (rows.length === 0) return <p className="text-xs text-gray-300 italic">—</p>;
   return (

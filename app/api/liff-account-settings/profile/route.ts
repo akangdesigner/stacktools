@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientByLineUid, upsertClientByLineUid } from '@/lib/aiEditorDb';
-import { parseSocialAccount, buildSocialAccount } from '@/lib/socialAccount';
+import { parseSocialAccount } from '@/lib/socialAccount';
 
 // 客戶資料設定：合併原本「建立／查詢／修改」三條路成一個表單。
-// social_account 序列化/解析邏輯共用於 lib/socialAccount.ts（內部管理頁 /ai-editor/[id] 也用同一套）。
+// FB/Threads/IG 帳號密碼一律讀寫 fb_user/fb_pass/th_user/th_pass/ig_user/ig_pass 真欄位。
+// social_account 只留給尚未遷移的舊資料當備份：6 個真欄位都空但 social_account 有內容時，
+// 用 lib/socialAccount.ts 的解析器暫時轉出來顯示，使用者存檔後就會正式寫進真欄位、完成遷移。
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -18,7 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ exists: false });
   }
 
-  const parsed = parseSocialAccount(client.social_account || '');
+  const hasRealColumns = client.fb_user || client.fb_pass || client.th_user || client.th_pass || client.ig_user || client.ig_pass;
+  const accounts = hasRealColumns
+    ? { fbUser: client.fb_user, fbPass: client.fb_pass, thUser: client.th_user, thPass: client.th_pass, igUser: client.ig_user, igPass: client.ig_pass, legacyRaw: '' }
+    : parseSocialAccount(client.social_account || '');
+
   return NextResponse.json({
     exists: true,
     name: client.name,
@@ -27,7 +33,7 @@ export async function GET(req: NextRequest) {
     client_info: client.client_info,
     recent_activities: client.recent_activities,
     fb_group_url: client.fb_group_url,
-    ...parsed,
+    ...accounts,
     connections: {
       fb: !!client.meta_access_token,
       threads: !!client.threads_access_token,
@@ -67,20 +73,18 @@ export async function POST(req: NextRequest) {
     (body.ig_user?.trim() && body.ig_pass?.trim());
 
   const existing = getClientByLineUid(line_uid);
-
-  let social_account: string;
-  if (hasAnyPlatform) {
-    social_account = buildSocialAccount(body);
-  } else if (existing) {
-    // 沒有動任何平台帳密欄位 → 保留原本的值，避免存檔時誤清空
-    social_account = existing.social_account;
-  } else {
+  if (!existing && !hasAnyPlatform) {
     return NextResponse.json({ error: '請至少填寫一種社群平台的帳號密碼' }, { status: 400 });
   }
 
   const { action } = upsertClientByLineUid(line_uid, {
     name: body.name.trim(),
-    social_account,
+    fb_user: body.fb_user?.trim() || '',
+    fb_pass: body.fb_pass?.trim() || '',
+    th_user: body.th_user?.trim() || '',
+    th_pass: body.th_pass?.trim() || '',
+    ig_user: body.ig_user?.trim() || '',
+    ig_pass: body.ig_pass?.trim() || '',
     keywords: body.keywords.trim(),
     persona: body.persona.trim(),
     client_info: body.client_info?.trim() || '',
