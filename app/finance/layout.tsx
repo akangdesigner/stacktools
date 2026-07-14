@@ -1,7 +1,10 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
-const ALLOWED_EMAIL = process.env.FINANCE_ALLOWED_EMAIL;
+const ALLOWED_EMAILS = (process.env.FINANCE_ALLOWED_EMAIL ?? "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 
 export default async function FinanceLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -10,7 +13,7 @@ export default async function FinanceLayout({ children }: { children: React.Reac
     redirect("/login");
   }
 
-  if (session.user.email !== ALLOWED_EMAIL) {
+  if (!ALLOWED_EMAILS.includes(session.user.email.toLowerCase())) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center max-w-sm">
