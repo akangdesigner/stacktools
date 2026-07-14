@@ -14,7 +14,8 @@ export function getFinanceDb(): Database.Database {
 
   db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  // client_id 現在存的是 Neon 的 channel_id，不是本地 clients 表的 id，FK 對不上要關掉
+  db.pragma('foreign_keys = OFF');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS clients (
