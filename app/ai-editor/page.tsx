@@ -6,11 +6,27 @@ import { useRouter } from 'next/navigation';
 interface AiEditorClient {
   id: number;
   name: string;
-  social_account: string;
+  social_account: string;  // 舊格式備份，新資料一律讀寫下面 6 個真欄位
+  fb_user: string;
+  fb_pass: string;
+  th_user: string;
+  th_pass: string;
+  ig_user: string;
+  ig_pass: string;
   line_uid: string;
   keywords: string;
   persona: string;
   client_info: string;
+}
+
+// 卡片列表用的社群帳號預覽：優先顯示真欄位，沒有才退回舊格式原文第一行
+function accountPreview(c: AiEditorClient): string {
+  const parts: string[] = [];
+  if (c.fb_user) parts.push(`FB: ${c.fb_user}`);
+  if (c.th_user) parts.push(`Threads: ${c.th_user}`);
+  if (c.ig_user) parts.push(`IG: ${c.ig_user}`);
+  if (parts.length) return parts.join(' / ');
+  return c.social_account ? c.social_account.split('\n')[0] : '';
 }
 
 export default function AiEditorListPage() {
@@ -20,7 +36,12 @@ export default function AiEditorListPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newSocialAccount, setNewSocialAccount] = useState('');
+  const [newFbUser, setNewFbUser] = useState('');
+  const [newFbPass, setNewFbPass] = useState('');
+  const [newThUser, setNewThUser] = useState('');
+  const [newThPass, setNewThPass] = useState('');
+  const [newIgUser, setNewIgUser] = useState('');
+  const [newIgPass, setNewIgPass] = useState('');
   const [newLineUid, setNewLineUid] = useState('');
   const [newKeywords, setNewKeywords] = useState('');
   const [newPersona, setNewPersona] = useState('');
@@ -42,12 +63,20 @@ export default function AiEditorListPage() {
     const res = await fetch('/api/ai-editor/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim(), social_account: newSocialAccount.trim(), line_uid: newLineUid.trim(), keywords: newKeywords.trim(), persona: newPersona.trim(), client_info: newClientInfo.trim() }),
+      body: JSON.stringify({
+        name: newName.trim(),
+        fb_user: newFbUser.trim(), fb_pass: newFbPass.trim(),
+        th_user: newThUser.trim(), th_pass: newThPass.trim(),
+        ig_user: newIgUser.trim(), ig_pass: newIgPass.trim(),
+        line_uid: newLineUid.trim(), keywords: newKeywords.trim(), persona: newPersona.trim(), client_info: newClientInfo.trim(),
+      }),
     });
     const data = await res.json() as AiEditorClient;
     setCreating(false);
     setShowForm(false);
-    setNewName(''); setNewSocialAccount(''); setNewLineUid(''); setNewKeywords(''); setNewPersona(''); setNewClientInfo('');
+    setNewName('');
+    setNewFbUser(''); setNewFbPass(''); setNewThUser(''); setNewThPass(''); setNewIgUser(''); setNewIgPass('');
+    setNewLineUid(''); setNewKeywords(''); setNewPersona(''); setNewClientInfo('');
     loadClients();
     if (data.id) router.push(`/ai-editor/${data.id}`);
   }
@@ -79,7 +108,18 @@ export default function AiEditorListPage() {
         <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3 max-w-md">
           <p className="text-sm font-semibold text-gray-800">新增客戶</p>
           <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="客戶名稱 *" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400" />
-          <textarea value={newSocialAccount} onChange={e => setNewSocialAccount(e.target.value)} rows={2} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          <div className="flex gap-2">
+            <input value={newFbUser} onChange={e => setNewFbUser(e.target.value)} placeholder="FB 帳號" className="w-1/2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+            <input value={newFbPass} onChange={e => setNewFbPass(e.target.value)} placeholder="FB 密碼" className="w-1/2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          </div>
+          <div className="flex gap-2">
+            <input value={newThUser} onChange={e => setNewThUser(e.target.value)} placeholder="Threads 帳號" className="w-1/2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+            <input value={newThPass} onChange={e => setNewThPass(e.target.value)} placeholder="Threads 密碼" className="w-1/2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          </div>
+          <div className="flex gap-2">
+            <input value={newIgUser} onChange={e => setNewIgUser(e.target.value)} placeholder="IG 帳號" className="w-1/2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+            <input value={newIgPass} onChange={e => setNewIgPass(e.target.value)} placeholder="IG 密碼" className="w-1/2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          </div>
           <input value={newLineUid} onChange={e => setNewLineUid(e.target.value)} placeholder="LINE UID（選填）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <input value={newKeywords} onChange={e => setNewKeywords(e.target.value)} placeholder="產業關鍵字（逗號分隔，例：植牙, 牙齒美白）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <textarea value={newPersona} onChange={e => setNewPersona(e.target.value)} rows={3} placeholder={`小編人設（例：溫暖親切的醫美診所小編，說話口吻輕鬆但專業，不用過度使用表情符號）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
@@ -116,8 +156,8 @@ export default function AiEditorListPage() {
               <div className="space-y-1.5 text-xs">
                 <div className="flex gap-1.5">
                   <span className="text-gray-400 shrink-0 w-14">社群</span>
-                  {c.social_account
-                    ? <span className="text-gray-600 truncate whitespace-pre">{c.social_account.split('\n')[0]}</span>
+                  {accountPreview(c)
+                    ? <span className="text-gray-600 truncate whitespace-pre">{accountPreview(c)}</span>
                     : <span className="text-gray-300">未設定</span>
                   }
                 </div>
