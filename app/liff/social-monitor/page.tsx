@@ -109,17 +109,40 @@ export default function SocialMonitorLiffPage() {
     setPhase('loading');
 
     try {
-      const res = await fetch('/api/liff-social-monitor/generate', {
+      // ① 送出掃描任務（立刻回 jobId，避開 Cloudflare 對長請求的 100 秒切斷）
+      const startRes = await fetch('/api/liff-social-monitor/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setItems(Array.isArray(data.items) ? data.items : []);
-      setCustomerName(data.customerName || '');
-      setProgress(100);
-      setPhase('ready');
+      const startData = await startRes.json().catch(() => ({}));
+      if (!startRes.ok || !startData.jobId) {
+        throw new Error(startData.error || `HTTP ${startRes.status}`);
+      }
+      const jobId = startData.jobId as string;
+
+      // ② 每 4 秒輪詢一次，最多等 8 分鐘
+      const deadline = Date.now() + 8 * 60 * 1000;
+      while (true) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const pr = await fetch(`/api/liff-social-monitor/generate?jobId=${encodeURIComponent(jobId)}`);
+        let pd: { status?: string; items?: Item[]; customerName?: string; error?: string };
+        try {
+          pd = await pr.json();
+        } catch {
+          if (Date.now() > deadline) throw new Error('掃描等待逾時，請重試');
+          continue; // 暫時性非 JSON 回應 → 繼續輪詢
+        }
+        if (pd.status === 'done') {
+          setItems(Array.isArray(pd.items) ? pd.items : []);
+          setCustomerName(pd.customerName || '');
+          setProgress(100);
+          setPhase('ready');
+          return;
+        }
+        if (pd.status === 'error') throw new Error(pd.error || '掃描失敗');
+        if (Date.now() > deadline) throw new Error('掃描等待逾時，請重試');
+      }
     } catch (e) {
       setError(`掃描失敗：${msg(e)}`);
       setPhase('error');
