@@ -21,7 +21,6 @@ export default function BlogRewriteLiffPage() {
   const [uid, setUid] = useState('');
   const [customerName, setCustomerName] = useState('');
 
-  const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [sourceTitle, setSourceTitle] = useState('');
@@ -108,7 +107,6 @@ export default function BlogRewriteLiffPage() {
       setPhase('error');
       return;
     }
-    setTitle(data.title || '');
     setContent(data.content || '');
     setImageUrl(data.imageUrl || '');
     setSourceTitle(data.sourceTitle || '');
@@ -117,7 +115,7 @@ export default function BlogRewriteLiffPage() {
     setPhase('ready');
   }
 
-  // ── AI 改文案：依指示改寫現有標題/內文 ──
+  // ── AI 改文案：依指示改寫現有內文 ──
   async function rewriteText(instruction: string) {
     const instr = instruction.trim();
     if (!instr) return;
@@ -127,11 +125,10 @@ export default function BlogRewriteLiffPage() {
       const res = await fetch('/api/liff-blogrewrite/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content, instruction: instr }),
+        body: JSON.stringify({ content, instruction: instr }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setTitle(data.title || title);
       setContent(data.content || content);
       setTextAdjust('');
     } catch (e) {
@@ -143,8 +140,8 @@ export default function BlogRewriteLiffPage() {
 
   // ── 確認送出 ──────────────────────────────────────────────
   async function confirm() {
-    if (!title.trim() || !content.trim()) {
-      setError('標題、內文都要有才能送出');
+    if (!content.trim()) {
+      setError('內文要有才能送出');
       return;
     }
     setError('');
@@ -153,7 +150,7 @@ export default function BlogRewriteLiffPage() {
       const res = await fetch('/api/liff-blogrewrite/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: uid, title, content, imageUrl }),
+        body: JSON.stringify({ line_uid: uid, content, imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -259,13 +256,6 @@ export default function BlogRewriteLiffPage() {
               {sourceTitle && <p className="source-hint">原文：{sourceTitle}</p>}
 
               <div className="pv-text">
-                <input
-                  className="pv-title-input"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="標題"
-                  disabled={rewriteLoading}
-                />
                 <textarea
                   ref={contentRef}
                   className="pv-body-input"
