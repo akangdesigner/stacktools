@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 type SheetData = { headers: string[]; rows: string[][]; tabName?: string; rowOffset?: number; sheetId?: string };
 type Tab = 'schedule' | 'progress' | 'personal' | 'clients';
@@ -809,6 +809,8 @@ function ClientSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
+  // 每次切換／關閉編輯對象就 +1，PDF 辨識回來時比對這個值，避免辨識結果套到已經切換過去的另一個客戶
+  const editSessionId = useRef(0);
 
   useEffect(() => {
     Promise.all([
@@ -823,6 +825,7 @@ function ClientSettingsTab() {
   }, []);
 
   function startEdit(clientId: number) {
+    editSessionId.current++;
     const p = profiles[clientId];
     setDraft({
       brand_url: p?.brand_url ?? '',
@@ -834,6 +837,11 @@ function ClientSettingsTab() {
     setEditing(clientId);
   }
 
+  function stopEdit() {
+    editSessionId.current++;
+    setEditing(null);
+  }
+
   async function saveProfile(clientId: number) {
     setSaving(true);
     await fetch('/api/writer/brand-profile', {
@@ -842,12 +850,14 @@ function ClientSettingsTab() {
       body: JSON.stringify({ gsc_client_id: clientId, ...draft }),
     });
     setProfiles(prev => ({ ...prev, [clientId]: { gsc_client_id: clientId, ...draft } }));
+    editSessionId.current++;
     setEditing(null);
     setSaving(false);
   }
 
   async function extractFromPdf(file: File) {
     if (editing == null) return;
+    const sessionId = editSessionId.current;
     setExtracting(true);
     setExtractError('');
     const body = new FormData();
@@ -855,6 +865,8 @@ function ClientSettingsTab() {
     try {
       const res = await fetch('/api/writer/brand-profile/extract-pdf', { method: 'POST', body });
       const data = await res.json();
+      // 辨識這段時間使用者已經切換或關閉了編輯對象，這份結果不再屬於任何正在編輯的客戶，直接捨棄
+      if (editSessionId.current !== sessionId) return;
       if (!res.ok) { setExtractError(data.error ?? '辨識失敗，請重試'); return; }
       setDraft(d => ({
         ...d,
@@ -863,9 +875,9 @@ function ClientSettingsTab() {
         banned_words: appendField(d.banned_words, data.title, data.banned_words),
       }));
     } catch {
-      setExtractError('辨識失敗，請重試');
+      if (editSessionId.current === sessionId) setExtractError('辨識失敗，請重試');
     } finally {
-      setExtracting(false);
+      if (editSessionId.current === sessionId) setExtracting(false);
     }
   }
 
@@ -932,7 +944,7 @@ function ClientSettingsTab() {
                 className="text-xs px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
                 {saving ? '儲存中…' : '儲存'}
               </button>
-              <button onClick={() => setEditing(null)} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700">取消</button>
+              <button onClick={stopEdit} className="text-xs px-3 py-1.5 text-gray-500 hover:text-gray-700">取消</button>
             </div>
           </div>
         ) : (

@@ -1177,6 +1177,8 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
   // 把觀點寫進筆記後，用這個 key 強制 AnalysisEditor 重新掛載以反映新值（同 OutlineEditor 做法）
   const [analysisEditorKey, setAnalysisEditorKey] = useState(0);
   const analyzeMsg = useRef('');
+  // 切換客戶下拉選單時 +1，避免舊客戶的品牌資料 fetch 晚回來，蓋掉使用者已經切到的新客戶
+  const clientFetchId = useRef(0);
 
   useEffect(() => {
     // 只列出「客戶設定」有填任一欄資料（品牌網址／品牌描述／寫文規範／禁詞）的客戶
@@ -1195,6 +1197,7 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
 
   function handleClientChange(id: number | null) {
     setSelectedClientId(id);
+    const fetchId = ++clientFetchId.current;
     if (id === null) { setBrandName(vendor); setBrandUrl(''); setBrandDescription(''); setClientWritingRules(''); setBannedWords(''); return; }
     const c = gscClients.find(x => x.id === id);
     if (c) {
@@ -1202,6 +1205,8 @@ function Stage1({ keyword, vendor, writingGuide, analyzeOverride, onSaveAnalyzeO
       fetch(`/api/writer/brand-profile?clientId=${id}`)
         .then(r => r.json())
         .then((p: BrandProfileOption) => {
+          // 這段等待期間使用者已經切到別的客戶，這筆結果過期了，不要套用
+          if (clientFetchId.current !== fetchId) return;
           setBrandUrl(p.brand_url ?? '');
           setBrandDescription(p.brand_description ?? '');
           setClientWritingRules(p.writing_rules ?? '');
