@@ -65,6 +65,10 @@ export default function HelpLiffPage() {
         <div className="note">看到喜歡的直接複製留言，點連結去原文回覆即可，這個功能不需要確認發佈這一步。</div>
       </FaqItem>
 
+      <FaqItem hi id="video" icon="🎬" title="短影音轉貼文生成" sub="上傳影片，頁面直接改" open={openKey === 'video'} onToggle={toggle}>
+        點擊按鈕開啟頁面，上傳短影音影片（3 分鐘內），AI 自動轉逐字稿並依品牌人設寫成貼文＋配圖。頁面上可直接調整文字或圖片，存檔後回 LINE 確認發佈。
+      </FaqItem>
+
       <div className="sec-title"><span className="badge">⚙️ 帳號與內容管理</span><span className="ln" /></div>
 
       <FaqItem id="account" icon="👤" title="客戶資料設定" sub="初次使用請先完成這步" open={openKey === 'account'} onToggle={toggle}>
@@ -77,18 +81,14 @@ export default function HelpLiffPage() {
         傳送 PDF 檔案即可完成導入，AI 生成內容時會參考裡面的品牌禁詞、口吻規範等資料。要刪除已上傳的文件，輸入「刪除:檔案名稱」即可（僅支援 PDF）。
       </FaqItem>
 
-      <div className="sec-title"><span className="badge">🎬 其他功能</span><span className="ln" /></div>
-
-      <FaqItem id="video" icon="🎬" title="短影音轉貼文生成" sub="影片直接變貼文" open={openKey === 'video'} onToggle={toggle}>
-        直接傳送短影音影片（3 分鐘內），AI 會自動辨識內容並整理成社群貼文，適合 Reels／Threads／直播精華快速轉文。
-      </FaqItem>
+      <div className="sec-title"><span className="badge">🛠️ 其他功能</span><span className="ln" /></div>
 
       <FaqItem id="publish" icon="🛠️" title="貼文確認與微調" sub="存檔後回 LINE 要做什麼" open={openKey === 'publish'} onToggle={toggle}>
-        節慶／時事／部落格改寫在頁面存檔後，LINE 會收到「確認發佈／丟棄」卡片：按確認發佈會排程上架，丟棄則作廢草稿。（社群海巡留言不需要這一步）
+        節慶／時事／部落格改寫／短影音轉貼文在頁面存檔後，LINE 會收到「確認發佈／丟棄」卡片：按確認發佈會排程上架，丟棄則作廢草稿。（社群海巡留言不需要這一步）
       </FaqItem>
 
       <FaqItem id="faq" icon="❓" title="常見問題 FAQ" sub="其他問題快速解答" open={openKey === 'faq'} onToggle={toggle}>
-        節慶／時事／部落格改寫都能在頁面上直接調整文字或圖片，改到滿意再存檔；社群海巡留言則是直接複製建議留言去回覆——都不需要再另外打字說明修改需求。若遇到生成失敗可重試一次，持續發生請聯繫小編後台協助排查。
+        節慶／時事／部落格改寫／短影音轉貼文都能在頁面上直接調整文字或圖片，改到滿意再存檔；社群海巡留言則是直接複製建議留言去回覆——都不需要再另外打字說明修改需求。若遇到生成失敗可重試一次，持續發生請聯繫小編後台協助排查。
       </FaqItem>
     </Shell>
   );
