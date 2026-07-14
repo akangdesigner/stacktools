@@ -38,10 +38,22 @@ export function parseSocialAccount(raw: string) {
     const end = i + 1 < hits.length ? hits[i + 1].index : raw.length;
     const span = raw.slice(start, end);
     // 帳號/密碼值：停在下一個空白、逗號或字串結尾（不是只有逗號），才能吃到換行或空格分隔的舊格式
-    const userMatch = span.match(/帳號[:：\s]*([^\s，,]+)/);
-    const passMatch = span.match(/密碼[:：\s]*([^\s，,]+)/);
-    const user = userMatch?.[1]?.trim() || '';
-    const pass = passMatch?.[1]?.trim() || '';
+    const userMatch = span.match(/帳號[:：\s]*([^\s，,；;]+)/);
+    const passMatch = span.match(/密碼[:：\s]*([^\s，,；;]+)/);
+    let user = userMatch?.[1]?.trim() || '';
+    let pass = passMatch?.[1]?.trim() || '';
+    if (!user && !pass) {
+      // 沒有「帳號/密碼」字樣的更舊格式，例如 IG:帳號,密碼:FB:帳號,密碼——去掉平台名稱與頭尾冒號後
+      // 剩下的內容按逗號切成「帳號,密碼」兩段。
+      const stripped = span
+        .replace(/^\s*(Facebook|Threads|Instagram|FB|IG)\s*[:：]?\s*/i, '')
+        .replace(/[:：；;\s]+$/, '');
+      const parts = stripped.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+      if (parts[0]) {
+        user = parts[0];
+        pass = parts[1] || '';
+      }
+    }
     if (!user && !pass) continue;
     anyOk = true;
     const key = hits[i].key;
