@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { parseSocialAccount, buildSocialAccount } from '@/lib/socialAccount';
 
 interface AiEditorClient {
   id: number;
@@ -33,7 +34,13 @@ export default function AiEditorClientPage() {
   const [client, setClient] = useState<AiEditorClient | null>(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editSocialAccount, setEditSocialAccount] = useState('');
+  const [editFbUser, setEditFbUser] = useState('');
+  const [editFbPass, setEditFbPass] = useState('');
+  const [editThUser, setEditThUser] = useState('');
+  const [editThPass, setEditThPass] = useState('');
+  const [editIgUser, setEditIgUser] = useState('');
+  const [editIgPass, setEditIgPass] = useState('');
+  const [editLegacyRaw, setEditLegacyRaw] = useState('');
   const [editLineUid, setEditLineUid] = useState('');
   const [editKeywords, setEditKeywords] = useState('');
   const [editPersona, setEditPersona] = useState('');
@@ -60,11 +67,19 @@ export default function AiEditorClientPage() {
 
   async function handleSave() {
     if (!client) return;
+    const hasAnyPlatform =
+      (editFbUser.trim() && editFbPass.trim()) ||
+      (editThUser.trim() && editThPass.trim()) ||
+      (editIgUser.trim() && editIgPass.trim());
+    // 有填任一平台帳密 → 組成新格式；沒填但有留舊格式原文 → 存原文；都沒動 → 保留原值，避免存檔時誤清空
+    const social_account = hasAnyPlatform
+      ? buildSocialAccount({ fb_user: editFbUser, fb_pass: editFbPass, th_user: editThUser, th_pass: editThPass, ig_user: editIgUser, ig_pass: editIgPass })
+      : (editLegacyRaw.trim() || client.social_account);
     setSaving(true);
     await fetch('/api/ai-editor/clients', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: client.id, name: editName, social_account: editSocialAccount, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken, ig_access_token: editIgAccessToken }),
+      body: JSON.stringify({ id: client.id, name: editName, social_account, line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken, ig_access_token: editIgAccessToken }),
     });
     setSaving(false);
     setEditing(false);
@@ -102,7 +117,15 @@ export default function AiEditorClientPage() {
           {!editing && (
             <div className="flex gap-3">
               <button
-                onClick={() => { setEditName(client.name); setEditSocialAccount(client.social_account); setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditIgAccessToken(client.ig_access_token ?? ''); setEditing(true); }}
+                onClick={() => {
+                  const parsed = parseSocialAccount(client.social_account ?? '');
+                  setEditName(client.name);
+                  setEditFbUser(parsed.fbUser); setEditFbPass(parsed.fbPass);
+                  setEditThUser(parsed.thUser); setEditThPass(parsed.thPass);
+                  setEditIgUser(parsed.igUser); setEditIgPass(parsed.igPass);
+                  setEditLegacyRaw(parsed.legacyRaw);
+                  setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditIgAccessToken(client.ig_access_token ?? ''); setEditing(true);
+                }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >編輯</button>
               <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-600 transition-colors">刪除</button>
@@ -118,9 +141,29 @@ export default function AiEditorClientPage() {
             <FieldCard label="LINE UID">
               <AutoTextarea value={editLineUid} onChange={e => setEditLineUid(e.target.value)} placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
-            <FieldCard label="社群帳號">
-              <AutoTextarea value={editSocialAccount} onChange={e => setEditSocialAccount(e.target.value)} placeholder={`IG: @帳號\nFB: 粉專名稱`} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+            <FieldCard label="Facebook 帳號密碼">
+              <div className="flex gap-2">
+                <input value={editFbUser} onChange={e => setEditFbUser(e.target.value)} placeholder="帳號" className="w-1/2 bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+                <input value={editFbPass} onChange={e => setEditFbPass(e.target.value)} placeholder="密碼" className="w-1/2 bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+              </div>
             </FieldCard>
+            <FieldCard label="Threads 帳號密碼">
+              <div className="flex gap-2">
+                <input value={editThUser} onChange={e => setEditThUser(e.target.value)} placeholder="帳號" className="w-1/2 bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+                <input value={editThPass} onChange={e => setEditThPass(e.target.value)} placeholder="密碼" className="w-1/2 bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+              </div>
+            </FieldCard>
+            <FieldCard label="Instagram 帳號密碼">
+              <div className="flex gap-2">
+                <input value={editIgUser} onChange={e => setEditIgUser(e.target.value)} placeholder="帳號" className="w-1/2 bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+                <input value={editIgPass} onChange={e => setEditIgPass(e.target.value)} placeholder="密碼" className="w-1/2 bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none placeholder:text-gray-300" />
+              </div>
+            </FieldCard>
+            {editLegacyRaw && (
+              <FieldCard label="舊格式原文（解析不出來，改填上面欄位即可轉新格式）" className="col-span-2">
+                <AutoTextarea value={editLegacyRaw} onChange={e => setEditLegacyRaw(e.target.value)} className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
+              </FieldCard>
+            )}
             <FieldCard label="產業關鍵字">
               <AutoTextarea value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="植牙, 牙齒美白, 隱形矯正" className="w-full bg-transparent text-xs text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
@@ -162,8 +205,8 @@ export default function AiEditorClientPage() {
                 ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded">{client.line_uid}</span>
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
             </FieldCard>
-            <FieldCard label="社群帳號">
-              <p className="text-xs text-gray-700 whitespace-pre-line">{client.social_account || '—'}</p>
+            <FieldCard label="社群帳號" className="col-span-2">
+              <SocialAccountView raw={client.social_account} />
             </FieldCard>
             <FieldCard label="產業關鍵字">
               <p className="text-xs text-gray-700">{client.keywords || '—'}</p>
@@ -284,6 +327,28 @@ function BillingSection({ client }: { client: AiEditorClient }) {
         </div>
         <p className="text-xs text-gray-400">客戶點開連結 → 綠界刷卡授權一次 → 之後每月自動扣款。授權結果會自動回填此頁狀態。</p>
       </div>
+    </div>
+  );
+}
+
+function SocialAccountView({ raw }: { raw: string }) {
+  const parsed = parseSocialAccount(raw ?? '');
+  if (parsed.legacyRaw) {
+    return <p className="text-xs text-gray-700 whitespace-pre-line">{parsed.legacyRaw}</p>;
+  }
+  const rows: { label: string; user: string; pass: string }[] = [
+    { label: 'Facebook', user: parsed.fbUser, pass: parsed.fbPass },
+    { label: 'Threads', user: parsed.thUser, pass: parsed.thPass },
+    { label: 'Instagram', user: parsed.igUser, pass: parsed.igPass },
+  ].filter(r => r.user || r.pass);
+  if (rows.length === 0) return <p className="text-xs text-gray-300 italic">—</p>;
+  return (
+    <div className="space-y-1">
+      {rows.map(r => (
+        <p key={r.label} className="text-xs text-gray-700">
+          <span className="font-medium text-gray-500">{r.label}：</span>{r.user || '—'} / {r.pass || '—'}
+        </p>
+      ))}
     </div>
   );
 }
