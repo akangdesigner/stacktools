@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
       'HTTP-Referer': 'https://stack.zeabur.app',
       'X-Title': 'Stacktools Writer',
     },
-    body: JSON.stringify({ model, messages, stream: true, temperature: 0.7 }),
+    // max_tokens 一定要設，否則 OpenRouter 會用模型上限（Gemini 2.5 Pro 是 65536）預扣額度，
+    // 帳戶餘額不夠付這個上限時就算實際用量很少也會直接 402（llms-generator.ts 踩過同樣的坑）
+    body: JSON.stringify({ model, messages, stream: true, temperature: 0.7, max_tokens: 8000 }),
   });
 
   if (!upstream.ok) {
