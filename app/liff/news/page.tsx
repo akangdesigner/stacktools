@@ -9,7 +9,9 @@ import type { Liff } from '@line/liff';
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID_NEWS || '';
 
-type Phase = 'init' | 'text' | 'image' | 'ready' | 'done' | 'error';
+type Phase = 'init' | 'pick' | 'text' | 'image' | 'ready' | 'done' | 'error';
+
+const MAX_KEYWORDS = 3;
 
 const PROGRESS_CAP = 95;
 const PROGRESS_TAU_TEXT_MS = 90_000; // 文案：抓熱門話題+逐篇評分+AI寫貼文，較久
@@ -26,6 +28,8 @@ export default function NewsLiffPage() {
   const [uid, setUid] = useState('');
   const [customerName, setCustomerName] = useState('');
 
+  const [keywords, setKeywords] = useState<string[]>([]); // 客戶的產業關鍵字（可選項）
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]); // 用戶複選（最多 3）
   const [content, setContent] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -84,7 +88,18 @@ export default function NewsLiffPage() {
         }
         if (cancelled) return;
         setUid(resolvedUid);
-        await runAll(resolvedUid);
+        // 先查客戶的產業關鍵字讓用戶複選，選完才開始生成
+        const kRes = await fetch('/api/liff-keywords', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ line_uid: resolvedUid }),
+        });
+        const kData = await kRes.json();
+        if (!kRes.ok) throw new Error(kData.error || `HTTP ${kRes.status}`);
+        if (cancelled) return;
+        setKeywords(kData.keywords || []);
+        setCustomerName(kData.customerName || '');
+        setPhase('pick');
       } catch (e) {
         if (!cancelled) {
           setError(`初始化失敗：${msg(e)}`);
@@ -95,7 +110,6 @@ export default function NewsLiffPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 一氣呵成：抓熱門話題+生文案 → 生圖 ────────────────────────
@@ -110,7 +124,7 @@ export default function NewsLiffPage() {
     const tRes = await fetch('/api/liff-news/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line_uid: lineUid }),
+      body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords }),
     });
     const tData = await tRes.json();
     if (!tRes.ok) {
@@ -230,6 +244,58 @@ export default function NewsLiffPage() {
     } catch {
       /* 一般瀏覽器沒有 closeWindow，忽略 */
     }
+  }
+
+  // ── 選關鍵字畫面 ──────────────────────────────────────────
+  if (phase === 'pick') {
+    return (
+      <Shell>
+        <header className="head">
+          <div className="mark">🔥</div>
+          <div className="eyebrow">Trending Post Studio</div>
+          <h1 className="title">時事互動貼文</h1>
+          <p className="sub">選 1～3 個想蹭的關鍵字，AI 幫你抓相關熱門話題</p>
+        </header>
+
+        {error && <div className="err">{error}</div>}
+
+        <section className="card">
+          <div className="card-pad">
+            <div className="kw-hint">最多選 {MAX_KEYWORDS} 個（已選 {selectedKeywords.length}）</div>
+            {keywords.length === 0 ? (
+              <p className="kw-empty">你的客戶資料還沒設定產業關鍵字，請先到「客戶資料設定」補上。</p>
+            ) : (
+              <div className="kw-wrap">
+                {keywords.map((k) => {
+                  const on = selectedKeywords.includes(k);
+                  return (
+                    <button
+                      key={k}
+                      className={`kw-chip${on ? ' on' : ''}`}
+                      onClick={() =>
+                        setSelectedKeywords((prev) =>
+                          prev.includes(k)
+                            ? prev.filter((x) => x !== k)
+                            : prev.length >= MAX_KEYWORDS
+                              ? prev
+                              : [...prev, k]
+                        )
+                      }
+                    >
+                      {k}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <button className="confirm" onClick={() => uid && runAll(uid)} disabled={selectedKeywords.length === 0}>
+          開始生成貼文
+        </button>
+      </Shell>
+    );
   }
 
   // ── 完成畫面 ──────────────────────────────────────────────
@@ -539,6 +605,19 @@ const FP_CSS = `
 .fp .card-eyebrow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
 .fp .card-eyebrow .lbl { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
 .fp .relink { border: 0; background: transparent; cursor: pointer; font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; color: var(--blue); display: inline-flex; align-items: center; gap: 4px; }
+
+.fp .kw-hint { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); margin: 0 0 12px; letter-spacing: .04em; }
+.fp .kw-empty { font-size: 12.5px; color: var(--ink-2); line-height: 1.7; }
+.fp .kw-wrap { display: flex; flex-wrap: wrap; gap: 9px; }
+.fp .kw-chip {
+  border: 1px solid var(--line-2); background: var(--field); color: var(--ink-2);
+  font-family: var(--sans); font-size: 13px; font-weight: 700; padding: 9px 15px; border-radius: 999px;
+  cursor: pointer; transition: all .15s;
+}
+.fp .kw-chip.on {
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep)); color: #fff; border-color: transparent;
+  box-shadow: 0 6px 16px -6px var(--glow);
+}
 
 .fp .pv-text { position: relative; }
 .fp .pv-title-input {

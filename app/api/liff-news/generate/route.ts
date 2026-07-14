@@ -11,7 +11,10 @@ const N8N_TEXT_WEBHOOK =
   'https://stack.zeabur.app/webhook/news-liff-text';
 
 export async function POST(req: NextRequest) {
-  const { line_uid } = (await req.json()) as { line_uid?: string };
+  const { line_uid, selected_keywords } = (await req.json()) as {
+    line_uid?: string;
+    selected_keywords?: string[];
+  };
   if (!line_uid || !line_uid.trim()) {
     return NextResponse.json({ error: '缺少 line_uid' }, { status: 400 });
   }
@@ -24,6 +27,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 用戶在 LIFF 選的關鍵字（最多 3 個）；沒選就給空陣列，n8n 會 fallback 原本的隨機挑選
+  const picked = Array.isArray(selected_keywords)
+    ? selected_keywords.map((k) => String(k).trim()).filter(Boolean).slice(0, 3)
+    : [];
+
   const customer_data = {
     name: client.name,
     social_account: client.social_account,
@@ -33,6 +41,7 @@ export async function POST(req: NextRequest) {
     recent_activities: client.recent_activities,
     fb_group_url: client.fb_group_url,
     line_uid: client.line_uid,
+    selected_keywords: picked,
   };
 
   try {
