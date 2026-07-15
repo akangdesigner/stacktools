@@ -32,7 +32,14 @@ export async function aggregateChecks(
   const inStage = (key: string) => stage === 0 || STAGE_OF[key] === stage;
   const { origin, pages, sitemapUrls, sitemapExists, robotsExists, llmsExists, reachedCap } = crawl;
 
-  const htmlPages = pages.filter((p) => p.ok && (p.title || p.h1 || p.imgTotal || p.mainText)); // 有內容的頁
+  // 空殼死頁（soft-404）：HTTP 回 200 但整頁沒 title、沒 h1、沒圖、0 內部連結、內文極短，
+  // 多半是 sitemap 裡的失效網址（如 news_detail.php?id=15 只回「找不到ID資料!」）。
+  // 判定極保守，避免誤殺真的薄頁（真頁幾乎一定有 title 或導覽連結）。
+  const isEmptyShell = (p: CrawlResult['pages'][number]) =>
+    p.ok && !p.title && p.h1 === 0 && p.imgTotal === 0 && p.internalLinks.length === 0 && p.mainText.trim().length < 50;
+  const shells = pages.filter(isEmptyShell);
+
+  const htmlPages = pages.filter((p) => p.ok && (p.title || p.h1 || p.imgTotal || p.mainText) && !isEmptyShell(p)); // 有內容的頁（排除空殼死頁）
   const Y = htmlPages.length || 1; // 分母（避免除以 0）
   const rangeNote = reachedCap ? `（已達爬取上限 ${pages.length} 頁，可能未涵蓋整站）` : `（爬取範圍：${pages.length} 頁）`;
 
@@ -284,8 +291,16 @@ export async function aggregateChecks(
   if (inStage('page')) {
     const bad = pages.filter((p) => p.status >= 400);
     const base = { key: 'page', level: LEVEL.QUALITY, category: CATEGORY.TECH, item: '有無網址 404' };
-    push(bad.length
-      ? { ...base, status: 'warn', advice: `爬取 ${pages.length} 頁中有 ${bad.length} 頁回應異常（含 404），例如：${bad.slice(0, 5).map((p) => `${toPath(origin, p.url)}（${p.status || '連不上'}）`).join('、')}`, evidence: `${bad.length}/${pages.length} 頁異常`, details: bad.map((p) => ({ url: p.url, note: `回應 ${p.status || '連不上'}` })) }
+    // 真的 4xx/5xx＋soft-404（回 200 但空殼死頁）一起回報，明細分別標原因
+    const details = [
+      ...bad.map((p) => ({ url: p.url, note: `回應 ${p.status || '連不上'}` })),
+      ...shells.map((p) => ({ url: p.url, note: 'soft-404（回 200 但內容為空／錯誤頁）' })),
+    ];
+    const parts: string[] = [];
+    if (bad.length) parts.push(`${bad.length} 頁回應異常（含 404）`);
+    if (shells.length) parts.push(`${shells.length} 頁 soft-404（回 200 但內容為空/錯誤頁，多來自 sitemap 失效網址）`);
+    push(details.length
+      ? { ...base, status: 'warn', advice: `爬取 ${pages.length} 頁中：${parts.join('、')}，建議修正或從 sitemap 移除`, evidence: `異常 ${bad.length}｜soft-404 ${shells.length}（共 ${pages.length} 頁）`, details }
       : { ...base, status: 'ok', advice: `爬取 ${pages.length} 頁皆正常回應，未發現 404`, evidence: `0/${pages.length} 頁異常` });
   }
 
