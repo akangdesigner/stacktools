@@ -121,23 +121,49 @@ export default function NewsLiffPage() {
     runStartRef.current = Date.now();
 
     setPhase('text');
-    const tRes = await fetch('/api/liff-news/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords }),
-    });
-    const tData = await tRes.json();
-    if (!tRes.ok) {
-      setError(`生文案失敗：${tData.error || `HTTP ${tRes.status}`}`);
-      setPhase('error');
-      return;
-    }
-    setContent(tData.content || '');
-    setImagePrompt(tData.imagePrompt || '');
-    setCustomerName(tData.customerName || '');
-    setTextDone(true);
+    try {
+      // ① 送出生文案任務（立刻回 jobId，避開 Cloudflare 對長請求的 100 秒切斷）
+      const startRes = await fetch('/api/liff-news/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords }),
+      });
+      const startData = await startRes.json().catch(() => ({}));
+      if (!startRes.ok || !startData.jobId) {
+        throw new Error(startData.error || `HTTP ${startRes.status}`);
+      }
+      const jobId = startData.jobId as string;
 
-    await genImage(tData.imagePrompt || '', '', false);
+      // ② 每 4 秒輪詢一次，最多等 8 分鐘
+      const deadline = Date.now() + 8 * 60 * 1000;
+      let imagePromptResult = '';
+      while (true) {
+        await new Promise((r) => setTimeout(r, 4000));
+        const pr = await fetch(`/api/liff-news/generate?jobId=${encodeURIComponent(jobId)}`);
+        let pd: { status?: string; content?: string; imagePrompt?: string; customerName?: string; error?: string };
+        try {
+          pd = await pr.json();
+        } catch {
+          if (Date.now() > deadline) throw new Error('生文案等待逾時，請重試');
+          continue; // 暫時性非 JSON 回應 → 繼續輪詢
+        }
+        if (pd.status === 'done') {
+          setContent(pd.content || '');
+          setImagePrompt(pd.imagePrompt || '');
+          setCustomerName(pd.customerName || '');
+          setTextDone(true);
+          imagePromptResult = pd.imagePrompt || '';
+          break;
+        }
+        if (pd.status === 'error') throw new Error(pd.error || '生文案失敗');
+        if (Date.now() > deadline) throw new Error('生文案等待逾時，請重試');
+      }
+
+      await genImage(imagePromptResult, '', false);
+    } catch (e) {
+      setError(`生文案失敗：${msg(e)}`);
+      setPhase('error');
+    }
   }
 
   // ── 生圖（adjustment=定向改圖需求；restart=true 單獨重生、重置計時）──
