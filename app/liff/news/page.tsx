@@ -47,12 +47,14 @@ export default function NewsLiffPage() {
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   // ── 內文框自動撐高：完整顯示全文，不要內部滑動 ──
+  // 依賴要含 phase：content 是在文案階段就設好，但 textarea 要到 phase='ready' 才 render，
+  // 若只依賴 content，撐高會在 textarea 還沒 mount 時就跑掉、之後不再觸發 → 框卡在一行高、文字被截。
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [content]);
+  }, [content, phase]);
 
   // ── 進度條：依「經過時間」漸近爬向 95%（單調遞增，不倒退）──
   useEffect(() => {
