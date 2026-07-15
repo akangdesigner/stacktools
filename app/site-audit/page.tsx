@@ -87,20 +87,22 @@ function DetailsToggle({ title, details }: { title: string; details: { url: stri
             </div>
 
             {/* 清單（可捲動）*/}
-            <div className="overflow-y-auto px-5 py-2 divide-y divide-gray-50">
+            <div className="overflow-y-auto overflow-x-hidden px-5 py-2 divide-y divide-gray-50">
               {details.map((d, i) => (
-                <div key={i} className="py-2 flex items-baseline gap-3 text-xs leading-relaxed">
+                <div key={i} className="py-2.5 flex gap-3 text-xs leading-relaxed">
                   <span className="text-gray-300 tabular-nums shrink-0 w-6 text-right">{i + 1}</span>
-                  <a
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline break-all font-mono flex-1"
-                    title={d.url}
-                  >
-                    {urlToPath(d.url)}
-                  </a>
-                  <span className="text-gray-400 shrink-0 text-right">{d.note}</span>
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline break-all font-mono block"
+                      title={d.url}
+                    >
+                      {urlToPath(d.url)}
+                    </a>
+                    <p className="text-gray-400 mt-0.5 break-all">{d.note}</p>
+                  </div>
                 </div>
               ))}
             </div>
