@@ -11,10 +11,11 @@ const N8N_CONFIRM_WEBHOOK =
   'https://stack.zeabur.app/webhook/festival-liff-confirm';
 
 export async function POST(req: NextRequest) {
-  const { line_uid, content, imageDataUrl } = (await req.json()) as {
+  const { line_uid, content, imageDataUrl, platforms } = (await req.json()) as {
     line_uid?: string;
     content?: string;
     imageDataUrl?: string;
+    platforms?: string; // 這次要發的平台，如 "ig,fb,threads"；沒帶就全發（相容舊版）
   };
 
   if (!line_uid || !content || !imageDataUrl) {
@@ -33,6 +34,12 @@ export async function POST(req: NextRequest) {
     name: client.name,
     social_account: client.social_account,
     line_uid: client.line_uid,
+    // 發文用 token（LIFF 直接發，不再回 LINE）：對應「AI小編-發文」流程需要的欄位名
+    access_token: client.meta_access_token, // FB 粉專／FB 綁 IG 用的 Meta token
+    fb_id: client.fb_page_id, // FB 粉專 ID
+    threads_access_token: client.threads_access_token,
+    ig_access_token: client.ig_access_token, // 無 FB 客戶的 IG 專用 token
+    platforms: platforms && platforms.trim() ? platforms.trim() : 'ig,fb,threads', // 這次要發的平台
   };
 
   try {
