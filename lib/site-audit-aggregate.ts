@@ -34,7 +34,7 @@ export async function aggregateChecks(
 
   const htmlPages = pages.filter((p) => p.ok && (p.title || p.h1 || p.imgTotal || p.mainText)); // 有內容的頁
   const Y = htmlPages.length || 1; // 分母（避免除以 0）
-  const rangeNote = reachedCap ? `（已達 300 頁上限，爬取範圍：${pages.length} 頁）` : `（爬取範圍：${pages.length} 頁）`;
+  const rangeNote = reachedCap ? `（已達爬取上限 ${pages.length} 頁，可能未涵蓋整站）` : `（爬取範圍：${pages.length} 頁）`;
 
   const out: CheckResult[] = [];
   const push = (c: CheckResult) => {

@@ -1,7 +1,7 @@
 import { parse, HTMLElement as NHTMLElement } from 'node-html-parser';
 
 // ── 網站技術健檢：全站爬蟲層 ────────────────────────────
-// 從首頁 BFS 爬「第一～第二層」、上限 300 頁，逐頁擷取分析要用的原始事實（title/desc、h 標籤、
+// 從首頁 BFS 爬「第一～第二層」＋補爬 sitemap、上限由呼叫端指定（route 目前 1000），逐頁擷取分析要用的原始事實（title/desc、h 標籤、
 // 圖片 ALT、JSON-LD、canonical、robots、viewport、GA 碼、內外部連結）。
 // 另外抓 sitemap.xml（給孤島比對）與 robots.txt / llms.txt（站台檔案存在性）。
 // 這一層只負責「爬 + 擷取原始值」，判斷門檻（title ≤30 等）交給 site-audit-aggregate.ts。
@@ -64,7 +64,7 @@ export interface CrawlResult {
   sitemapExists: boolean;
   robotsExists: boolean;
   llmsExists: boolean;
-  reachedCap: boolean;   // 是否碰到 300 頁上限（代表可能沒爬完整站）
+  reachedCap: boolean;   // 是否碰到頁數上限（代表可能沒爬完整站）
 }
 
 // 網址正規化：同網域比對用，去掉 fragment / 查詢字串 / 結尾斜線（首頁保留 /）

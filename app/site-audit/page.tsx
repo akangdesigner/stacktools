@@ -49,37 +49,65 @@ function urlToPath(u: string) {
   return u.replace(/^https?:\/\/[^/]+/, "") || "/";
 }
 
-// 「查看更多」：展開該項目具體是哪些頁有問題（每列＝可點路徑＋問題原因）
-function DetailsToggle({ details }: { details: { url: string; note: string }[] }) {
+// 「查看更多」：點開彈窗列出該項目具體是哪些頁有問題（可捲動，不撐開表格）
+function DetailsToggle({ title, details }: { title: string; details: { url: string; note: string }[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div>
+    <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         className="text-xs text-orange-600 hover:text-orange-700 hover:underline whitespace-nowrap"
       >
-        {open ? "收合" : `查看更多（${details.length} 頁）`}
+        查看更多（{details.length} 頁）
       </button>
+
       {open && (
-        <ul className="mt-1.5 space-y-1 border-l-2 border-orange-100 pl-3">
-          {details.map((d, i) => (
-            <li key={i} className="text-xs leading-relaxed">
-              <a
-                href={d.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline break-all font-mono"
-                title={d.url}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[75vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 標題列 */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 shrink-0">
+              <p className="text-sm font-semibold text-gray-800">
+                {title}
+                <span className="ml-2 text-xs font-normal text-gray-400">{details.length} 個問題頁面</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="text-gray-400 hover:text-gray-700 text-lg leading-none px-1"
               >
-                {urlToPath(d.url)}
-              </a>
-              <span className="text-gray-400">　{d.note}</span>
-            </li>
-          ))}
-        </ul>
+                ✕
+              </button>
+            </div>
+
+            {/* 清單（可捲動）*/}
+            <div className="overflow-y-auto px-5 py-2 divide-y divide-gray-50">
+              {details.map((d, i) => (
+                <div key={i} className="py-2 flex items-baseline gap-3 text-xs leading-relaxed">
+                  <span className="text-gray-300 tabular-nums shrink-0 w-6 text-right">{i + 1}</span>
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline break-all font-mono flex-1"
+                    title={d.url}
+                  >
+                    {urlToPath(d.url)}
+                  </a>
+                  <span className="text-gray-400 shrink-0 text-right">{d.note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -138,7 +166,7 @@ function StageTable({ stage, rows, tag }: { stage: number; rows: CheckItem[]; ta
                   </td>
                   <td className="px-3 py-2 align-top">
                     {c.details && c.details.length > 0 ? (
-                      <DetailsToggle details={c.details} />
+                      <DetailsToggle title={c.item} details={c.details} />
                     ) : (
                       <span className="text-xs text-gray-300">—</span>
                     )}
@@ -415,7 +443,7 @@ export default function SiteAuditPage() {
               {progressMsg}
             </div>
           ) : (
-            <p className="text-xs text-gray-400">會從首頁爬第一～二層（上限 300 頁）做全站內容分析，並用 GSC 實測收錄狀態；網站較大時需要一點時間。</p>
+            <p className="text-xs text-gray-400">會從首頁爬第一～二層＋補爬 sitemap（上限 1000 頁）做全站內容分析，並用 GSC 實測收錄狀態；網站較大時需要一點時間。</p>
           )}
         </div>
       </form>

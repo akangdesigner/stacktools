@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   void (async () => {
     try {
       const crawl = await crawlSite(pageUrl, {
-        maxPages: 300,
+        maxPages: 1000, // 大站涵蓋完整 sitemap（1446 頁的站約 2 分鐘內，8 分鐘輪詢上限內）
         maxDepth: 2,
         concurrency: 8,
         onProgress: (p) => updateAuditJob(job.id, { status: 'crawling', progress: p, message: `已爬 ${p.crawled} 頁（發現 ${p.discovered} 頁）…` }),
