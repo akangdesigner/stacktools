@@ -38,6 +38,12 @@ export default function FestivalLiffPage() {
   const [textAdjust, setTextAdjust] = useState(''); // 定向改文案的需求文字
   const [rewriteLoading, setRewriteLoading] = useState(false); // AI 改文案中
   const [confirmLoading, setConfirmLoading] = useState(false);
+  // 這次要發到哪些平台（發文前自己勾；預設全開，沒設 token 的平台就算勾了 n8n 也會跳過）
+  const [platforms, setPlatforms] = useState<{ ig: boolean; fb: boolean; threads: boolean }>({
+    ig: true,
+    fb: true,
+    threads: true,
+  });
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
   const runStartRef = useRef<number>(0); // 本輪生成開始時間（毫秒）
@@ -215,13 +221,19 @@ export default function FestivalLiffPage() {
       setError('內文、圖片都要有才能送出');
       return;
     }
+    // 組成 "ig,fb,threads" 這種字串傳給 n8n；至少要選一個平台
+    const picked = (['ig', 'fb', 'threads'] as const).filter((p) => platforms[p]).join(',');
+    if (!picked) {
+      setError('至少要選一個要發佈的平台');
+      return;
+    }
     setError('');
     setConfirmLoading(true);
     try {
       const res = await fetch('/api/liff-festival/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: uid, content, imageDataUrl: imageUrl }),
+        body: JSON.stringify({ line_uid: uid, content, imageDataUrl: imageUrl, platforms: picked }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -247,12 +259,12 @@ export default function FestivalLiffPage() {
       <Shell center>
         <div className="done">
           <div className="done-badge">✓</div>
-          <h1 className="done-title">草稿已存好</h1>
+          <h1 className="done-title">已發佈 🎉</h1>
           <p className="done-sub">
-            回到 LINE 對話，按<b>「確認發佈」</b>就會發到你的社群。
+            貼文已<b>直接發到你的社群</b>，可以去 IG／FB／Threads 看看囉。
           </p>
           <button className="confirm" onClick={closeLiff}>
-            回到 LINE
+            關閉
           </button>
         </div>
       </Shell>
@@ -418,9 +430,40 @@ export default function FestivalLiffPage() {
             </div>
           </section>
 
-          {/* 確認送出 */}
+          {/* 發佈平台選擇（發文前自己勾要發到哪些） */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 2px 12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#5C6A85' }}>發佈到</span>
+            {(
+              [
+                ['ig', 'IG'],
+                ['fb', 'FB'],
+                ['threads', 'Threads'],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPlatforms((p) => ({ ...p, [k]: !p[k] }))}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  border: `1px solid ${platforms[k] ? 'transparent' : 'rgba(43,92,230,.24)'}`,
+                  background: platforms[k] ? 'linear-gradient(135deg,#2B5CE6,#1E48C8)' : '#F2F5FC',
+                  color: platforms[k] ? '#fff' : '#5C6A85',
+                }}
+              >
+                {platforms[k] ? '✓ ' : ''}
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* 確認送出 → 直接發佈 */}
           <button className="confirm" onClick={confirm} disabled={confirmLoading || rewriteLoading}>
-            {confirmLoading ? '存檔中…' : '確認使用這篇 ＋ 這張圖'}
+            {confirmLoading ? '發佈中…' : '確認並發佈'}
           </button>
         </>
       )}
@@ -564,7 +607,7 @@ const FP_CSS = `
 .fp .pv-body-input {
   display: block; width: 100%; border: 0; background: transparent; outline: none;
   resize: none; overflow: hidden; font-family: var(--sans);
-  font-size: 13.5px; line-height: 1.9; color: #46506A;
+  font-size: 16px; line-height: 1.75; color: #46506A;
   margin: 0 0 14px; padding: 3px 5px; border-radius: 8px;
 }
 .fp .pv-body-input:focus { background: var(--blue-soft); }
@@ -594,7 +637,7 @@ const FP_CSS = `
   transition: border-color .2s, box-shadow .2s;
 }
 .fp .field:focus-within { border-color: rgba(43,92,230,.6); box-shadow: 0 0 0 3px rgba(43,92,230,.14); }
-.fp .field input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-family: var(--sans); font-size: 13px; color: var(--ink); }
+.fp .field input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-family: var(--sans); font-size: 16px; color: var(--ink); }
 .fp .field input::placeholder { color: var(--ink-3); }
 .fp .field input:disabled { opacity: .5; }
 .fp .send {
