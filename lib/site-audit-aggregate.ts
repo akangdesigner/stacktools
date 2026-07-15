@@ -83,8 +83,11 @@ export async function aggregateChecks(
     if (!sitemapExists || sitemapUrls.length === 0) {
       push({ ...base, status: 'warn', advice: '找不到 sitemap.xml，無法比對孤島頁面，建議先建立 sitemap 再複核', evidence: `${origin}/sitemap.xml` });
     } else {
+      // 孤島判斷只採計「首頁連結可達」的頁（viaSitemap=false）：
+      // sitemap 補爬進來的頁不能當可達來源，否則每頁都被自己補爬成「可達」→ 孤島全消失。
       const reachable = new Set<string>();
       for (const p of pages) {
+        if (p.viaSitemap) continue;
         reachable.add(normalizeUrl(p.url));
         for (const l of p.internalLinks) reachable.add(normalizeUrl(l));
       }
@@ -98,7 +101,7 @@ export async function aggregateChecks(
         if (chk.unavailable) {
           // 沒 GSC → 維持原本「疑似」清單並強調可能高估
           const samples = orphans.slice(0, 6).map((u) => toPath(origin, u));
-          push({ ...base, status: 'warn', advice: `發現 ${orphans.length} 個疑似孤島頁面（sitemap 有、首頁 2 層內未連到），例如：${samples.join('、')}${orphans.length > 6 ? ' 等' : ''}；未接 GSC 無法過濾，JS 動態選單站可能高估，建議人工複核`, evidence: `疑似孤島 ${orphans.length} 頁（未經 GSC 核對）` });
+          push({ ...base, status: 'warn', advice: `發現 ${orphans.length} 個疑似孤島頁面（sitemap 有、首頁 2 層內未連到），例如：${samples.join('、')}${orphans.length > 6 ? ' 等' : ''}；未接 GSC 無法過濾，JS 動態選單站可能高估，建議人工複核`, evidence: `疑似孤島 ${orphans.length} 頁（未經 GSC 核對）`, details: orphans.map((u) => ({ url: normalizeUrl(u), note: '疑似孤島（未經 GSC 核對，可能高估）' })) });
         } else {
           const checked = orphans.slice(0, 80);
           const real = checked.filter((u) => !chk.indexed.has(u)); // GSC 未收錄的才算真孤島候選
@@ -109,7 +112,7 @@ export async function aggregateChecks(
             push({ ...base, status: 'ok', advice: `未被內部連結指向的 ${orphans.length} 頁中，經 GSC 核對均已收錄（Google 找得到，非真孤島，多為 JS 選單頁）${tailNote}，未發現確定孤島`, evidence: `疑似 ${orphans.length}，GSC 已收錄剔除 ${dropped} 頁` });
           } else {
             const samples = real.slice(0, 6).map((u) => toPath(origin, u));
-            push({ ...base, status: 'warn', advice: `發現 ${real.length} 個真正疑似孤島（sitemap 有、未被內部連結指向、且 GSC 未收錄），例如：${samples.join('、')}${real.length > 6 ? ' 等' : ''}；已剔除 ${dropped} 個已收錄頁（如主選單）${tailNote}，建議補內部連結`, evidence: `真孤島候選 ${real.length}、剔除已收錄 ${dropped}` });
+            push({ ...base, status: 'warn', advice: `發現 ${real.length} 個真正疑似孤島（sitemap 有、未被內部連結指向、且 GSC 未收錄），例如：${samples.join('、')}${real.length > 6 ? ' 等' : ''}；已剔除 ${dropped} 個已收錄頁（如主選單）${tailNote}，建議補內部連結`, evidence: `真孤島候選 ${real.length}、剔除已收錄 ${dropped}`, details: real.map((u) => ({ url: normalizeUrl(u), note: 'sitemap 有、未被內部連結指向、GSC 未收錄' })) });
           }
         }
       }
@@ -124,7 +127,7 @@ export async function aggregateChecks(
     } else {
       const noindex = htmlPages.filter((p) => p.noindex);
       push(noindex.length
-        ? { ...base, status: 'warn', advice: `${noindex.length}/${Y} 頁設有 noindex（會被排除索引），例如：${noindex.slice(0, 5).map((p) => toPath(origin, p.url)).join('、')}，請確認是否刻意；實際收錄建議 GSC 複核`, evidence: `${noindex.length}/${Y} 頁 noindex` }
+        ? { ...base, status: 'warn', advice: `${noindex.length}/${Y} 頁設有 noindex（會被排除索引），例如：${noindex.slice(0, 5).map((p) => toPath(origin, p.url)).join('、')}，請確認是否刻意；實際收錄建議 GSC 複核`, evidence: `${noindex.length}/${Y} 頁 noindex`, details: noindex.map((p) => ({ url: p.url, note: '設有 noindex，會被排除索引' })) }
         : { ...base, status: 'ok', advice: `爬取頁面未發現 noindex；實際收錄狀況建議以 GSC / site: 查詢人工複核${rangeNote}`, evidence: `0/${Y} 頁 noindex` });
     }
   }
@@ -140,12 +143,14 @@ export async function aggregateChecks(
 
   // 7. 麵包屑
   if (inStage('breadcrumb')) {
-    const bc = htmlPages.filter((p) => p.hasBreadcrumb).length;
+    const noBc = htmlPages.filter((p) => !p.hasBreadcrumb);
+    const bc = Y - noBc.length;
     const base = { key: 'breadcrumb', level: LEVEL.EFFICIENCY, category: CATEGORY.STRUCTURE, item: '有無麵包屑' };
+    const noBcDetails = noBc.map((p) => ({ url: p.url, note: '未偵測到麵包屑' }));
     push(bc === 0
-      ? { ...base, status: 'warn', advice: `爬取頁面皆未偵測到麵包屑（0/${Y}），建議加上 BreadcrumbList`, evidence: `0/${Y} 頁有麵包屑` }
+      ? { ...base, status: 'warn', advice: `爬取頁面皆未偵測到麵包屑（0/${Y}），建議加上 BreadcrumbList`, evidence: `0/${Y} 頁有麵包屑`, details: noBcDetails }
       : bc < Y
-        ? { ...base, status: 'warn', advice: `僅 ${bc}/${Y} 頁有麵包屑，建議全站補齊`, evidence: `${bc}/${Y} 頁有麵包屑` }
+        ? { ...base, status: 'warn', advice: `僅 ${bc}/${Y} 頁有麵包屑，建議全站補齊`, evidence: `${bc}/${Y} 頁有麵包屑`, details: noBcDetails }
         : { ...base, status: 'ok', advice: `爬取頁面皆有麵包屑（${bc}/${Y}）`, evidence: `${bc}/${Y} 頁有麵包屑` });
   }
 
@@ -155,7 +160,7 @@ export async function aggregateChecks(
     const avg = Math.round(htmlPages.reduce((s, p) => s + p.internalLinks.length, 0) / Y);
     const base = { key: 'internalLinks', level: LEVEL.EFFICIENCY, category: CATEGORY.STRUCTURE, item: '內部連結結構' };
     push(noLink.length
-      ? { ...base, status: 'warn', advice: `有 ${noLink.length}/${Y} 頁沒有任何內部連結（平均每頁 ${avg} 條），建議補相關內容互連`, evidence: `平均 ${avg} 條/頁，${noLink.length} 頁無內部連結` }
+      ? { ...base, status: 'warn', advice: `有 ${noLink.length}/${Y} 頁沒有任何內部連結（平均每頁 ${avg} 條），建議補相關內容互連`, evidence: `平均 ${avg} 條/頁，${noLink.length} 頁無內部連結`, details: noLink.map((p) => ({ url: p.url, note: '沒有任何內部連結' })) }
       : { ...base, status: 'ok', advice: `內部連結結構合理（平均每頁約 ${avg} 條）`, evidence: `平均 ${avg} 條/頁` });
   }
 
@@ -164,7 +169,7 @@ export async function aggregateChecks(
     const broken = pages.filter((p) => p.status >= 400);
     const base = { key: 'brokenLinks', level: LEVEL.EFFICIENCY, category: CATEGORY.STRUCTURE, item: '無效連結檢查' };
     push(broken.length
-      ? { ...base, status: 'fail', advice: `爬取 ${pages.length} 頁中有 ${broken.length} 頁連到壞頁（4xx/5xx），例如：${broken.slice(0, 5).map((p) => `${toPath(origin, p.url)}（${p.status || '連不上'}）`).join('、')}，建議修正或移除連結`, evidence: `${broken.length}/${pages.length} 頁異常` }
+      ? { ...base, status: 'fail', advice: `爬取 ${pages.length} 頁中有 ${broken.length} 頁連到壞頁（4xx/5xx），例如：${broken.slice(0, 5).map((p) => `${toPath(origin, p.url)}（${p.status || '連不上'}）`).join('、')}，建議修正或移除連結`, evidence: `${broken.length}/${pages.length} 頁異常`, details: broken.map((p) => ({ url: p.url, note: `回應 ${p.status || '連不上'}` })) }
       : { ...base, status: 'ok', advice: `爬取 ${pages.length} 頁未發現壞連結；全站連結建議人工複核`, evidence: `0/${pages.length} 頁異常` });
   }
 
@@ -173,16 +178,27 @@ export async function aggregateChecks(
     if (gsc.duplicate) {
       push(gsc.duplicate);
     } else {
-      const noCanon = htmlPages.filter((p) => !p.canonical).length;
-      const titleMap = new Map<string, number>();
-      for (const p of htmlPages) if (p.title) titleMap.set(p.title, (titleMap.get(p.title) ?? 0) + 1);
-      const dupTitleGroups = [...titleMap.values()].filter((n) => n > 1).length;
+      const noCanonPages = htmlPages.filter((p) => !p.canonical);
+      const noCanon = noCanonPages.length;
+      const titleGroups = new Map<string, typeof htmlPages>();
+      for (const p of htmlPages) if (p.title) {
+        const g = titleGroups.get(p.title) ?? [];
+        g.push(p);
+        titleGroups.set(p.title, g);
+      }
+      const dupGroups = [...titleGroups.entries()].filter(([, g]) => g.length > 1);
+      const dupTitleGroups = dupGroups.length;
       const base = { key: 'duplicate', level: LEVEL.RANK, category: CATEGORY.CONTENT, item: '檢查重複內容' };
       const problems: string[] = [];
       if (noCanon) problems.push(`${noCanon}/${Y} 頁未設 canonical`);
       if (dupTitleGroups) problems.push(`${dupTitleGroups} 組頁面標題重複`);
+      // 明細：先列未設 canonical 的頁，再列標題重複的頁（附重複的標題）
+      const dupDetails = [
+        ...noCanonPages.map((p) => ({ url: p.url, note: '未設 canonical' })),
+        ...dupGroups.flatMap(([title, g]) => g.map((p) => ({ url: p.url, note: `標題重複：${title}` }))),
+      ];
       push(problems.length
-        ? { ...base, status: 'warn', advice: `${problems.join('、')}，容易產生重複內容，建議補 canonical 並人工複核`, evidence: problems.join('、') }
+        ? { ...base, status: 'warn', advice: `${problems.join('、')}，容易產生重複內容，建議補 canonical 並人工複核`, evidence: problems.join('、'), details: dupDetails }
         : { ...base, status: 'ok', advice: '頁面皆有 canonical、未發現重複標題；全站重複情形建議人工複核', evidence: `0 問題（共 ${Y} 頁）` });
     }
   }
@@ -193,14 +209,19 @@ export async function aggregateChecks(
   if (inStage('tkd')) {
     const charLen = (s: string) => [...s.trim()].length;
     let te = 0, tl = 0, de = 0, dl = 0;
+    const tkdDetails: { url: string; note: string }[] = [];
     for (const p of htmlPages) {
-      if (!p.title) te++; else if (charLen(p.title) > 30) tl++;
-      if (!p.description) de++; else if (charLen(p.description) > 80) dl++;
+      const probs: string[] = [];
+      if (!p.title) { te++; probs.push('Title 留空'); }
+      else if (charLen(p.title) > 30) { tl++; probs.push(`Title 過長（${charLen(p.title)} 字）`); }
+      if (!p.description) { de++; probs.push('Description 留空'); }
+      else if (charLen(p.description) > 80) { dl++; probs.push(`Description 過長（${charLen(p.description)} 字）`); }
+      if (probs.length) tkdDetails.push({ url: p.url, note: probs.join('、') });
     }
     const base = { key: 'tkd', level: LEVEL.RANK, category: CATEGORY.TRACKING, item: 'TKD 完整性' };
     const issues = te + tl + de + dl;
     push(issues
-      ? { ...base, status: 'fail', advice: `共 ${Y} 頁中：Title 留空 ${te}、過長(>30) ${tl}；Description 留空 ${de}、過長(>80) ${dl}，建議補齊並控制字數`, evidence: `T空${te}/長${tl}｜D空${de}/長${dl}（共 ${Y} 頁）` }
+      ? { ...base, status: 'fail', advice: `共 ${Y} 頁中：Title 留空 ${te}、過長(>30) ${tl}；Description 留空 ${de}、過長(>80) ${dl}，建議補齊並控制字數`, evidence: `T空${te}/長${tl}｜D空${de}/長${dl}（共 ${Y} 頁）`, details: tkdDetails }
       : { ...base, status: 'ok', advice: `爬取 ${Y} 頁 Title / Description 皆有填且長度適當`, evidence: `共 ${Y} 頁皆正常` });
   }
 
@@ -214,8 +235,17 @@ export async function aggregateChecks(
     if (noH1) problems.push(`${noH1} 頁缺 h1`);
     if (multiH1) problems.push(`${multiH1} 頁有多個 h1`);
     if (noH2) problems.push(`${noH2} 頁缺 h2`);
+    // 明細：逐頁列出標題結構問題
+    const headingDetails: { url: string; note: string }[] = [];
+    for (const p of htmlPages) {
+      const probs: string[] = [];
+      if (p.h1 === 0) probs.push('缺 h1');
+      else if (p.h1 > 1) probs.push(`有 ${p.h1} 個 h1`);
+      if (p.h2 === 0) probs.push('缺 h2');
+      if (probs.length) headingDetails.push({ url: p.url, note: probs.join('、') });
+    }
     push(problems.length
-      ? { ...base, status: 'fail', advice: `共 ${Y} 頁中：${problems.join('、')}，建議補齊標題結構讓 Google 理解`, evidence: problems.join('、') }
+      ? { ...base, status: 'fail', advice: `共 ${Y} 頁中：${problems.join('、')}，建議補齊標題結構讓 Google 理解`, evidence: problems.join('、'), details: headingDetails }
       : { ...base, status: 'ok', advice: `爬取 ${Y} 頁標題結構完整`, evidence: `共 ${Y} 頁皆正常` });
   }
 
@@ -255,17 +285,18 @@ export async function aggregateChecks(
     const bad = pages.filter((p) => p.status >= 400);
     const base = { key: 'page', level: LEVEL.QUALITY, category: CATEGORY.TECH, item: '有無網址 404' };
     push(bad.length
-      ? { ...base, status: 'warn', advice: `爬取 ${pages.length} 頁中有 ${bad.length} 頁回應異常（含 404），例如：${bad.slice(0, 5).map((p) => `${toPath(origin, p.url)}（${p.status || '連不上'}）`).join('、')}`, evidence: `${bad.length}/${pages.length} 頁異常` }
+      ? { ...base, status: 'warn', advice: `爬取 ${pages.length} 頁中有 ${bad.length} 頁回應異常（含 404），例如：${bad.slice(0, 5).map((p) => `${toPath(origin, p.url)}（${p.status || '連不上'}）`).join('、')}`, evidence: `${bad.length}/${pages.length} 頁異常`, details: bad.map((p) => ({ url: p.url, note: `回應 ${p.status || '連不上'}` })) }
       : { ...base, status: 'ok', advice: `爬取 ${pages.length} 頁皆正常回應，未發現 404`, evidence: `0/${pages.length} 頁異常` });
   }
 
   // 16. 手機端優化（viewport）
   if (inStage('viewport')) {
-    const vp = htmlPages.filter((p) => p.hasViewport).length;
+    const noVp = htmlPages.filter((p) => !p.hasViewport);
+    const vp = Y - noVp.length;
     const base = { key: 'viewport', level: LEVEL.EFFICIENCY, category: CATEGORY.TECH, item: '手機端優化' };
     push(vp === Y
       ? { ...base, status: 'ok', advice: `爬取 ${Y} 頁皆有設定 viewport`, evidence: `${vp}/${Y} 頁` }
-      : { ...base, status: 'warn', advice: `僅 ${vp}/${Y} 頁設定 viewport，其餘手機端排版可能異常`, evidence: `${vp}/${Y} 頁` });
+      : { ...base, status: 'warn', advice: `僅 ${vp}/${Y} 頁設定 viewport，其餘手機端排版可能異常`, evidence: `${vp}/${Y} 頁`, details: noVp.map((p) => ({ url: p.url, note: '缺少 viewport' })) });
   }
 
   // 17. 分類層級是否清楚
@@ -307,10 +338,11 @@ export async function aggregateChecks(
   if (inStage('imgAlt')) {
     const totalImg = htmlPages.reduce((s, p) => s + p.imgTotal, 0);
     const emptyImg = htmlPages.reduce((s, p) => s + p.imgAltEmpty, 0);
-    const pagesWithEmpty = htmlPages.filter((p) => p.imgAltEmpty > 0).length;
+    const emptyPages = htmlPages.filter((p) => p.imgAltEmpty > 0);
+    const pagesWithEmpty = emptyPages.length;
     const base = { key: 'imgAlt', level: LEVEL.EFFICIENCY, category: CATEGORY.STRUCTURE, item: '圖片 ALT 標記' };
     push(emptyImg
-      ? { ...base, status: 'fail', advice: `全站 ${emptyImg}/${totalImg} 張圖 alt 留空（分布於 ${pagesWithEmpty} 頁），Google 圖片搜尋無法抓取，建議補上描述性 alt`, evidence: `${emptyImg}/${totalImg} 張空白` }
+      ? { ...base, status: 'fail', advice: `全站 ${emptyImg}/${totalImg} 張圖 alt 留空（分布於 ${pagesWithEmpty} 頁），Google 圖片搜尋無法抓取，建議補上描述性 alt`, evidence: `${emptyImg}/${totalImg} 張空白`, details: emptyPages.map((p) => ({ url: p.url, note: `${p.imgAltEmpty} 張圖 alt 留空` })) }
       : { ...base, status: 'ok', advice: `爬取頁面圖片皆有 alt（共 ${totalImg} 張）`, evidence: `0/${totalImg} 張空白` });
   }
 
@@ -318,9 +350,10 @@ export async function aggregateChecks(
   if (inStage('imgFormat')) {
     const totalImg = htmlPages.reduce((s, p) => s + p.imgTotal, 0);
     const legacy = htmlPages.reduce((s, p) => s + p.imgLegacy, 0);
+    const legacyPages = htmlPages.filter((p) => p.imgLegacy > 0);
     const base = { key: 'imgFormat', level: LEVEL.EFFICIENCY, category: CATEGORY.STRUCTURE, item: '縮圖及多媒體優化' };
     push(legacy
-      ? { ...base, status: 'warn', advice: `全站 ${legacy}/${totalImg} 張圖為非 WebP/AVIF 格式，建議壓縮至 200KB 以下並改用現代格式`, evidence: `${legacy}/${totalImg} 張非現代格式` }
+      ? { ...base, status: 'warn', advice: `全站 ${legacy}/${totalImg} 張圖為非 WebP/AVIF 格式，建議壓縮至 200KB 以下並改用現代格式`, evidence: `${legacy}/${totalImg} 張非現代格式`, details: legacyPages.map((p) => ({ url: p.url, note: `${p.imgLegacy} 張非現代格式` })) }
       : { ...base, status: 'ok', advice: `爬取頁面圖片皆為現代格式（共 ${totalImg} 張）`, evidence: `0/${totalImg} 張` });
   }
 

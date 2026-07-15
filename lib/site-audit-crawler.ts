@@ -48,6 +48,7 @@ export interface PageFacts {
   externalCount: number;
   isHome: boolean;
   mainText: string;      // 純文字摘要（給 E-E-A-T 取樣用，截斷）
+  viaSitemap: boolean;   // true＝由 sitemap 補爬（非首頁連結可達）；孤島判斷不把這種頁當「可達來源」
 }
 
 export interface CrawlProgress {
@@ -73,6 +74,19 @@ export function normalizeUrl(u: string): string {
     let p = x.pathname.replace(/\/+$/, '');
     if (p === '') p = '/';
     return x.origin + p;
+  } catch {
+    return u;
+  }
+}
+
+// 保留查詢字串的正規化：查詢字串型 CMS（services.php?category_id=1）的每個 query 都是不同頁，
+// 補爬 sitemap 時要用這個 key 去重，才不會把 188 個網址壓成十幾條路徑。
+export function normalizeFull(u: string): string {
+  try {
+    const x = new URL(u);
+    let p = x.pathname.replace(/\/+$/, '');
+    if (p === '') p = '/';
+    return x.origin + p + x.search;
   } catch {
     return u;
   }
@@ -113,7 +127,7 @@ function extractJsonLdTypes(root: NHTMLElement): string[] {
 }
 
 // 擷取單頁事實
-function extractPageFacts(html: string, url: string, depth: number, status: number, ok: boolean, origin: string): PageFacts {
+function extractPageFacts(html: string, url: string, depth: number, status: number, ok: boolean, origin: string, viaSitemap = false): PageFacts {
   const root = parse(html);
   const title = (root.querySelector('title')?.textContent ?? '').trim();
   const description = (root.querySelector('meta[name="description"]')?.getAttribute('content') ?? '').trim();
@@ -202,6 +216,7 @@ function extractPageFacts(html: string, url: string, depth: number, status: numb
     externalCount,
     isHome: pathname === '/',
     mainText,
+    viaSitemap,
   };
 }
 
@@ -314,11 +329,51 @@ export async function crawlSite(
   if (seen.size >= maxPages) reachedCap = true;
 
   const [sitemapUrls, sitemapExists, robotsExists, llmsExists] = await sidePromise;
+
+  // ── 階段二：sitemap 補爬 ──
+  // 首頁選單常靠 JS 動態產生，靜態 BFS 只看得到少數連結（如 zeyutang 首頁只抓到 16 頁）。
+  // 把 sitemap 有、但首頁 2 層內沒連到的頁補進來實際爬取，讓逐頁檢查（TKD、h 標籤、圖片等）涵蓋全站。
+  // 這些頁標記 viaSitemap，孤島判斷不會把它們當「首頁連結可達」的來源。
+  if (pages.length < maxPages) {
+    // 去重用「保留查詢字串」的 key：本站是查詢字串型 CMS（services.php?category_id=1…），
+    // 一般 normalizeUrl 會丟掉查詢字串，188 個網址會被壓成 16 條路徑而全被判定重複。
+    const crawledKeys = new Set(pages.map((p) => normalizeFull(p.url)));
+    const extra: string[] = [];
+    const extraKeys = new Set<string>();
+    for (const u of sitemapUrls) {
+      const k = normalizeFull(u);
+      if (crawledKeys.has(k) || extraKeys.has(k)) continue; // 已爬過或已排入的不重爬
+      extraKeys.add(k);
+      extra.push(u); // 用「原始」網址（保留查詢字串/結尾斜線）去爬實際頁面
+    }
+    for (let i = 0; i < extra.length && pages.length < maxPages; i += concurrency) {
+      const remaining = maxPages - pages.length;
+      const batch = extra.slice(i, i + concurrency).slice(0, remaining);
+      const facts = await Promise.all(
+        batch.map(async (url) => {
+          try {
+            const res = await fetchWithTimeout(url);
+            const ct = res.headers.get('content-type') ?? '';
+            if (!ct.includes('html')) return emptyFacts(url, 1, res.status, res.ok, origin, true);
+            return extractPageFacts(await res.text(), url, 1, res.status, res.ok, origin, true);
+          } catch {
+            return emptyFacts(url, 1, 0, false, origin, true);
+          }
+        }),
+      );
+      for (const f of facts) {
+        pages.push(f);
+        opts.onProgress?.({ crawled: pages.length, discovered: seen.size, cap: maxPages });
+      }
+    }
+    if (pages.length >= maxPages) reachedCap = true;
+  }
+
   return { origin, pages, sitemapUrls, sitemapExists, robotsExists, llmsExists, reachedCap };
 }
 
 // 非 HTML / 連不上頁面的空事實
-function emptyFacts(url: string, depth: number, status: number, ok: boolean, origin: string): PageFacts {
+function emptyFacts(url: string, depth: number, status: number, ok: boolean, origin: string, viaSitemap = false): PageFacts {
   let isHome = false;
   try {
     isHome = (new URL(url).pathname.replace(/\/+$/, '') || '/') === '/';
@@ -330,6 +385,6 @@ function emptyFacts(url: string, depth: number, status: number, ok: boolean, ori
     title: '', description: '', h1: 0, h2: 0,
     imgTotal: 0, imgAltEmpty: 0, imgAltEmptyNames: [], imgLegacy: 0,
     jsonLdTypes: [], hasBreadcrumb: false, canonical: '', noindex: false, hasViewport: false,
-    analytics: [], internalLinks: [], externalCount: 0, isHome, mainText: '',
+    analytics: [], internalLinks: [], externalCount: 0, isHome, mainText: '', viaSitemap,
   };
 }

@@ -210,6 +210,7 @@ function makeFacts(p: { url: string; title: string; description: string; noindex
     externalCount: 0,
     isHome: false,
     mainText: '',
+    viaSitemap: false,
   };
 }
 

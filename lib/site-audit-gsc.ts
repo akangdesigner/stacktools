@@ -10,6 +10,20 @@ import { normalizeUrl } from './site-audit-crawler';
 
 const SC_BASE = 'https://searchconsole.googleapis.com';
 
+// 送 URL 檢測前把網址 path 解碼：sitemap 裡的中文網址常是小寫 percent-encoded（%e5…），
+// 原封送給 URL Inspection API → Google 回「無法辨識的網址」誤判未收錄；
+// 解碼後（new URL 會統一成標準編碼）→ 正確回 PASS。query／解碼失敗保留原樣。
+// 一定要修在這最底層：runGscChecks 的 host 改寫會把中文重新編回 %，改上游沒用。
+function decodeUrlForInspect(u: string): string {
+  try {
+    const x = new URL(u);
+    x.pathname = decodeURIComponent(x.pathname);
+    return x.href;
+  } catch {
+    return u;
+  }
+}
+
 // 列出授權帳號的 GSC 資源，找出符合此 origin 的已驗證 property（回傳其 siteUrl）
 async function resolveGscProperty(origin: string, accessToken: string): Promise<string | null> {
   let host = '';
@@ -70,14 +84,15 @@ async function inspectUrls(
     const batch = urls.slice(i, i + concurrency);
     const rs = await Promise.all(
       batch.map(async (url): Promise<InspectResult> => {
+        const inspectUrl = decodeUrlForInspect(url); // 中文網址先解碼再送，避免被判「無法辨識」
         try {
           const res = await fetch(`${SC_BASE}/v1/urlInspection/index:inspect`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ inspectionUrl: url, siteUrl, languageCode: 'zh-TW' }),
+            body: JSON.stringify({ inspectionUrl: inspectUrl, siteUrl, languageCode: 'zh-TW' }),
             signal: AbortSignal.timeout(10000),
           });
-          if (!res.ok) return { url, verdict: 'ERROR', coverageState: `HTTP ${res.status}`, googleCanonical: '', userCanonical: '', richTypes: [], error: true };
+          if (!res.ok) return { url: inspectUrl, verdict: 'ERROR', coverageState: `HTTP ${res.status}`, googleCanonical: '', userCanonical: '', richTypes: [], error: true };
           const d = (await res.json()) as {
             inspectionResult?: {
               indexStatusResult?: { verdict?: string; coverageState?: string; googleCanonical?: string; userCanonical?: string };
@@ -87,7 +102,7 @@ async function inspectUrls(
           const idx = d.inspectionResult?.indexStatusResult;
           const rich = d.inspectionResult?.richResultsResult?.detectedItems ?? [];
           return {
-            url,
+            url: inspectUrl,
             verdict: idx?.verdict ?? 'UNKNOWN',
             coverageState: idx?.coverageState ?? '',
             googleCanonical: idx?.googleCanonical ?? '',
@@ -96,7 +111,7 @@ async function inspectUrls(
             error: false,
           };
         } catch {
-          return { url, verdict: 'ERROR', coverageState: '連線失敗', googleCanonical: '', userCanonical: '', richTypes: [], error: true };
+          return { url: inspectUrl, verdict: 'ERROR', coverageState: '連線失敗', googleCanonical: '', userCanonical: '', richTypes: [], error: true };
         }
       }),
     );
@@ -118,9 +133,10 @@ async function buildSitemapCheck(siteUrl: string, accessToken: string): Promise<
     sitemap?: { path: string; errors?: string | number; warnings?: string | number; contents?: { submitted?: string | number; indexed?: string | number }[] }[];
   };
   const list = data.sitemap ?? [];
-  if (list.length === 0) {
-    return { ...base, status: 'fail', advice: 'GSC 實測：未在 Search Console 提交任何 sitemap，建議提交 sitemap.xml', evidence: '已提交 0 份' };
-  }
+  // 空清單「不」等於沒提交：App 帳號對某些客戶站只是受限使用者(siteRestrictedUser)、或只有
+  // 網址前置版 property 而提交是掛在 sc-domain 版時，Sitemaps API 會回空清單（zeyutang 實測即如此，
+  // 後台明明有提交）。此時回 null 交由上層退回爬蟲判斷「檔案是否存在」，避免誤報「未提交」。
+  if (list.length === 0) return null;
   // 註：Sitemaps API 的 contents.indexed 是舊欄位、常年回 0 不可靠，故只採用「提交數」與「錯誤數」；實際收錄看「有無建立索引」那項
   let errors = 0, submitted = 0;
   for (const s of list) {
@@ -147,7 +163,9 @@ function buildIndexingCheck(results: InspectResult[], sitemapTotal: number): Che
   const evidence = `GSC：已收錄 ${indexed}/${valid.length}`;
   if (notIndexed.length === 0) return { ...base, status: 'ok', advice: `GSC 實測：抽查 ${valid.length} 頁全部已收錄${scopeNote}`, evidence };
   const status: CheckResult['status'] = notIndexed.length > valid.length * 0.3 ? 'fail' : 'warn';
-  return { ...base, status, advice: `GSC 實測：${valid.length} 頁中 ${indexed} 頁已收錄、${notIndexed.length} 頁未收錄${reasonText ? `（${reasonText}）` : ''}${scopeNote}，建議檢查未收錄頁面`, evidence };
+  // 明細：逐頁列出未收錄的網址與 Google 給的原因（coverageState）
+  const details = notIndexed.map((r) => ({ url: r.url, note: r.coverageState || '未收錄' }));
+  return { ...base, status, advice: `GSC 實測：${valid.length} 頁中 ${indexed} 頁已收錄、${notIndexed.length} 頁未收錄${reasonText ? `（${reasonText}）` : ''}${scopeNote}，建議檢查未收錄頁面`, evidence, details };
 }
 
 // 由 URL 檢測結果組「結構化數據 (Schema)」（Google 實際辨識到的型別）
@@ -179,7 +197,9 @@ function buildDuplicateCheck(results: InspectResult[]): CheckResult | null {
         return r.url;
       }
     });
-    return { ...base, status: 'warn', advice: `GSC 實測：${dup.length}/${valid.length} 頁 Google 認定 canonical 指向其他網址（視為重複內容），例如：${samples.join('、')}，建議確認是否刻意合併`, evidence: `${dup.length}/${valid.length} 頁被視為重複` };
+    // 明細：逐頁列出被視為重複的網址與 Google 選定的 canonical
+    const details = dup.map((r) => ({ url: r.url, note: `Google canonical 指向：${r.googleCanonical}` }));
+    return { ...base, status: 'warn', advice: `GSC 實測：${dup.length}/${valid.length} 頁 Google 認定 canonical 指向其他網址（視為重複內容），例如：${samples.join('、')}，建議確認是否刻意合併`, evidence: `${dup.length}/${valid.length} 頁被視為重複`, details };
   }
   return { ...base, status: 'ok', advice: `GSC 實測：抽查 ${valid.length} 頁 Google 皆以自身為 canonical，未發現重複內容`, evidence: `${valid.length} 頁無重複` };
 }

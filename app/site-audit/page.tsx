@@ -13,6 +13,7 @@ interface CheckItem {
   advice: string;   // SEO 建議事項
   evidence?: string;
   stage?: number;   // 所屬階段（1 或 2）
+  details?: { url: string; note: string }[]; // 具體問題頁清單（給「查看更多」展開用）
 }
 interface AuditResult {
   url: string;
@@ -42,6 +43,45 @@ const STAGE_LABEL: Record<number, string> = {
   1: "報告1：網站 SEO 基礎健檢與可行性評估",
   2: "報告2：SEO 結構與內容優化規劃",
 };
+
+// 網址顯示成路徑（去掉網域），連結仍用完整網址
+function urlToPath(u: string) {
+  return u.replace(/^https?:\/\/[^/]+/, "") || "/";
+}
+
+// 「查看更多」：展開該項目具體是哪些頁有問題（每列＝可點路徑＋問題原因）
+function DetailsToggle({ details }: { details: { url: string; note: string }[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-xs text-orange-600 hover:text-orange-700 hover:underline whitespace-nowrap"
+      >
+        {open ? "收合" : `查看更多（${details.length} 頁）`}
+      </button>
+      {open && (
+        <ul className="mt-1.5 space-y-1 border-l-2 border-orange-100 pl-3">
+          {details.map((d, i) => (
+            <li key={i} className="text-xs leading-relaxed">
+              <a
+                href={d.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline break-all font-mono"
+                title={d.url}
+              >
+                {urlToPath(d.url)}
+              </a>
+              <span className="text-gray-400">　{d.note}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 // 只留寫回進度表需要的欄位
 function toWriteChecks(checks: CheckItem[]) {
@@ -78,6 +118,7 @@ function StageTable({ stage, rows, tag }: { stage: number; rows: CheckItem[]; ta
               <th className="px-3 py-2 font-medium whitespace-nowrap">狀態</th>
               <th className="px-3 py-2 font-medium whitespace-nowrap">確認事項</th>
               <th className="px-3 py-2 font-medium">SEO 建議事項</th>
+              <th className="px-3 py-2 font-medium whitespace-nowrap">問題頁面</th>
             </tr>
           </thead>
           <tbody>
@@ -94,6 +135,13 @@ function StageTable({ stage, rows, tag }: { stage: number; rows: CheckItem[]; ta
                   <td className="px-3 py-2 text-gray-600">
                     {c.advice}
                     {c.evidence && <div className="text-xs text-gray-400 mt-1 break-all">{c.evidence}</div>}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {c.details && c.details.length > 0 ? (
+                      <DetailsToggle details={c.details} />
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
                   </td>
                 </tr>
               );

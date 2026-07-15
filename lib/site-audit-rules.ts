@@ -74,6 +74,7 @@ export type CheckResult = {
   advice: string;     // SEO 建議事項（判斷結論）
   evidence?: string;  // 抓到的實際證據（例如：3/12 張圖 alt 空白）
   stage?: number;     // 屬於哪一階段（1 或 2）；最終輸出時依 STAGE_OF 補上
+  details?: { url: string; note: string }[]; // 具體問題頁清單（完整網址＋該頁問題），給前端「查看更多」展開用
 };
 
 // 計算「中文字數」的近似值：以字元數計（中文全形一字算 1），
