@@ -23,6 +23,22 @@ type Item = {
   suggestedComment: string;
 };
 
+type SortBy = 'relevant' | 'likes' | 'replies';
+
+// 排序選項（最相關＝沿用 n8n 回傳的 AI 相關性原順序，不再重排）
+const SORT_OPTIONS: { key: SortBy; label: string }[] = [
+  { key: 'relevant', label: '最相關' },
+  { key: 'likes', label: '最多讚' },
+  { key: 'replies', label: '留言最高' },
+];
+
+// 總共顯示則數選項
+const LIMIT_OPTIONS: { value: number; label: string }[] = [
+  { value: 5, label: '5 則' },
+  { value: 10, label: '10 則' },
+  { value: 20, label: '20 則' },
+];
+
 const PROGRESS_CAP = 95;
 const PROGRESS_TAU_MS = 100_000; // Threads+FB 雙路掃描＋評分，抓長一點
 
@@ -41,6 +57,8 @@ export default function SocialMonitorLiffPage() {
   const [keywords, setKeywords] = useState<string[]>([]); // 客戶產業關鍵字（可選項）
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]); // 用戶複選（最多 3）
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<SortBy>('relevant'); // 排序標準：最相關/最多讚/最多留言
+  const [limit, setLimit] = useState<number>(10); // 每個來源顯示上限，0=全部
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
   const runStartRef = useRef<number>(0);
@@ -159,8 +177,20 @@ export default function SocialMonitorLiffPage() {
     }
   }
 
-  const threadsItems = items.filter((i) => i.source === 'threads');
-  const fbItems = items.filter((i) => i.source === 'facebook');
+  // 全部來源一起依選定排序，取前 N 則（總數上限），再依來源分區顯示
+  const arranged = (() => {
+    const arr = [...items];
+    if (sortBy === 'likes') arr.sort((a, b) => b.likeCount - a.likeCount);
+    else if (sortBy === 'replies') arr.sort((a, b) => b.replyCount - a.replyCount);
+    // relevant 沿用 n8n 原順序，不重排
+    return limit > 0 ? arr.slice(0, limit) : arr;
+  })();
+
+  const allThreads = items.filter((i) => i.source === 'threads'); // 供 stat 計總數
+  const allFb = items.filter((i) => i.source === 'facebook');
+  const threadsItems = arranged.filter((i) => i.source === 'threads');
+  const fbItems = arranged.filter((i) => i.source === 'facebook');
+  const topItem = arranged[0]; // 排序後整體第一則，🔥最推薦掛這裡（不分區）
 
   return (
     <Shell center={phase === 'init' || phase === 'loading'}>
@@ -269,14 +299,47 @@ export default function SocialMonitorLiffPage() {
               <div className="lbl">候選貼文</div>
             </div>
             <div className="stat">
-              <div className="num">{threadsItems.length}</div>
+              <div className="num">{allThreads.length}</div>
               <div className="lbl">Threads</div>
             </div>
             <div className="stat">
-              <div className="num">{fbItems.length}</div>
+              <div className="num">{allFb.length}</div>
               <div className="lbl">FB 社團</div>
             </div>
           </div>
+
+          {items.length > 0 && (
+            <div className="toolbar">
+              <div className="tb-group">
+                <span className="tb-lbl">排序</span>
+                <div className="tb-chips">
+                  {SORT_OPTIONS.map((o) => (
+                    <button
+                      key={o.key}
+                      className={`tb-chip${sortBy === o.key ? ' on' : ''}`}
+                      onClick={() => setSortBy(o.key)}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="tb-group">
+                <span className="tb-lbl">則數</span>
+                <div className="tb-chips">
+                  {LIMIT_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      className={`tb-chip${limit === o.value ? ' on' : ''}`}
+                      onClick={() => setLimit(o.value)}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {items.length === 0 && (
             <div className="card">
@@ -293,7 +356,7 @@ export default function SocialMonitorLiffPage() {
                 <span className="ln" />
               </div>
               {threadsItems.map((it, i) => (
-                <PostCard key={`t-${i}`} item={it} idx={i} copied={copiedIdx === items.indexOf(it)} onCopy={() => copyComment(it.suggestedComment, items.indexOf(it))} top={i === 0} />
+                <PostCard key={`t-${i}`} item={it} idx={i} copied={copiedIdx === items.indexOf(it)} onCopy={() => copyComment(it.suggestedComment, items.indexOf(it))} top={it === topItem} />
               ))}
             </>
           )}
@@ -305,7 +368,7 @@ export default function SocialMonitorLiffPage() {
                 <span className="ln" />
               </div>
               {fbItems.map((it, i) => (
-                <PostCard key={`f-${i}`} item={it} idx={i} copied={copiedIdx === items.indexOf(it)} onCopy={() => copyComment(it.suggestedComment, items.indexOf(it))} />
+                <PostCard key={`f-${i}`} item={it} idx={i} copied={copiedIdx === items.indexOf(it)} onCopy={() => copyComment(it.suggestedComment, items.indexOf(it))} top={it === topItem} />
               ))}
             </>
           )}
@@ -493,6 +556,27 @@ const FP_CSS = `
 }
 .fp .stat .num { font-family: var(--mono); font-size: 20px; font-weight: 800; color: var(--blue-deep); }
 .fp .stat .lbl { font-size: 10px; color: var(--ink-3); margin-top: 2px; font-weight: 700; letter-spacing: .04em; }
+
+.fp .toolbar {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 13px; margin: 0 0 16px; display: flex; flex-direction: column; gap: 11px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.85) inset, 0 14px 28px -22px rgba(30,60,120,.4);
+}
+.fp .tb-group { display: flex; align-items: center; gap: 10px; }
+.fp .tb-lbl {
+  flex: 0 0 auto; width: 30px; font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: .1em; color: var(--ink-3);
+}
+.fp .tb-chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.fp .tb-chip {
+  border: 1px solid var(--line-2); background: var(--field); color: var(--ink-2);
+  font-family: var(--sans); font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+  cursor: pointer; transition: all .15s;
+}
+.fp .tb-chip.on {
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep)); color: #fff; border-color: transparent;
+  box-shadow: 0 5px 13px -6px var(--glow);
+}
 
 .fp .sec-title { display: flex; align-items: center; gap: 8px; margin: 20px 2px 10px; }
 .fp .sec-title .txt { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
