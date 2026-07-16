@@ -144,7 +144,8 @@ export default function VideoPostLiffPage() {
       const startRes = await fetch('/api/liff-videopost/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePrompt: prompt, adjustment: adj }),
+        // 有定向調整且手上有當前圖 → 帶上一張圖走 img2img（只改調整處、其餘不動）；首次/重新生成不帶
+        body: JSON.stringify({ imagePrompt: prompt, adjustment: adj, baseImage: adj && imageUrl ? imageUrl : undefined }),
       });
       const startData = await startRes.json().catch(() => ({}));
       if (!startRes.ok || !startData.jobId) {

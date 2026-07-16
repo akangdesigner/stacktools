@@ -22,17 +22,30 @@ function prune() {
 }
 
 // 背景生圖：完成/失敗都寫回 job 表
-async function generate(jobId: string, imagePrompt: string, adjustment?: string) {
+async function generate(jobId: string, imagePrompt: string, adjustment?: string, baseImage?: string) {
   const apiKey = process.env.OPENROUTER_IMAGE_API_KEY || process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     jobs.set(jobId, { status: 'error', error: '伺服器尚未設定 OPENROUTER_IMAGE_API_KEY 或 OPENROUTER_API_KEY 環境變數', ts: Date.now() });
     return;
   }
 
-  // 有定向修改需求就接在原提示詞後面，強調務必套用（gpt-5.4-image-2 中文 OK）
+  // 定向調整且有底圖 → 走圖像編輯（img2img）：帶上一張圖進去，指令要求只改「調整」提到的地方，
+  // 其餘整體構圖/畫風/顏色一律保持不變。沒底圖（首次生圖或重新生成）→ 維持純文字全新生成。
+  const editing = !!(baseImage && adjustment?.trim());
   const finalPrompt = adjustment?.trim()
     ? `${imagePrompt}\n\n[Adjustment — must apply exactly, this overrides conflicting parts above]: ${adjustment.trim()}`
     : imagePrompt;
+  const content = editing
+    ? [
+        { type: 'image_url', image_url: { url: baseImage! } },
+        {
+          type: 'text',
+          text:
+            'Edit the provided image. Preserve the overall composition, layout, framing, subject, art style, and color palette exactly — keep every element the instruction does NOT mention unchanged. Only modify precisely what the instruction asks for.\n\n' +
+            `Instruction: ${adjustment!.trim()}`,
+        },
+      ]
+    : [{ type: 'text', text: finalPrompt }];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 285_000);
@@ -48,7 +61,7 @@ async function generate(jobId: string, imagePrompt: string, adjustment?: string)
       body: JSON.stringify({
         model: IMAGE_MODEL,
         modalities: ['image', 'text'], // 告訴 OpenRouter 要圖片輸出（Gemini 生圖需要）
-        messages: [{ role: 'user', content: [{ type: 'text', text: finalPrompt }] }],
+        messages: [{ role: 'user', content }],
       }),
       signal: controller.signal,
     });
@@ -88,14 +101,14 @@ async function generate(jobId: string, imagePrompt: string, adjustment?: string)
 
 // 送出生圖任務 → 立刻回 jobId
 export async function POST(req: NextRequest) {
-  const { imagePrompt, adjustment } = (await req.json()) as { imagePrompt?: string; adjustment?: string };
+  const { imagePrompt, adjustment, baseImage } = (await req.json()) as { imagePrompt?: string; adjustment?: string; baseImage?: string };
   if (!imagePrompt || !imagePrompt.trim()) {
     return NextResponse.json({ error: '缺少 imagePrompt' }, { status: 400 });
   }
   prune();
   const jobId = crypto.randomUUID();
   jobs.set(jobId, { status: 'pending', ts: Date.now() });
-  void generate(jobId, imagePrompt, adjustment); // 背景跑，不 await
+  void generate(jobId, imagePrompt, adjustment, baseImage); // 背景跑，不 await
   return NextResponse.json({ jobId });
 }
 
