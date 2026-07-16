@@ -14,6 +14,8 @@ type Phase = 'init' | 'upload' | 'transcribing' | 'image' | 'ready' | 'done' | '
 const PROGRESS_CAP = 95;
 const TRANSCRIBE_TAU_MS = 50_000;
 const IMAGE_TAU_MS = 185_000;
+// 影片會先完整上傳到 Next API；採較保守上限，避免被部署平台先擋掉而回傳 HTML 錯誤頁。
+const MAX_CLIENT_UPLOAD = 50 * 1024 * 1024;
 const PHASE_LABEL: Record<string, string> = {
   transcribing: '影片轉逐字稿＋AI 寫文案中…',
   image: 'AI 生成配圖中…',
@@ -40,6 +42,34 @@ export default function VideoPostLiffPage() {
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
 
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+  async function readApiResponse(res: Response): Promise<Record<string, unknown>> {
+    const raw = await res.text();
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      const statusHint = res.status === 413
+        ? '影片檔案超過伺服器可接收的大小'
+        : `伺服器回傳非預期格式（HTTP ${res.status}）`;
+      throw new Error(`${statusHint}，請換較短或壓縮後的影片再試`);
+    }
+  }
+
+  function selectFile(nextFile: File | null) {
+    setError('');
+    if (!nextFile) {
+      setFile(null);
+      return;
+    }
+    if (nextFile.size > MAX_CLIENT_UPLOAD) {
+      const mb = (nextFile.size / 1024 / 1024).toFixed(1);
+      setFile(null);
+      setError(`影片為 ${mb}MB，目前上限 50MB，請先裁短或壓縮後再上傳`);
+      return;
+    }
+    setFile(nextFile);
+  }
 
   // ── 內文框自動撐高 ──
   useEffect(() => {
@@ -113,14 +143,14 @@ export default function VideoPostLiffPage() {
       form.append('line_uid', uid);
       form.append('file', file);
       const tRes = await fetch('/api/liff-videopost/generate', { method: 'POST', body: form });
-      const tData = await tRes.json();
-      if (!tRes.ok) throw new Error(tData.error || `HTTP ${tRes.status}`);
+      const tData = await readApiResponse(tRes);
+      if (!tRes.ok) throw new Error(String(tData.error || `HTTP ${tRes.status}`));
 
-      setContent(tData.content || '');
-      setImagePrompt(tData.imagePrompt || '');
-      setCustomerName(tData.customerName || '');
+      setContent(String(tData.content || ''));
+      setImagePrompt(String(tData.imagePrompt || ''));
+      setCustomerName(String(tData.customerName || ''));
 
-      await genImage(tData.imagePrompt || '', '', false);
+      await genImage(String(tData.imagePrompt || ''), '', false);
     } catch (e) {
       setError(`生文案失敗：${msg(e)}`);
       setPhase('error');
@@ -271,12 +301,12 @@ export default function VideoPostLiffPage() {
               <input
                 type="file"
                 accept="video/*"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                onChange={(e) => selectFile(e.target.files?.[0] || null)}
               />
               <span className="fp-ic">📎</span>
               <span className="fp-txt">{file ? file.name : '點此選擇影片檔案'}</span>
             </label>
-            <p className="hint">{'// 影片長度建議在 3 分鐘內，檔案上限 200MB'}</p>
+            <p className="hint">{'// 影片長度建議在 3 分鐘內，檔案上限 50MB'}</p>
           </div>
         </section>
 
