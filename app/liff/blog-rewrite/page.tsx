@@ -206,7 +206,10 @@ export default function BlogRewriteLiffPage() {
               <div className="prog-fill" style={{ width: `${progress}%` }} />
             </div>
             <div className="prog-meta">
-              <span className="st">抓最新文章＋AI 依品牌人設改寫中…</span>
+              <span className="st">
+                抓最新文章＋AI 依品牌人設改寫中
+                <span className="dots"><i>.</i><i>.</i><i>.</i></span>
+              </span>
               <span className="pc">{Math.round(progress)}%</span>
             </div>
           </div>
@@ -338,6 +341,13 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
             <path d="M40 520 H100 L130 550 V640" />
             <path d="M360 700 H280 L250 730 V820" />
           </g>
+          {/* 流光層：沿電路線跑的亮光段，做出科技流動線條光感 */}
+          <g className="flow" fill="none">
+            <path d="M20 120 H120 L150 90 H240" />
+            <path d="M380 60 V160 L340 200 H300" />
+            <path d="M40 520 H100 L130 550 V640" />
+            <path d="M360 700 H280 L250 730 V820" />
+          </g>
           <g fill="rgba(43,92,230,.5)">
             <circle cx="120" cy="120" r="3" />
             <circle cx="240" cy="90" r="3" />
@@ -397,6 +407,16 @@ const FP_CSS = `
           mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
 }
 .fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 沿電路線流動的亮光段（stroke-dashoffset 讓一小段光跑完整條線循環）*/
+.fp .fx svg .flow path {
+  stroke: var(--blue); stroke-width: 1.6; stroke-linecap: round;
+  stroke-dasharray: 7 240; stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 4px var(--glow));
+  animation: fp-flow 4s linear infinite;
+}
+.fp .fx svg .flow path:nth-child(2) { stroke: var(--green); animation-delay: -1.3s; animation-duration: 4.6s; }
+.fp .fx svg .flow path:nth-child(3) { animation-delay: -2.4s; animation-duration: 5.2s; }
+.fp .fx svg .flow path:nth-child(4) { stroke: var(--green); animation-delay: -0.7s; animation-duration: 4.3s; }
 .fp .fx .sheen {
   position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
@@ -519,6 +539,10 @@ const FP_CSS = `
 .fp .prog-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--blue-deep), #5B87F2); box-shadow: 0 0 12px 0 var(--glow); transition: width .5s ease-out; }
 .fp .prog-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .fp .prog-meta .st { flex: 1; text-align: left; font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; color: var(--ink-2); line-height: 1.5; }
+.fp .prog-meta .st .dots { display: inline; letter-spacing: 2px; }
+.fp .prog-meta .st .dots i { font-style: normal; opacity: .2; animation: fp-dots 1.4s infinite; }
+.fp .prog-meta .st .dots i:nth-child(2) { animation-delay: .2s; }
+.fp .prog-meta .st .dots i:nth-child(3) { animation-delay: .4s; }
 .fp .prog-meta .pc { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--blue); }
 
 .fp .done { text-align: center; }
@@ -535,8 +559,12 @@ const FP_CSS = `
 @keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
+@keyframes fp-flow { to { stroke-dashoffset: -247; } }
+@keyframes fp-dots { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .tab .dot, .fp .pv-text-loading .spin { animation: none; }
+  .fp .fx .sheen, .fp .tab .dot, .fp .pv-text-loading .spin,
+  .fp .fx svg .flow path, .fp .prog-meta .st .dots i { animation: none; }
   .fp .fx .sheen { display: none; }
+  .fp .fx svg .flow path { display: none; }
 }
 `;
