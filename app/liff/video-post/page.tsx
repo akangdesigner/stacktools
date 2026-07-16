@@ -295,10 +295,10 @@ export default function VideoPostLiffPage() {
           <div className="card-pad loading-card">
             <div className="mark">🎬</div>
             <div className="eyebrow eyebrow-muted">
-              {phase === 'init' ? 'Connecting' : 'Rendering'}
+              {phase === 'init' ? 'Loading' : 'Rendering'}
             </div>
             <h2 className="loading-h">
-              {customerName ? `正在幫 ${customerName} 生成短影音貼文` : '正在生成你的短影音貼文'}
+              {phase === 'init' ? '讀取中…' : customerName ? `正在幫 ${customerName} 生成短影音貼文` : '正在生成你的短影音貼文'}
             </h2>
 
             {phase !== 'init' && (

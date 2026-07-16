@@ -196,10 +196,10 @@ export default function BlogRewriteLiffPage() {
           <div className="card-pad loading-card">
             <div className="mark">📝</div>
             <div className="eyebrow eyebrow-muted">
-              {phase === 'init' ? 'Connecting' : 'Rewriting'}
+              {phase === 'init' ? 'Loading' : 'Rewriting'}
             </div>
             <h2 className="loading-h">
-              {customerName ? `正在幫 ${customerName} 改寫文章` : '正在改寫你的文章'}
+              {phase === 'init' ? '讀取中…' : customerName ? `正在幫 ${customerName} 改寫文章` : '正在改寫你的文章'}
             </h2>
 
             <div className="prog-track">
