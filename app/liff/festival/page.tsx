@@ -11,7 +11,30 @@ import type { Liff } from '@line/liff';
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID || '';
 
-type Phase = 'init' | 'text' | 'image' | 'ready' | 'done' | 'error';
+// ── 每月節慶主題固定清單（台灣節慶 × 季節話題；對齊 n8n 節慶資料庫，每月至少 3 個）──
+// 開頁依「當月」取該月選項給用戶單選；選定的主題名會原封不動帶進 n8n 當 detected_holiday。
+const FESTIVAL_TOPICS: Record<number, string[]> = {
+  1: ['跨年迎新', '尾牙採買', '春節前夕', '寒流暖身'],
+  2: ['新春團圓', '西洋情人節', '元宵節', '開工收心'],
+  3: ['38 女神節', '春遊野餐', '春季換季'],
+  4: ['兒童節', '清明連假', '母親節預熱', '春季旅遊'],
+  5: ['母親節', '初夏消暑', '換季穿搭'],
+  6: ['端午節', '畢業季', '梅雨生活'],
+  7: ['暑假旅遊', '消暑涼感', '父親節預熱'],
+  8: ['父親節', '七夕情人節', '中元普渡', '中秋預購'],
+  9: ['開學收心', '中秋節', '秋季旅遊'],
+  10: ['雙十連假', '百貨週年慶', '萬聖節'],
+  11: ['雙11購物節', '感恩節', '聖誕預熱'],
+  12: ['聖誕節', '跨年倒數', '歲末聚餐'],
+};
+
+// 取當月主題選項（月份 1–12）
+function topicsForThisMonth(): string[] {
+  const m = new Date().getMonth() + 1;
+  return FESTIVAL_TOPICS[m] || [];
+}
+
+type Phase = 'init' | 'pick' | 'text' | 'image' | 'ready' | 'done' | 'error';
 
 // 進度條：以「平均約 9 分鐘」為基準的漸近曲線，慢慢爬向上限 95%（最後 90→95 當緩衝、
 // 沒好就卡在 95），圖文真的回來時直接跳 100%。TAU 調成 ~9 分鐘時約落在 90%。
@@ -28,6 +51,9 @@ export default function FestivalLiffPage() {
   const [progress, setProgress] = useState(0);
   const [uid, setUid] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState(''); // 用戶選定的節慶主題（切籤或自訂輸入）
+  const [customTopic, setCustomTopic] = useState(''); // 自己輸入的主題文字
+  const [topicOptions] = useState<string[]>(() => topicsForThisMonth()); // 本月可選主題（開頁固定）
 
   const [content, setContent] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
@@ -95,7 +121,7 @@ export default function FestivalLiffPage() {
         }
         if (cancelled) return;
         setUid(resolvedUid);
-        await runAll(resolvedUid);
+        setPhase('pick'); // 先進選主題畫面，讓用戶挑本月節慶主題，選了才生成
       } catch (e) {
         if (!cancelled) {
           setError(`初始化失敗：${msg(e)}`);
@@ -109,20 +135,20 @@ export default function FestivalLiffPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 一氣呵成：生文案 → 生圖 ────────────────────────────────
-  async function runAll(lineUid: string) {
+  // ── 一氣呵成：生文案 → 生圖（topic=用戶選定的節慶主題）───────
+  async function runAll(lineUid: string, topic: string) {
     setError('');
     setImageUrl('');
     setTextDone(false);
     setProgress(0);
     runStartRef.current = Date.now(); // 整輪從這裡開始計時
 
-    // ① 生文案
+    // ① 生文案（帶上選定主題，n8n 會直接用它當 detected_holiday）
     setPhase('text');
     const tRes = await fetch('/api/liff-festival/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line_uid: lineUid }),
+      body: JSON.stringify({ line_uid: lineUid, selected_topic: topic }),
     });
     const tData = await tRes.json();
     if (!tRes.ok) {
@@ -157,7 +183,8 @@ export default function FestivalLiffPage() {
       const startRes = await fetch('/api/liff-festival/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagePrompt: prompt, adjustment: adj }),
+        // 有定向調整且手上有當前圖 → 帶上一張圖走 img2img（只改調整處、其餘不動）；首次/重新生成不帶
+        body: JSON.stringify({ imagePrompt: prompt, adjustment: adj, baseImage: adj && imageUrl ? imageUrl : undefined }),
       });
       const startData = await startRes.json().catch(() => ({}));
       if (!startRes.ok || !startData.jobId) {
@@ -271,6 +298,77 @@ export default function FestivalLiffPage() {
     );
   }
 
+  // ── 選主題畫面：開頁先讓用戶挑本月節慶主題（單選）──────────
+  if (phase === 'pick') {
+    return (
+      <Shell>
+        <header className="head">
+          <div className="mark">🎐</div>
+          <div className="eyebrow">Festival Post Studio</div>
+          <h1 className="title">節慶貼文生成</h1>
+          <p className="sub">先選一個本月的節慶主題，AI 再幫你寫成貼文</p>
+        </header>
+
+        {error && <div className="err">{error}</div>}
+
+        <section className="card">
+          <div className="card-pad">
+            <div className="card-eyebrow">
+              <span className="lbl">Topic · 本月主題</span>
+            </div>
+            {topicOptions.length === 0 ? (
+              <p className="sub" style={{ textAlign: 'left' }}>本月暫無預設主題，請聯絡管理員。</p>
+            ) : (
+              <div className="topic-grid">
+                {topicOptions.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`topic-chip ${selectedTopic === t ? 'on' : ''}`}
+                    onClick={() => {
+                      setSelectedTopic(t);
+                      setCustomTopic(''); // 改點切籤 → 清掉自訂輸入
+                    }}
+                  >
+                    {selectedTopic === t ? '✓ ' : ''}
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="divider-soft" />
+
+            {/* 自己輸入主題：打字即成為選定主題，上方切籤高亮會自動取消 */}
+            <div className="ctl-label">
+              <span className="ic">✍️</span>
+              <span className="zh">自己輸入主題</span>
+              <span className="en">Custom</span>
+            </div>
+            <div className="field">
+              <input
+                value={customTopic}
+                onChange={(e) => {
+                  setCustomTopic(e.target.value);
+                  setSelectedTopic(e.target.value);
+                }}
+                placeholder="例：品牌週年慶、新品上市、會員日"
+              />
+            </div>
+          </div>
+        </section>
+
+        <button
+          className="confirm"
+          disabled={!selectedTopic}
+          onClick={() => uid && selectedTopic && runAll(uid, selectedTopic)}
+        >
+          {selectedTopic ? `用「${selectedTopic}」生成貼文` : '請先選一個主題'}
+        </button>
+      </Shell>
+    );
+  }
+
   // ── 生成中畫面（進度條）────────────────────────────────────
   if (phase === 'init' || phase === 'text' || phase === 'image') {
     return (
@@ -327,7 +425,7 @@ export default function FestivalLiffPage() {
 
       {/* 錯誤時給重試 */}
       {phase === 'error' && (
-        <button className="confirm" style={{ marginBottom: 16 }} onClick={() => uid && runAll(uid)}>
+        <button className="confirm" style={{ marginBottom: 16 }} onClick={() => uid && selectedTopic && runAll(uid, selectedTopic)}>
           ↻ 重新生成
         </button>
       )}
@@ -339,9 +437,14 @@ export default function FestivalLiffPage() {
             <div className="card-pad">
               <div className="card-eyebrow">
                 <span className="lbl">Preview · 貼文預覽</span>
-                <button className="relink" onClick={() => uid && runAll(uid)}>
-                  ↻ 整篇重生
-                </button>
+                <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                  <button className="relink" onClick={() => setPhase('pick')}>
+                    ⇦ 換主題
+                  </button>
+                  <button className="relink" onClick={() => uid && selectedTopic && runAll(uid, selectedTopic)}>
+                    ↻ 整篇重生
+                  </button>
+                </div>
               </div>
 
               <div className="pv-text">
@@ -650,6 +753,19 @@ const FP_CSS = `
 .fp .send:disabled { opacity: .4; cursor: default; box-shadow: none; }
 .fp .send:disabled:active { transform: none; }
 .fp .hint { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin: 8px 2px 0; letter-spacing: .03em; }
+
+.fp .topic-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.fp .topic-chip {
+  border: 1px solid var(--line-2); background: var(--field); color: var(--ink-2);
+  font-family: var(--sans); font-size: 14px; font-weight: 700; letter-spacing: .02em;
+  padding: 10px 16px; border-radius: 999px; cursor: pointer; transition: transform .1s, box-shadow .2s;
+}
+.fp .topic-chip:active { transform: scale(.97); }
+.fp .topic-chip.on {
+  border-color: transparent; color: #FFFFFF;
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+  box-shadow: 0 6px 16px -6px var(--glow);
+}
 .fp .divider-soft { height: 1px; background: var(--line); margin: 16px 0; }
 
 .fp .confirm {

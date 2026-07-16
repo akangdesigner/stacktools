@@ -12,7 +12,10 @@ const N8N_TEXT_WEBHOOK =
   'https://stack.zeabur.app/webhook/festival-liff-text';
 
 export async function POST(req: NextRequest) {
-  const { line_uid } = (await req.json()) as { line_uid?: string };
+  const { line_uid, selected_topic } = (await req.json()) as {
+    line_uid?: string;
+    selected_topic?: string; // 用戶在 LIFF 選定的節慶主題（沒帶就讓 n8n 自己偵測）
+  };
   if (!line_uid || !line_uid.trim()) {
     return NextResponse.json({ error: '缺少 line_uid' }, { status: 400 });
   }
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(N8N_TEXT_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_data }),
+      body: JSON.stringify({ customer_data, selected_topic: (selected_topic || '').trim() }),
     });
 
     if (!upstream.ok) {
