@@ -360,10 +360,10 @@ export default function NewsLiffPage() {
           <div className="card-pad loading-card">
             <div className="mark">🔥</div>
             <div className="eyebrow eyebrow-muted">
-              {phase === 'init' ? 'Connecting' : 'Rendering'}
+              {phase === 'init' ? 'Loading' : 'Rendering'}
             </div>
             <h2 className="loading-h">
-              {customerName ? `正在幫 ${customerName} 準備時事貼文` : '正在準備你的時事貼文'}
+              {phase === 'init' ? '讀取中…' : customerName ? `正在幫 ${customerName} 準備時事貼文` : '正在準備你的時事貼文'}
             </h2>
 
             <div className="prog-track">
