@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientByLineUid } from '@/lib/aiEditorDb';
 
-// 部落格改寫確認：LIFF 選定改寫文案後送來 → 查客戶 → 轉呼叫 n8n confirm webhook 直接發佈
-// 圖片沿用原文 OG 圖，不經 App 上傳；發佈平台與其他 LIFF 發文方式一致。
+// 部落格改寫確認：LIFF 選定改寫文案後送來 → 查客戶 → 轉呼叫 n8n confirm webhook
+// （n8n 那邊寫進「ai小編上架文章」草稿列，是否發布=否；圖片沿用原文 OG 圖，不經 App 上傳）
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const N8N_CONFIRM_WEBHOOK =
   process.env.N8N_BLOGREWRITE_CONFIRM_WEBHOOK ||
   'https://stack.zeabur.app/webhook/blogrewrite-liff-confirm';
 
 export async function POST(req: NextRequest) {
-  const { line_uid, content, imageUrl, platforms } = (await req.json()) as {
+  const { line_uid, content, imageUrl } = (await req.json()) as {
     line_uid?: string;
     content?: string;
     imageUrl?: string;
-    platforms?: string;
   };
 
   if (!line_uid || !content) {
@@ -34,11 +33,6 @@ export async function POST(req: NextRequest) {
     name: client.name,
     social_account: client.social_account,
     line_uid: client.line_uid,
-    access_token: client.meta_access_token,
-    fb_id: client.fb_page_id,
-    threads_access_token: client.threads_access_token,
-    ig_access_token: client.ig_access_token,
-    platforms: platforms && platforms.trim() ? platforms.trim() : 'ig,fb,threads',
   };
 
   try {
@@ -51,7 +45,7 @@ export async function POST(req: NextRequest) {
     if (!upstream.ok) {
       const raw = await upstream.text();
       return NextResponse.json(
-        { error: `發佈失敗（n8n ${upstream.status}）：${raw.slice(0, 300)}` },
+        { error: `存檔失敗（n8n ${upstream.status}）：${raw.slice(0, 300)}` },
         { status: 502 }
       );
     }
@@ -59,6 +53,6 @@ export async function POST(req: NextRequest) {
     const data = await upstream.json().catch(() => ({}));
     return NextResponse.json({ ok: true, ...data });
   } catch (err) {
-    return NextResponse.json({ error: `發佈連線失敗：${String(err)}` }, { status: 504 });
+    return NextResponse.json({ error: `存檔連線失敗：${String(err)}` }, { status: 504 });
   }
 }

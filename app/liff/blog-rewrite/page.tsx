@@ -28,12 +28,6 @@ export default function BlogRewriteLiffPage() {
   const [textAdjust, setTextAdjust] = useState(''); // 定向改文案的需求文字
   const [rewriteLoading, setRewriteLoading] = useState(false); // AI 改文案中
   const [confirmLoading, setConfirmLoading] = useState(false);
-  // 這次要發到哪些平台（與節慶、時事貼文一致，預設全開）
-  const [platforms, setPlatforms] = useState<{ ig: boolean; fb: boolean; threads: boolean }>({
-    ig: true,
-    fb: true,
-    threads: true,
-  });
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
   const runStartRef = useRef<number>(0);
@@ -47,7 +41,7 @@ export default function BlogRewriteLiffPage() {
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [content, phase]);
+  }, [content]);
 
   // ── 進度條：依「經過時間」漸近爬向 95%（單調遞增，不倒退）──
   useEffect(() => {
@@ -150,18 +144,13 @@ export default function BlogRewriteLiffPage() {
       setError('內文要有才能送出');
       return;
     }
-    const picked = (['ig', 'fb', 'threads'] as const).filter((p) => platforms[p]).join(',');
-    if (!picked) {
-      setError('至少要選一個要發佈的平台');
-      return;
-    }
     setError('');
     setConfirmLoading(true);
     try {
       const res = await fetch('/api/liff-blogrewrite/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: uid, content, imageUrl, platforms: picked }),
+        body: JSON.stringify({ line_uid: uid, content, imageUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -187,12 +176,12 @@ export default function BlogRewriteLiffPage() {
       <Shell center>
         <div className="done">
           <div className="done-badge">✓</div>
-          <h1 className="done-title">已發佈 🎉</h1>
+          <h1 className="done-title">草稿已存好</h1>
           <p className="done-sub">
-            貼文已<b>直接發到你的社群</b>，可以去 IG／FB／Threads 看看囉。
+            回到 LINE 對話，按<b>「確認發佈」</b>就會發到你的社群。
           </p>
           <button className="confirm" onClick={closeLiff}>
-            關閉
+            回到 LINE
           </button>
         </div>
       </Shell>
@@ -328,40 +317,9 @@ export default function BlogRewriteLiffPage() {
             </div>
           </section>
 
-          {/* 發佈平台選擇（與其他 LIFF 發文方式一致） */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 2px 12px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#5C6A85' }}>發佈到</span>
-            {(
-              [
-                ['ig', 'IG'],
-                ['fb', 'FB'],
-                ['threads', 'Threads'],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setPlatforms((p) => ({ ...p, [k]: !p[k] }))}
-                style={{
-                  padding: '7px 16px',
-                  borderRadius: 999,
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  border: `1px solid ${platforms[k] ? 'transparent' : 'rgba(43,92,230,.24)'}`,
-                  background: platforms[k] ? 'linear-gradient(135deg,#2B5CE6,#1E48C8)' : '#F2F5FC',
-                  color: platforms[k] ? '#fff' : '#5C6A85',
-                }}
-              >
-                {platforms[k] ? '✓ ' : ''}
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* 確認送出 → 直接發佈 */}
+          {/* 確認送出 */}
           <button className="confirm" onClick={confirm} disabled={confirmLoading || rewriteLoading}>
-            {confirmLoading ? '發佈中…' : '確認並發佈'}
+            {confirmLoading ? '存檔中…' : '確認使用這篇貼文'}
           </button>
         </>
       )}
