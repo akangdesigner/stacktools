@@ -11,7 +11,7 @@ const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID_NEWS || '';
 
 type Phase = 'init' | 'pick' | 'text' | 'image' | 'ready' | 'done' | 'error';
 
-const MAX_KEYWORDS = 3;
+const MAX_KEYWORDS = 1; // 最多只能選一個關鍵字（單選）
 
 const PROGRESS_CAP = 95;
 const PROGRESS_TAU_TEXT_MS = 90_000; // 文案：抓熱門話題+逐篇評分+AI寫貼文，較久
@@ -294,14 +294,14 @@ export default function NewsLiffPage() {
           <div className="mark">🔥</div>
           <div className="eyebrow">Trending Post Studio</div>
           <h1 className="title">時事互動貼文</h1>
-          <p className="sub">選 1～3 個想蹭的關鍵字，AI 幫你抓相關熱門話題</p>
+          <p className="sub">選 1 個想蹭的關鍵字，AI 幫你抓相關熱門話題</p>
         </header>
 
         {error && <div className="err">{error}</div>}
 
         <section className="card">
           <div className="card-pad">
-            <div className="kw-hint">最多選 {MAX_KEYWORDS} 個（已選 {selectedKeywords.length}）</div>
+            <div className="kw-hint">只能選 1 個關鍵字（已選 {selectedKeywords.length}）</div>
             {keywords.length === 0 ? (
               <p className="kw-empty">你的客戶資料還沒設定產業關鍵字，請先到「客戶資料設定」補上。</p>
             ) : (
@@ -313,13 +313,8 @@ export default function NewsLiffPage() {
                       key={k}
                       className={`kw-chip${on ? ' on' : ''}`}
                       onClick={() =>
-                        setSelectedKeywords((prev) =>
-                          prev.includes(k)
-                            ? prev.filter((x) => x !== k)
-                            : prev.length >= MAX_KEYWORDS
-                              ? prev
-                              : [...prev, k]
-                        )
+                        // 單選：點已選的取消、點別的直接換成這一個
+                        setSelectedKeywords((prev) => (prev.includes(k) ? [] : [k]))
                       }
                     >
                       {k}
