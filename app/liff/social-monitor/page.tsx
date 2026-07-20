@@ -47,7 +47,9 @@ const LIMIT_OPTIONS: { value: number; label: string }[] = [
 ];
 
 const PROGRESS_CAP = 95;
-const PROGRESS_TAU_MS = 150_000; // Threads+FB 雙路掃描＋評分，多關鍵字更久，抓長一點
+// 進度條依「選了幾個關鍵字」對準實際掃描時間：爬蟲＋AI逐筆評分都跟關鍵字數成正比。
+// 實測 2 關鍵字約 3 分鐘完成；tau=關鍵字數×60s → 約在 關鍵字數×180s 時爬到 90%，貼近真實。
+const TAU_PER_KEYWORD_MS = 60_000;
 
 function formatCount(n: number): string {
   if (!n || n <= 0) return '0';
@@ -75,14 +77,17 @@ export default function SocialMonitorLiffPage() {
 
   useEffect(() => {
     if (phase !== 'loading') return;
+    // 選越多關鍵字掃越久 → tau 隨關鍵字數放大，進度條節奏才對得準
+    const kw = Math.min(3, Math.max(1, selectedKeywords.length));
+    const tau = kw * TAU_PER_KEYWORD_MS;
     const id = setInterval(() => {
       const start = runStartRef.current || Date.now();
       const elapsed = Date.now() - start;
-      const target = PROGRESS_CAP * (1 - Math.exp(-elapsed / PROGRESS_TAU_MS));
+      const target = PROGRESS_CAP * (1 - Math.exp(-elapsed / tau));
       setProgress((p) => (target > p ? target : p));
     }, 500);
     return () => clearInterval(id);
-  }, [phase]);
+  }, [phase, selectedKeywords.length]);
 
   useEffect(() => {
     let cancelled = false;
