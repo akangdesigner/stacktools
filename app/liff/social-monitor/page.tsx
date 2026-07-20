@@ -547,16 +547,16 @@ const FP_CSS = `
 .fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 /* 電路板底 + 沿線流動光脈 + 閃爍節點 */
 .fp .fx svg.circuit { position: absolute; inset: 0; width: 100%; height: 100%; }
-.fp .fx .trace { stroke: rgba(43,92,230,.22); stroke-width: 1.4; fill: none; }
+.fp .fx .trace { stroke: rgba(43,92,230,.24); stroke-width: 1.4; fill: none; }
+/* 注意：會動的線(改 stroke-dashoffset)絕對不要加 filter，WebKit 會不重繪→動畫看起來靜止 */
 .fp .fx .flow {
-  fill: none; stroke: var(--blue); stroke-width: 2.4; stroke-linecap: round;
-  stroke-dasharray: 15 210;
-  filter: drop-shadow(0 0 5px rgba(43,92,230,.9));
+  fill: none; stroke: var(--blue); stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: 15 210; stroke-dashoffset: 0; will-change: stroke-dashoffset;
   animation: fp-flow 3.2s linear infinite;
 }
-.fp .fx .flow.g { stroke: var(--green); filter: drop-shadow(0 0 5px rgba(35,174,110,.9)); }
-.fp .fx .node { fill: var(--blue); filter: drop-shadow(0 0 4px rgba(43,92,230,.8)); animation: fp-node 2.4s ease-in-out infinite; }
-.fp .fx .node.g { fill: var(--green); filter: drop-shadow(0 0 4px rgba(35,174,110,.8)); }
+.fp .fx .flow.g { stroke: var(--green); }
+.fp .fx .node { fill: var(--blue); animation: fp-node 2.4s ease-in-out infinite; }
+.fp .fx .node.g { fill: var(--green); }
 .fp .fx .sheen {
   position: absolute; top: -20%; left: -60%; width: 55%; height: 150%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent);
@@ -720,7 +720,7 @@ const FP_CSS = `
 }
 
 @keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
-@keyframes fp-flow { to { stroke-dashoffset: -225; } }
+@keyframes fp-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -225; } }
 @keyframes fp-node { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .fp .fx .flow, .fp .fx .node, .fp .fx .sheen { animation: none; }
