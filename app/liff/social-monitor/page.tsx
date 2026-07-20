@@ -32,6 +32,13 @@ const SORT_OPTIONS: { key: SortBy; label: string }[] = [
   { key: 'replies', label: '留言最高' },
 ];
 
+// 海巡前選的排序標準（決定 n8n 用哪個標準挑貼文＋過濾沒流量的；讚數/留言會濾掉 0 互動）
+const PICK_SORT_OPTIONS: { key: SortBy; label: string; desc: string }[] = [
+  { key: 'likes', label: '讚數高', desc: '優先撈讚數高的貼文' },
+  { key: 'replies', label: '留言高', desc: '優先撈留言多的貼文' },
+  { key: 'relevant', label: '關聯度高', desc: '優先撈跟關鍵字最相關的' },
+];
+
 // 總共顯示則數選項
 const LIMIT_OPTIONS: { value: number; label: string }[] = [
   { value: 5, label: '5 則' },
@@ -56,6 +63,7 @@ export default function SocialMonitorLiffPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [keywords, setKeywords] = useState<string[]>([]); // 客戶產業關鍵字（可選項）
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]); // 用戶複選（最多 3）
+  const [scanSort, setScanSort] = useState<SortBy>('likes'); // 海巡前選的排序標準，傳給 n8n 決定怎麼挑貼文
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>('relevant'); // 排序標準：最相關/最多讚/最多留言
   const [limit, setLimit] = useState<number>(10); // 每個來源顯示上限，0=全部
@@ -131,7 +139,7 @@ export default function SocialMonitorLiffPage() {
       const startRes = await fetch('/api/liff-social-monitor/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords }),
+        body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords, sort_by: scanSort }),
       });
       const startData = await startRes.json().catch(() => ({}));
       if (!startRes.ok || !startData.jobId) {
@@ -234,6 +242,25 @@ export default function SocialMonitorLiffPage() {
                   })}
                 </div>
               )}
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="card-pad">
+              <div className="kw-hint">怎麼挑貼文</div>
+              <div className="sort-wrap">
+                {PICK_SORT_OPTIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    className={`sort-opt${scanSort === o.key ? ' on' : ''}`}
+                    onClick={() => setScanSort(o.key)}
+                  >
+                    <span className="so-label">{o.label}</span>
+                    <span className="so-desc">{o.desc}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="kw-empty" style={{ marginTop: 10 }}>會自動過濾掉 7 天前的舊貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。</p>
             </div>
           </section>
 
@@ -540,6 +567,20 @@ const FP_CSS = `
   background: linear-gradient(135deg, var(--blue), var(--blue-deep)); color: #fff; border-color: transparent;
   box-shadow: 0 6px 16px -6px var(--glow);
 }
+.fp .sort-wrap { display: flex; flex-direction: column; gap: 8px; }
+.fp .sort-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  border: 1px solid var(--line-2); background: var(--field); border-radius: 12px; padding: 11px 14px;
+  cursor: pointer; transition: all .15s;
+}
+.fp .sort-opt.on {
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep)); border-color: transparent;
+  box-shadow: 0 6px 16px -6px var(--glow);
+}
+.fp .sort-opt .so-label { font-family: var(--sans); font-size: 13.5px; font-weight: 800; color: var(--ink); }
+.fp .sort-opt .so-desc { font-size: 11px; color: var(--ink-3); }
+.fp .sort-opt.on .so-label { color: #fff; }
+.fp .sort-opt.on .so-desc { color: rgba(255,255,255,.8); }
 .fp .confirm {
   position: relative; width: 100%; border: 0; cursor: pointer; color: #FFFFFF;
   font-family: var(--sans); font-size: 15px; font-weight: 800; letter-spacing: .04em;

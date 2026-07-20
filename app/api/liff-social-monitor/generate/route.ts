@@ -61,13 +61,17 @@ async function scan(
 
 // 送出掃描任務 → 立刻回 jobId
 export async function POST(req: NextRequest) {
-  const { line_uid, selected_keywords } = (await req.json()) as {
+  const { line_uid, selected_keywords, sort_by } = (await req.json()) as {
     line_uid?: string;
     selected_keywords?: string[];
+    sort_by?: string;
   };
   if (!line_uid || !line_uid.trim()) {
     return NextResponse.json({ error: '缺少 line_uid' }, { status: 400 });
   }
+
+  // 海巡排序標準：likes=讚數高 / replies=留言高 / relevant=關聯度高（決定 n8n 怎麼挑貼文）
+  const sortBy = ['likes', 'replies', 'relevant'].includes(String(sort_by)) ? String(sort_by) : 'likes';
 
   const client = getClientByLineUid(line_uid.trim());
   if (!client) {
@@ -91,6 +95,7 @@ export async function POST(req: NextRequest) {
     fb_group_url: client.fb_group_url,
     line_uid: client.line_uid,
     selected_keywords: picked,
+    sort_by: sortBy,
   };
 
   prune();
