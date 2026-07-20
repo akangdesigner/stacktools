@@ -480,33 +480,11 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
     <div className="fp">
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
-        {/* 電路板底 + 沿線流動光脈 + 閃爍節點：線鋪滿畫面中央區，任何寬度都看得到（避免被 slice 裁到畫面外）*/}
-        <svg className="circuit" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" fill="none">
-          <g className="trace">
-            <path d="M40 90 H180 L210 120 H370" />
-            <path d="M200 0 V170 L168 202 V360" />
-            <path d="M20 400 H150 L182 432 H400" />
-            <path d="M370 300 V470 L338 502 H210" />
-            <path d="M55 650 H180 L212 618 V470" />
-            <path d="M200 800 V630 L240 590 H380" />
-            <path d="M40 250 H118 L150 282 V340" />
-          </g>
-          <path className="flow" d="M40 90 H180 L210 120 H370" style={{ animationDuration: '3.4s' }} />
-          <path className="flow g" d="M200 0 V170 L168 202 V360" style={{ animationDelay: '-1.2s', animationDuration: '4s' }} />
-          <path className="flow" d="M20 400 H150 L182 432 H400" style={{ animationDelay: '-0.6s', animationDuration: '3s' }} />
-          <path className="flow" d="M370 300 V470 L338 502 H210" style={{ animationDelay: '-2s', animationDuration: '3.8s' }} />
-          <path className="flow g" d="M55 650 H180 L212 618 V470" style={{ animationDelay: '-1.6s', animationDuration: '4.2s' }} />
-          <path className="flow" d="M200 800 V630 L240 590 H380" style={{ animationDelay: '-0.9s', animationDuration: '3.5s' }} />
-          <g>
-            <circle className="node" cx="180" cy="90" r="3.4" />
-            <circle className="node g" cx="168" cy="202" r="3.4" style={{ animationDelay: '-0.8s' }} />
-            <circle className="node" cx="182" cy="432" r="3.4" style={{ animationDelay: '-1.2s' }} />
-            <circle className="node" cx="338" cy="502" r="3.4" style={{ animationDelay: '-0.4s' }} />
-            <circle className="node g" cx="212" cy="618" r="3.4" style={{ animationDelay: '-1.6s' }} />
-            <circle className="node" cx="240" cy="590" r="3.4" style={{ animationDelay: '-0.6s' }} />
-          </g>
-        </svg>
-        <div className="sheen" />
+        {/* 雷達掃描：光束繞圈掃 + 同心圓漣漪往外擴散（呼應「海巡／掃描」主題，壓在底層不擋內容）*/}
+        <div className="radar-sweep" />
+        <div className="radar-ring" />
+        <div className="radar-ring r2" />
+        <div className="radar-ring r3" />
       </div>
       <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
     </div>
@@ -545,23 +523,22 @@ const FP_CSS = `
 }
 .fp * { box-sizing: border-box; }
 .fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-/* 電路板底 + 沿線流動光脈 + 閃爍節點 */
-.fp .fx svg.circuit { position: absolute; inset: 0; width: 100%; height: 100%; }
-.fp .fx .trace { stroke: rgba(43,92,230,.24); stroke-width: 1.4; fill: none; }
-/* 注意：會動的線(改 stroke-dashoffset)絕對不要加 filter，WebKit 會不重繪→動畫看起來靜止 */
-.fp .fx .flow {
-  fill: none; stroke: var(--blue); stroke-width: 3; stroke-linecap: round;
-  stroke-dasharray: 15 210; stroke-dashoffset: 0; will-change: stroke-dashoffset;
-  animation: fp-flow 3.2s linear infinite;
+/* 雷達掃描：光束繞圈掃 + 同心圓漣漪；壓在很淡的底層、藏在毛玻璃卡後，不擋內容 */
+.fp .fx .radar-sweep {
+  position: absolute; top: -46%; left: 50%; width: 150%; aspect-ratio: 1 / 1; transform: translateX(-50%);
+  background: conic-gradient(from 0deg, rgba(43,92,230,.20), rgba(43,92,230,.04) 18%, transparent 34%, transparent 100%);
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, #000 0%, #000 54%, transparent 70%);
+          mask: radial-gradient(circle, #000 0%, #000 54%, transparent 70%);
+  animation: fp-spin 7s linear infinite;
 }
-.fp .fx .flow.g { stroke: var(--green); }
-.fp .fx .node { fill: var(--blue); animation: fp-node 2.4s ease-in-out infinite; }
-.fp .fx .node.g { fill: var(--green); }
-.fp .fx .sheen {
-  position: absolute; top: -20%; left: -60%; width: 55%; height: 150%;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent);
-  transform: skewX(-14deg); animation: fp-sheen 11s ease-in-out infinite;
+.fp .fx .radar-ring {
+  position: absolute; top: 8%; left: 50%; width: 40px; aspect-ratio: 1 / 1; transform: translate(-50%, -50%);
+  border: 1.5px solid rgba(43,92,230,.3); border-radius: 50%; opacity: 0;
+  animation: fp-ripple 4.5s ease-out infinite;
 }
+.fp .fx .radar-ring.r2 { animation-delay: -1.5s; }
+.fp .fx .radar-ring.r3 { animation-delay: -3s; }
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
 
@@ -719,11 +696,10 @@ const FP_CSS = `
   box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 12px 28px -20px rgba(30,60,120,.28);
 }
 
-@keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
-@keyframes fp-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -225; } }
-@keyframes fp-node { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@keyframes fp-spin { to { transform: translateX(-50%) rotate(360deg); } }
+@keyframes fp-ripple { 0% { opacity: .5; width: 40px; } 100% { opacity: 0; width: 620px; } }
 @media (prefers-reduced-motion: reduce) {
-  /* 電路光脈很輕微、是品牌識別，保留；只收掉範圍最大的斜掃光 */
-  .fp .fx .sheen { animation: none; display: none; }
+  /* 使用者要求動畫要看得到（很多手機預設開減少動態），雷達很輕柔就保留；只收掉往外炸的漣漪 */
+  .fp .fx .radar-ring { animation: none; display: none; }
 }
 `;
