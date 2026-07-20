@@ -4,7 +4,7 @@ import { writeFile, readFile, unlink, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ffmpegPath from 'ffmpeg-static';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 
 // 共用給 app/api/writer/transcribe 與 app/api/liff-videopost/generate：
 // 用 ffmpeg 把影片/音檔抽成 16kHz 單聲道 mp3 再送 Groq Whisper 轉錄。
@@ -12,7 +12,7 @@ export const WHISPER_LIMIT = 25 * 1024 * 1024;
 
 // 用 ffmpeg 把影片/音檔抽成 16kHz 單聲道 mp3（語音轉錄只需這樣，檔案大幅縮小）
 export async function extractAudio(input: Buffer, srcExt: string): Promise<Buffer> {
-  const bin = ffmpegPath as unknown as string | null;
+  const bin = ffmpegInstaller.path;
   if (!bin) throw new Error('伺服器找不到 ffmpeg 執行檔路徑');
   // 確認 binary 真的存在且可執行（Next 打包可能改寫路徑，先擋掉）
   try {
