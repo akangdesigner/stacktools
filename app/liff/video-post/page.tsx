@@ -112,9 +112,32 @@ export default function VideoPostLiffPage() {
       const form = new FormData();
       form.append('line_uid', uid);
       form.append('file', file);
-      const tRes = await fetch('/api/liff-videopost/generate', { method: 'POST', body: form });
-      const tData = await tRes.json();
-      if (!tRes.ok) throw new Error(tData.error || `HTTP ${tRes.status}`);
+      const startRes = await fetch('/api/liff-videopost/generate', { method: 'POST', body: form });
+      const startData = await startRes.json().catch(() => ({}));
+      if (!startRes.ok || !startData.jobId) {
+        throw new Error(startData.error || `HTTP ${startRes.status}`);
+      }
+      const jobId = startData.jobId as string;
+
+      const deadline = Date.now() + 6 * 60 * 1000;
+      let tData: { content?: string; imagePrompt?: string; customerName?: string } | null = null;
+      while (!tData) {
+        await new Promise((r) => setTimeout(r, 3500));
+        const pr = await fetch(`/api/liff-videopost/generate?jobId=${encodeURIComponent(jobId)}`);
+        let pd: { status?: string; content?: string; imagePrompt?: string; customerName?: string; error?: string };
+        try {
+          pd = await pr.json();
+        } catch {
+          if (Date.now() > deadline) throw new Error('生文案等待逾時，請重試');
+          continue;
+        }
+        if (pd.status === 'done') {
+          tData = pd;
+          break;
+        }
+        if (pd.status === 'error') throw new Error(pd.error || '生文案失敗');
+        if (Date.now() > deadline) throw new Error('生文案等待逾時，請重試');
+      }
 
       setContent(tData.content || '');
       setImagePrompt(tData.imagePrompt || '');
