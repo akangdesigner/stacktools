@@ -47,7 +47,7 @@ const LIMIT_OPTIONS: { value: number; label: string }[] = [
 ];
 
 const PROGRESS_CAP = 95;
-const PROGRESS_TAU_MS = 100_000; // Threads+FB 雙路掃描＋評分，抓長一點
+const PROGRESS_TAU_MS = 150_000; // Threads+FB 雙路掃描＋評分，多關鍵字更久，抓長一點
 
 function formatCount(n: number): string {
   if (!n || n <= 0) return '0';
@@ -66,7 +66,7 @@ export default function SocialMonitorLiffPage() {
   const [scanSort, setScanSort] = useState<SortBy>('likes'); // 海巡前選的排序標準，傳給 n8n 決定怎麼挑貼文
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>('relevant'); // 排序標準：最相關/最多讚/最多留言
-  const [limit, setLimit] = useState<number>(10); // 每個來源顯示上限，0=全部
+  const [limit, setLimit] = useState<number>(20); // 顯示則數上限，0=全部（預設放大，才看得到多關鍵字撈到的量）
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
   const runStartRef = useRef<number>(0);
@@ -147,8 +147,8 @@ export default function SocialMonitorLiffPage() {
       }
       const jobId = startData.jobId as string;
 
-      // ② 每 4 秒輪詢一次，最多等 8 分鐘
-      const deadline = Date.now() + 8 * 60 * 1000;
+      // ② 每 4 秒輪詢一次，最多等 12 分鐘（多關鍵字掃描較久）
+      const deadline = Date.now() + 12 * 60 * 1000;
       while (true) {
         await new Promise((r) => setTimeout(r, 4000));
         const pr = await fetch(`/api/liff-social-monitor/generate?jobId=${encodeURIComponent(jobId)}`);
@@ -260,7 +260,7 @@ export default function SocialMonitorLiffPage() {
                   </button>
                 ))}
               </div>
-              <p className="kw-empty" style={{ marginTop: 10 }}>會自動過濾掉 7 天前的舊貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。</p>
+              <p className="kw-empty" style={{ marginTop: 10 }}>會自動過濾掉 7 天前的舊貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。選越多關鍵字，撈到的貼文越多。</p>
             </div>
           </section>
 
