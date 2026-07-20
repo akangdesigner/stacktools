@@ -522,23 +522,24 @@ const FP_CSS = `
     linear-gradient(180deg, #F3F6FD 0%, #E4EBF8 100%);
 }
 .fp * { box-sizing: border-box; }
-.fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-/* 雷達掃描：光束繞圈掃 + 同心圓漣漪；壓在很淡的底層、藏在毛玻璃卡後，不擋內容 */
+/* fixed：鎖住視窗，雷達中心固定在手機畫面正中央（捲動也維持置中）*/
+.fp .fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* 雷達掃描：以畫面中央為中心，光束繞圈掃 + 同心圓漣漪往外擴散；藏在毛玻璃卡後不擋內容 */
 .fp .fx .radar-sweep {
-  position: absolute; top: -46%; left: 50%; width: 150%; aspect-ratio: 1 / 1; transform: translateX(-50%);
-  background: conic-gradient(from 0deg, rgba(43,92,230,.20), rgba(43,92,230,.04) 18%, transparent 34%, transparent 100%);
+  position: absolute; top: 50%; left: 50%; width: 128vh; height: 128vh; transform: translate(-50%, -50%);
+  background: conic-gradient(from 0deg, rgba(43,92,230,.22), rgba(43,92,230,.05) 16%, transparent 32%, transparent 100%);
   border-radius: 50%;
-  -webkit-mask: radial-gradient(circle, #000 0%, #000 54%, transparent 70%);
-          mask: radial-gradient(circle, #000 0%, #000 54%, transparent 70%);
+  -webkit-mask: radial-gradient(circle, #000 0%, #000 46%, transparent 64%);
+          mask: radial-gradient(circle, #000 0%, #000 46%, transparent 64%);
   animation: fp-spin 7s linear infinite;
 }
 .fp .fx .radar-ring {
-  position: absolute; top: 8%; left: 50%; width: 40px; aspect-ratio: 1 / 1; transform: translate(-50%, -50%);
-  border: 1.5px solid rgba(43,92,230,.3); border-radius: 50%; opacity: 0;
-  animation: fp-ripple 4.5s ease-out infinite;
+  position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; transform: translate(-50%, -50%);
+  border: 2px solid rgba(43,92,230,.35); border-radius: 50%; opacity: 0;
+  animation: fp-ripple 5s ease-out infinite;
 }
-.fp .fx .radar-ring.r2 { animation-delay: -1.5s; }
-.fp .fx .radar-ring.r3 { animation-delay: -3s; }
+.fp .fx .radar-ring.r2 { animation-delay: -1.7s; }
+.fp .fx .radar-ring.r3 { animation-delay: -3.4s; }
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
 
@@ -696,10 +697,7 @@ const FP_CSS = `
   box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 12px 28px -20px rgba(30,60,120,.28);
 }
 
-@keyframes fp-spin { to { transform: translateX(-50%) rotate(360deg); } }
-@keyframes fp-ripple { 0% { opacity: .5; width: 40px; } 100% { opacity: 0; width: 620px; } }
-@media (prefers-reduced-motion: reduce) {
-  /* 使用者要求動畫要看得到（很多手機預設開減少動態），雷達很輕柔就保留；只收掉往外炸的漣漪 */
-  .fp .fx .radar-ring { animation: none; display: none; }
-}
+@keyframes fp-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes fp-ripple { 0% { opacity: .45; width: 60px; height: 60px; } 100% { opacity: 0; width: 78vh; height: 78vh; } }
+/* 注意：不要在 prefers-reduced-motion 關掉雷達——很多手機預設開減少動態，關了使用者就看不到動畫（已踩過坑）*/
 `;
