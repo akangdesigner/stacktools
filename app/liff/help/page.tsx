@@ -44,6 +44,15 @@ export default function HelpLiffPage() {
         <a className="cta-btn" href="/liff/account-settings">前往設定 →</a>
       </div>
 
+      <div className="tip-card">
+        <div className="eb tip">Pro Tip</div>
+        <h3>💡 想讓貼文更符合你的期望？</h3>
+        <p>AI 寫出來的東西跟想像有落差，通常是因為它不知道你心中的標準長怎樣。去「客戶資料文件導入」上傳兩種文件，之後每次生成都會參考：</p>
+        <div className="step"><span className="n">1</span><span><b>寫文規範</b>：品牌口吻、禁詞、必用語、排版格式等具體規則</span></div>
+        <div className="step"><span className="n">2</span><span><b>發文格式範例</b>：幾篇你覺得寫得好的貼文，讓 AI 照著抓感覺</span></div>
+        <a className="cta-btn tip" href="/liff/doc-import">前往上傳 →</a>
+      </div>
+
       <div className="sec-title hi"><span className="badge">✨ 全新 LIFF 體驗</span><span className="ln" /></div>
 
       <FaqItem hi id="festival" icon="🎨" title="節慶主題規劃" sub="生成貼文＋配圖，頁面直接改" open={openKey === 'festival'} onToggle={toggle}>
@@ -181,6 +190,23 @@ const FP_CSS = `
   font-size: 12.5px; font-weight: 700; padding: 9px 16px; border-radius: 10px;
   background: linear-gradient(135deg, var(--blue), var(--blue-deep)); box-shadow: 0 8px 18px -8px var(--glow);
 }
+
+.fp .tip-card {
+  position: relative; border-radius: 18px; margin-bottom: 20px; padding: 18px;
+  background: linear-gradient(150deg, #FFFFFF 0%, var(--amber-soft) 130%);
+  border: 1px solid rgba(231,154,62,.35);
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 22px 44px -26px rgba(30,60,120,.35);
+}
+.fp .tip-card .eb.tip { font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .12em; color: var(--amber); text-transform: uppercase; }
+.fp .tip-card h3 { font-size: 15px; font-weight: 900; margin: 6px 0 6px; color: var(--ink); }
+.fp .tip-card p { font-size: 12px; line-height: 1.7; color: var(--ink-2); margin: 0 0 10px; }
+.fp .tip-card .step { display: flex; gap: 8px; margin-bottom: 6px; font-size: 12px; line-height: 1.7; color: #4E5568; }
+.fp .tip-card .step .n {
+  flex-shrink: 0; width: 17px; height: 17px; border-radius: 999px; background: #fff; color: var(--amber);
+  font-family: var(--mono); font-size: 9.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  border: 1px solid rgba(231,154,62,.4);
+}
+.fp .cta-btn.tip { background: linear-gradient(135deg, var(--amber), #C97F1F); box-shadow: 0 8px 18px -8px rgba(231,154,62,.5); margin-top: 4px; }
 
 .fp .sec-title { display: flex; align-items: center; gap: 9px; margin: 22px 2px 11px; }
 .fp .sec-title .badge {
