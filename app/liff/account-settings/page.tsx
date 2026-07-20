@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Liff } from '@line/liff';
+import { IMAGE_STYLES } from '@/lib/imageStyles';
 
 // 客戶資料設定 LIFF：合併原本「客戶資料建立／查詢／修改」三條路成一個表單。
 // 一開頁用 line_uid 查現有資料：沒有 → 建立模式（空白表單）；有 → 查詢/修改模式（現值＋可編輯）。
@@ -37,6 +38,7 @@ export default function AccountSettingsLiffPage() {
   const [clientInfo, setClientInfo] = useState('');
   const [activities, setActivities] = useState('');
   const [fbGroupUrl, setFbGroupUrl] = useState('');
+  const [imageStyle, setImageStyle] = useState('');
 
   const [fbUser, setFbUser] = useState('');
   const [fbPass, setFbPass] = useState('');
@@ -84,6 +86,7 @@ export default function AccountSettingsLiffPage() {
           setClientInfo(data.client_info || '');
           setActivities(data.recent_activities || '');
           setFbGroupUrl(data.fb_group_url || '');
+          setImageStyle(data.image_style || '');
           setFbUser(data.fbUser || '');
           setFbPass(data.fbPass || '');
           setThUser(data.thUser || '');
@@ -135,6 +138,7 @@ export default function AccountSettingsLiffPage() {
           client_info: clientInfo,
           recent_activities: activities,
           fb_group_url: fbGroupUrl,
+          image_style: imageStyle,
           fb_user: fbUser, fb_pass: fbPass,
           th_user: thUser, th_pass: thPass,
           ig_user: igUser, ig_pass: igPass,
@@ -276,6 +280,12 @@ export default function AccountSettingsLiffPage() {
             <label>FB 海巡社團網址 <span className="opt">選填，多個逗號分隔</span></label>
             <input value={fbGroupUrl} onChange={(e) => setFbGroupUrl(e.target.value)} placeholder="例：https://facebook.com/groups/xxx" />
           </div>
+          <div className="field-row">
+            <label>圖片風格 <span className="opt">選填，影響 AI 生圖的畫風</span></label>
+            <select value={imageStyle} onChange={(e) => setImageStyle(e.target.value)}>
+              {IMAGE_STYLES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
+            </select>
+          </div>
         </div>
       </section>
 
@@ -395,12 +405,12 @@ const FP_CSS = `
 .fp .field-row label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--ink-2); margin-bottom: 5px; }
 .fp .field-row label .req { color: var(--amber); font-size: 10px; }
 .fp .field-row label .opt { font-family: var(--mono); font-size: 9px; color: var(--ink-3); font-weight: 500; }
-.fp .field-row input, .fp .field-row textarea {
+.fp .field-row input, .fp .field-row textarea, .fp .field-row select {
   width: 100%; border: 1px solid var(--line); background: var(--field); border-radius: 10px;
   padding: 9px 11px; font-family: var(--sans); font-size: 13px; color: var(--ink); outline: none;
   transition: border-color .2s, box-shadow .2s; resize: none;
 }
-.fp .field-row input:focus, .fp .field-row textarea:focus { border-color: rgba(43,92,230,.5); box-shadow: 0 0 0 3px rgba(43,92,230,.12); background: #fff; }
+.fp .field-row input:focus, .fp .field-row textarea:focus, .fp .field-row select:focus { border-color: rgba(43,92,230,.5); box-shadow: 0 0 0 3px rgba(43,92,230,.12); background: #fff; }
 .fp .field-row input::placeholder, .fp .field-row textarea::placeholder { color: var(--ink-3); }
 .fp .field-hint { font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin: 5px 2px 0; line-height: 1.5; }
 

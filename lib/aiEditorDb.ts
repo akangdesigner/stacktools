@@ -70,6 +70,10 @@ function getDb() {
   if (!cols.includes('ig_access_token')) {
     _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN ig_access_token TEXT NOT NULL DEFAULT ''`);
   }
+  // 圖片風格偏好（代碼，如 cinematic/anime/retro/watercolor/claymation/object-hero）：空字串＝未指定，維持預設真實生活感
+  if (!cols.includes('image_style')) {
+    _db.exec(`ALTER TABLE ai_editor_clients ADD COLUMN image_style TEXT NOT NULL DEFAULT ''`);
+  }
 
   // 社群帳號密碼：改用真欄位取代 social_account 塞單一字串猜格式（舊資料留在 social_account 當備份）
   for (const col of ['fb_user', 'fb_pass', 'th_user', 'th_pass', 'ig_user', 'ig_pass']) {
@@ -127,6 +131,7 @@ export interface AiEditorClient {
   meta_access_token: string;
   threads_access_token: string;
   ig_access_token: string;  // 無 FB 客戶專用（Instagram Login API）
+  image_style: string;  // 圖片風格偏好代碼，空字串＝未指定
   // 金流欄位
   billing_status: 'none' | 'pending' | 'active' | 'failed' | 'cancelled';
   billing_amount: number;
@@ -150,8 +155,8 @@ type NewAiEditorClient = Omit<AiEditorClient, 'id' | 'ig_access_token' | 'billin
 export function createAiEditorClient(data: NewAiEditorClient): AiEditorClient {
   const db = getDb();
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, fb_user, fb_pass, th_user, th_pass, ig_user, ig_pass, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name, data.social_account ?? '', data.fb_user ?? '', data.fb_pass ?? '', data.th_user ?? '', data.th_pass ?? '', data.ig_user ?? '', data.ig_pass ?? '', data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, fb_user, fb_pass, th_user, th_pass, ig_user, ig_pass, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token, image_style) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name, data.social_account ?? '', data.fb_user ?? '', data.fb_pass ?? '', data.th_user ?? '', data.th_pass ?? '', data.ig_user ?? '', data.ig_pass ?? '', data.line_uid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '', data.image_style ?? '');
   return getAiEditorClient(result.lastInsertRowid as number)!;
 }
 
@@ -204,7 +209,7 @@ export function upsertClientByLineUid(
     return { client: getAiEditorClient(existing.id)!, action: 'updated' };
   }
   const result = db.prepare(
-    'INSERT INTO ai_editor_clients (name, social_account, fb_user, fb_pass, th_user, th_pass, ig_user, ig_pass, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(data.name ?? '', data.social_account ?? '', data.fb_user ?? '', data.fb_pass ?? '', data.th_user ?? '', data.th_pass ?? '', data.ig_user ?? '', data.ig_pass ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '');
+    'INSERT INTO ai_editor_clients (name, social_account, fb_user, fb_pass, th_user, th_pass, ig_user, ig_pass, line_uid, keywords, persona, client_info, recent_activities, fb_group_url, fb_page_id, meta_access_token, threads_access_token, image_style) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(data.name ?? '', data.social_account ?? '', data.fb_user ?? '', data.fb_pass ?? '', data.th_user ?? '', data.th_pass ?? '', data.ig_user ?? '', data.ig_pass ?? '', lineUid, data.keywords ?? '', data.persona ?? '', data.client_info ?? '', data.recent_activities ?? '', data.fb_group_url ?? '', data.fb_page_id ?? '', data.meta_access_token ?? '', data.threads_access_token ?? '', data.image_style ?? '');
   return { client: getAiEditorClient(result.lastInsertRowid as number)!, action: 'created' };
 }

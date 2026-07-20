@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     recent_activities: client.recent_activities,
     fb_group_url: client.fb_group_url,
     line_uid: client.line_uid,
+    image_style: client.image_style,
   };
 
   try {

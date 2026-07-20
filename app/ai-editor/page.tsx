@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { IMAGE_STYLES } from '@/lib/imageStyles';
 
 interface AiEditorClient {
   id: number;
@@ -46,6 +47,7 @@ export default function AiEditorListPage() {
   const [newKeywords, setNewKeywords] = useState('');
   const [newPersona, setNewPersona] = useState('');
   const [newClientInfo, setNewClientInfo] = useState('');
+  const [newImageStyle, setNewImageStyle] = useState('');
   const [creating, setCreating] = useState(false);
 
   function loadClients() {
@@ -69,6 +71,7 @@ export default function AiEditorListPage() {
         th_user: newThUser.trim(), th_pass: newThPass.trim(),
         ig_user: newIgUser.trim(), ig_pass: newIgPass.trim(),
         line_uid: newLineUid.trim(), keywords: newKeywords.trim(), persona: newPersona.trim(), client_info: newClientInfo.trim(),
+        image_style: newImageStyle,
       }),
     });
     const data = await res.json() as AiEditorClient;
@@ -76,7 +79,7 @@ export default function AiEditorListPage() {
     setShowForm(false);
     setNewName('');
     setNewFbUser(''); setNewFbPass(''); setNewThUser(''); setNewThPass(''); setNewIgUser(''); setNewIgPass('');
-    setNewLineUid(''); setNewKeywords(''); setNewPersona(''); setNewClientInfo('');
+    setNewLineUid(''); setNewKeywords(''); setNewPersona(''); setNewClientInfo(''); setNewImageStyle('');
     loadClients();
     if (data.id) router.push(`/ai-editor/${data.id}`);
   }
@@ -124,6 +127,9 @@ export default function AiEditorListPage() {
           <input value={newKeywords} onChange={e => setNewKeywords(e.target.value)} placeholder="產業關鍵字（逗號分隔，例：植牙, 牙齒美白）" className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <textarea value={newPersona} onChange={e => setNewPersona(e.target.value)} rows={3} placeholder={`小編人設（例：溫暖親切的醫美診所小編，說話口吻輕鬆但專業，不用過度使用表情符號）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
           <textarea value={newClientInfo} onChange={e => setNewClientInfo(e.target.value)} rows={3} placeholder={`客戶資訊（例：台北植牙診所，目標受眾為 30-50 歲上班族，主打無痛療程與透明收費）`} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-gray-400" />
+          <select value={newImageStyle} onChange={e => setNewImageStyle(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-400">
+            {IMAGE_STYLES.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+          </select>
           <div className="flex gap-2">
             <button onClick={handleCreate} disabled={creating || !newName.trim()} className="px-3 py-1 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
               {creating ? '建立中…' : '建立'}

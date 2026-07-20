@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as { name?: string; social_account?: string; fb_user?: string; fb_pass?: string; th_user?: string; th_pass?: string; ig_user?: string; ig_pass?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string };
+  const body = await req.json() as { name?: string; social_account?: string; fb_user?: string; fb_pass?: string; th_user?: string; th_pass?: string; ig_user?: string; ig_pass?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string; image_style?: string };
   const lineUid = body.line_uid?.trim() ?? '';
   if (lineUid) {
     const { client, action } = upsertClientByLineUid(lineUid, {
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       ...(body.fb_page_id !== undefined && { fb_page_id: body.fb_page_id!.trim() }),
       ...(body.meta_access_token !== undefined && { meta_access_token: body.meta_access_token!.trim() }),
       ...(body.threads_access_token !== undefined && { threads_access_token: body.threads_access_token!.trim() }),
+      ...(body.image_style !== undefined && { image_style: body.image_style!.trim() }),
     });
     return NextResponse.json({ ...client, action });
   }
@@ -55,12 +56,13 @@ export async function POST(req: NextRequest) {
     fb_page_id: body.fb_page_id?.trim() ?? '',
     meta_access_token: body.meta_access_token?.trim() ?? '',
     threads_access_token: body.threads_access_token?.trim() ?? '',
+    image_style: body.image_style?.trim() ?? '',
   });
   return NextResponse.json(client);
 }
 
 export async function PUT(req: NextRequest) {
-  const body = await req.json() as { id?: number; name?: string; social_account?: string; fb_user?: string; fb_pass?: string; th_user?: string; th_pass?: string; ig_user?: string; ig_pass?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string; ig_access_token?: string };
+  const body = await req.json() as { id?: number; name?: string; social_account?: string; fb_user?: string; fb_pass?: string; th_user?: string; th_pass?: string; ig_user?: string; ig_pass?: string; line_uid?: string; keywords?: string; persona?: string; client_info?: string; recent_activities?: string; fb_group_url?: string; fb_page_id?: string; meta_access_token?: string; threads_access_token?: string; ig_access_token?: string; image_style?: string };
   if (!body.id) return NextResponse.json({ error: '缺少 id' }, { status: 400 });
   updateAiEditorClient(body.id, {
     ...(body.name !== undefined && { name: body.name }),
@@ -81,6 +83,7 @@ export async function PUT(req: NextRequest) {
     ...(body.meta_access_token !== undefined && { meta_access_token: body.meta_access_token }),
     ...(body.threads_access_token !== undefined && { threads_access_token: body.threads_access_token }),
     ...(body.ig_access_token !== undefined && { ig_access_token: body.ig_access_token }),
+    ...(body.image_style !== undefined && { image_style: body.image_style }),
   });
   return NextResponse.json({ ok: true });
 }

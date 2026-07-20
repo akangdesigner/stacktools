@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
     fb_group_url: client.fb_group_url,
     line_uid: client.line_uid,
     selected_keywords: picked,
+    image_style: client.image_style,
   };
 
   prune();

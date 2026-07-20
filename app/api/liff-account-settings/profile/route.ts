@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     client_info: client.client_info,
     recent_activities: client.recent_activities,
     fb_group_url: client.fb_group_url,
+    image_style: client.image_style,
     ...accounts,
     connections: {
       fb: !!client.meta_access_token,
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
     fb_user?: string; fb_pass?: string;
     th_user?: string; th_pass?: string;
     ig_user?: string; ig_pass?: string;
+    image_style?: string;
   };
 
   const line_uid = body.line_uid?.trim();
@@ -90,6 +92,7 @@ export async function POST(req: NextRequest) {
     client_info: body.client_info?.trim() || '',
     recent_activities: body.recent_activities?.trim() || '',
     fb_group_url: body.fb_group_url?.trim() || '',
+    image_style: body.image_style?.trim() ?? '',
   });
 
   return NextResponse.json({ ok: true, action });

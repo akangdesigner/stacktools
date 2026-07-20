@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { parseSocialAccount } from '@/lib/socialAccount';
+import { IMAGE_STYLES } from '@/lib/imageStyles';
 
 interface AiEditorClient {
   id: number;
@@ -25,6 +26,7 @@ interface AiEditorClient {
   meta_access_token: string;
   threads_access_token: string;
   ig_access_token: string;  // IG 專用 Token（無 FB 客戶走 Instagram Login API）
+  image_style: string;  // 圖片風格偏好代碼，空字串＝未指定
   // 金流
   billing_status: 'none' | 'pending' | 'active' | 'failed' | 'cancelled';
   billing_amount: number;
@@ -57,6 +59,7 @@ export default function AiEditorClientPage() {
   const [editMetaAccessToken, setEditMetaAccessToken] = useState('');
   const [editThreadsAccessToken, setEditThreadsAccessToken] = useState('');
   const [editIgAccessToken, setEditIgAccessToken] = useState('');
+  const [editImageStyle, setEditImageStyle] = useState('');
   const [saving, setSaving] = useState(false);
 
   function loadClient() {
@@ -82,7 +85,7 @@ export default function AiEditorClientPage() {
         fb_user: editFbUser, fb_pass: editFbPass,
         th_user: editThUser, th_pass: editThPass,
         ig_user: editIgUser, ig_pass: editIgPass,
-        line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken, ig_access_token: editIgAccessToken,
+        line_uid: editLineUid, keywords: editKeywords, persona: editPersona, client_info: editClientInfo, recent_activities: editRecentActivities, fb_group_url: editFbGroupUrl, fb_page_id: editFbPageId, meta_access_token: editMetaAccessToken, threads_access_token: editThreadsAccessToken, ig_access_token: editIgAccessToken, image_style: editImageStyle,
       }),
     });
     setSaving(false);
@@ -128,7 +131,7 @@ export default function AiEditorClientPage() {
                   setEditThUser(accounts.thUser); setEditThPass(accounts.thPass);
                   setEditIgUser(accounts.igUser); setEditIgPass(accounts.igPass);
                   setEditLegacyRaw(accounts.legacyRaw);
-                  setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditIgAccessToken(client.ig_access_token ?? ''); setEditing(true);
+                  setEditLineUid(client.line_uid); setEditKeywords(client.keywords ?? ''); setEditPersona(client.persona ?? ''); setEditClientInfo(client.client_info ?? ''); setEditRecentActivities(client.recent_activities ?? ''); setEditFbGroupUrl(client.fb_group_url ?? ''); setEditFbPageId(client.fb_page_id ?? ''); setEditMetaAccessToken(client.meta_access_token ?? ''); setEditThreadsAccessToken(client.threads_access_token ?? ''); setEditIgAccessToken(client.ig_access_token ?? ''); setEditImageStyle(client.image_style ?? ''); setEditing(true);
                 }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >編輯</button>
@@ -195,6 +198,11 @@ export default function AiEditorClientPage() {
             <FieldCard label="IG 專用 Token（無 FB 客戶用）" className="col-span-2">
               <AutoTextarea value={editIgAccessToken} onChange={e => setEditIgAccessToken(e.target.value)} placeholder="IGAA..." className="w-full bg-transparent text-xs font-mono text-gray-800 resize-none focus:outline-none placeholder:text-gray-300" />
             </FieldCard>
+            <FieldCard label="圖片風格" className="col-span-2">
+              <select value={editImageStyle} onChange={e => setEditImageStyle(e.target.value)} className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-xs text-gray-800 focus:outline-none">
+                {IMAGE_STYLES.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+              </select>
+            </FieldCard>
             <div className="col-span-2 flex gap-2">
               <button onClick={handleSave} disabled={saving} className="px-4 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 disabled:opacity-40 transition-colors">
                 {saving ? '儲存中…' : '儲存'}
@@ -248,6 +256,9 @@ export default function AiEditorClientPage() {
               {client.ig_access_token
                 ? <span className="text-xs font-mono text-gray-800 bg-white border border-gray-200 px-2 py-0.5 rounded truncate block max-w-full">{client.ig_access_token.slice(0, 20)}…</span>
                 : <span className="text-xs text-gray-300 italic">尚未設定</span>}
+            </FieldCard>
+            <FieldCard label="圖片風格" className="col-span-2">
+              <p className="text-xs text-gray-700">{IMAGE_STYLES.find(s => s.code === client.image_style)?.label || '不指定（AI 依內容判斷）'}</p>
             </FieldCard>
           </div>
         )}
