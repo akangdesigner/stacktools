@@ -4,7 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const IMAGE_MODEL = 'openai/gpt-5.4-image-2';
+// 生圖模型：改用 Gemini 2.5 Flash Image（快，約數秒～十幾秒），跟節慶頁同理由——
+// 圖片提示詞是純英文的生活風照片、圖上不渲染中文，故 Gemini 沒中文問題。
+const IMAGE_MODEL = 'google/gemini-2.5-flash-image';
 
 type Job = { status: 'pending' | 'done' | 'error'; dataUrl?: string; error?: string; ts: number };
 
