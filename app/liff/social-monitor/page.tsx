@@ -723,7 +723,7 @@ const FP_CSS = `
 @keyframes fp-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -225; } }
 @keyframes fp-node { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .flow, .fp .fx .node, .fp .fx .sheen { animation: none; }
-  .fp .fx .sheen { display: none; }
+  /* 電路光脈很輕微、是品牌識別，保留；只收掉範圍最大的斜掃光 */
+  .fp .fx .sheen { animation: none; display: none; }
 }
 `;
