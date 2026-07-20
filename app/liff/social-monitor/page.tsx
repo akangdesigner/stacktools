@@ -270,11 +270,21 @@ export default function SocialMonitorLiffPage() {
         </>
       )}
 
-      {(phase === 'init' || phase === 'loading') && (
+      {phase === 'init' && (
         <section className="card">
           <div className="card-pad loading-card">
             <div className="mark">📌</div>
-            <div className="eyebrow eyebrow-muted">{phase === 'init' ? 'Connecting' : 'Scanning'}</div>
+            <div className="eyebrow eyebrow-muted">Loading</div>
+            <h2 className="loading-h">讀取中…</h2>
+          </div>
+        </section>
+      )}
+
+      {phase === 'loading' && (
+        <section className="card">
+          <div className="card-pad loading-card">
+            <div className="mark">📌</div>
+            <div className="eyebrow eyebrow-muted">Scanning</div>
             <h2 className="loading-h">正在幫你掃描熱門話題</h2>
             <div className="prog-track">
               <div className="prog-fill" style={{ width: `${progress}%` }} />
