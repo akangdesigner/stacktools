@@ -480,36 +480,32 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
     <div className="fp">
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
-        <div className="grid" />
-        <svg viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice" fill="none">
-          <g stroke="rgba(43,92,230,.16)" strokeWidth="1">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
+        {/* 電路板底 + 沿線流動光脈 + 閃爍節點：線鋪滿畫面中央區，任何寬度都看得到（避免被 slice 裁到畫面外）*/}
+        <svg className="circuit" viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" fill="none">
+          <g className="trace">
+            <path d="M40 90 H180 L210 120 H370" />
+            <path d="M200 0 V170 L168 202 V360" />
+            <path d="M20 400 H150 L182 432 H400" />
+            <path d="M370 300 V470 L338 502 H210" />
+            <path d="M55 650 H180 L212 618 V470" />
+            <path d="M200 800 V630 L240 590 H380" />
+            <path d="M40 250 H118 L150 282 V340" />
           </g>
-          {/* 流光層：沿電路線跑的亮光段，做出科技流動線條光感 */}
-          <g className="flow" fill="none">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          <g fill="rgba(43,92,230,.5)">
-            <circle cx="120" cy="120" r="3" />
-            <circle cx="240" cy="90" r="3" />
-            <circle cx="300" cy="200" r="3" />
-            <circle cx="100" cy="520" r="3" />
-            <circle cx="280" cy="700" r="3" />
-          </g>
-          <g fill="rgba(35,174,110,.45)">
-            <circle cx="150" cy="90" r="3" />
-            <circle cx="130" cy="640" r="3" />
+          <path className="flow" d="M40 90 H180 L210 120 H370" style={{ animationDuration: '3.4s' }} />
+          <path className="flow g" d="M200 0 V170 L168 202 V360" style={{ animationDelay: '-1.2s', animationDuration: '4s' }} />
+          <path className="flow" d="M20 400 H150 L182 432 H400" style={{ animationDelay: '-0.6s', animationDuration: '3s' }} />
+          <path className="flow" d="M370 300 V470 L338 502 H210" style={{ animationDelay: '-2s', animationDuration: '3.8s' }} />
+          <path className="flow g" d="M55 650 H180 L212 618 V470" style={{ animationDelay: '-1.6s', animationDuration: '4.2s' }} />
+          <path className="flow" d="M200 800 V630 L240 590 H380" style={{ animationDelay: '-0.9s', animationDuration: '3.5s' }} />
+          <g>
+            <circle className="node" cx="180" cy="90" r="3.4" />
+            <circle className="node g" cx="168" cy="202" r="3.4" style={{ animationDelay: '-0.8s' }} />
+            <circle className="node" cx="182" cy="432" r="3.4" style={{ animationDelay: '-1.2s' }} />
+            <circle className="node" cx="338" cy="502" r="3.4" style={{ animationDelay: '-0.4s' }} />
+            <circle className="node g" cx="212" cy="618" r="3.4" style={{ animationDelay: '-1.6s' }} />
+            <circle className="node" cx="240" cy="590" r="3.4" style={{ animationDelay: '-0.6s' }} />
           </g>
         </svg>
-        <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
-        <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
-        <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
         <div className="sheen" />
       </div>
       <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
@@ -519,20 +515,22 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
 
 const FP_CSS = `
 .fp {
-  --card: #FFFFFF;
-  --line: rgba(43,92,230,.14);
-  --line-2: rgba(43,92,230,.24);
+  /* 毛玻璃卡：半透明白＋模糊，背景會透出來 → 融入不突兀 */
+  --card: rgba(255,255,255,.55);
+  --glass-line: rgba(255,255,255,.75);
+  --line: rgba(43,92,230,.12);
+  --line-2: rgba(43,92,230,.18);
   --ink: #1D2942;
-  --ink-2: #5C6A85;
+  --ink-2: #56618A;
   --ink-3: #94A0B8;
   --blue: #2B5CE6;
   --blue-deep: #1E48C8;
-  --blue-soft: #EAF0FE;
+  --blue-soft: #E7EEFD;
   --green: #23AE6E;
-  --green-soft: #E9F7F0;
-  --glow: rgba(43,92,230,.38);
-  --field: #F2F5FC;
-  --thread: #000000;
+  --green-soft: #E7F6EF;
+  --glow: rgba(43,92,230,.30);
+  --field: rgba(43,92,230,.055);
+  --thread: #101012;
   --fb: #1877F2;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
   --mono: "SF Mono", "JetBrains Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -541,37 +539,29 @@ const FP_CSS = `
   font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased;
   padding: 22px 0 44px;
   background:
-    radial-gradient(680px 340px at 86% -6%, rgba(43,92,230,.16) 0%, transparent 60%),
-    radial-gradient(560px 360px at -10% 14%, rgba(35,174,110,.10) 0%, transparent 58%),
-    linear-gradient(180deg, #EEF3FD 0%, #D9E4F7 100%);
+    radial-gradient(760px 380px at 50% -8%, rgba(43,92,230,.12) 0%, transparent 62%),
+    radial-gradient(520px 340px at 12% 108%, rgba(35,174,110,.08) 0%, transparent 60%),
+    linear-gradient(180deg, #F3F6FD 0%, #E4EBF8 100%);
 }
 .fp * { box-sizing: border-box; }
 .fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.fp .fx .grid {
-  position: absolute; inset: 0;
-  background-image: radial-gradient(rgba(43,92,230,.12) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(circle at 50% 14%, #000 0%, transparent 68%);
-          mask-image: radial-gradient(circle at 50% 14%, #000 0%, transparent 68%);
+/* 電路板底 + 沿線流動光脈 + 閃爍節點 */
+.fp .fx svg.circuit { position: absolute; inset: 0; width: 100%; height: 100%; }
+.fp .fx .trace { stroke: rgba(43,92,230,.22); stroke-width: 1.4; fill: none; }
+.fp .fx .flow {
+  fill: none; stroke: var(--blue); stroke-width: 2.4; stroke-linecap: round;
+  stroke-dasharray: 15 210;
+  filter: drop-shadow(0 0 5px rgba(43,92,230,.9));
+  animation: fp-flow 3.2s linear infinite;
 }
-.fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* 沿電路線流動的亮光段（stroke-dashoffset 讓一小段光跑完整條線循環）*/
-.fp .fx svg .flow path {
-  stroke: var(--blue); stroke-width: 1.6; stroke-linecap: round;
-  stroke-dasharray: 7 240; stroke-dashoffset: 0;
-  filter: drop-shadow(0 0 4px var(--glow));
-  animation: fp-flow 4s linear infinite;
-}
-.fp .fx svg .flow path:nth-child(2) { stroke: var(--green); animation-delay: -1.3s; animation-duration: 4.6s; }
-.fp .fx svg .flow path:nth-child(3) { animation-delay: -2.4s; animation-duration: 5.2s; }
-.fp .fx svg .flow path:nth-child(4) { stroke: var(--green); animation-delay: -0.7s; animation-duration: 4.3s; }
+.fp .fx .flow.g { stroke: var(--green); filter: drop-shadow(0 0 5px rgba(35,174,110,.9)); }
+.fp .fx .node { fill: var(--blue); filter: drop-shadow(0 0 4px rgba(43,92,230,.8)); animation: fp-node 2.4s ease-in-out infinite; }
+.fp .fx .node.g { fill: var(--green); filter: drop-shadow(0 0 4px rgba(35,174,110,.8)); }
 .fp .fx .sheen {
-  position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
-  background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
-  transform: skewX(-14deg); animation: fp-sheen 10s ease-in-out infinite;
+  position: absolute; top: -20%; left: -60%; width: 55%; height: 150%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent);
+  transform: skewX(-14deg); animation: fp-sheen 11s ease-in-out infinite;
 }
-.fp .cube { position: absolute; border-radius: 4px; transform: rotate(45deg);
-  background: linear-gradient(135deg, rgba(43,92,230,.28), rgba(43,92,230,.10)); }
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
 
@@ -722,11 +712,18 @@ const FP_CSS = `
 .fp .relink { border: 0; background: transparent; cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--blue); }
 .fp .hint { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin: 8px 2px 0; letter-spacing: .03em; }
 
+/* 統一毛玻璃卡：半透明＋模糊＋玻璃邊＋柔陰影 → 融入背景、質感一致（放最後蓋掉各卡片原本的實心白／重陰影）*/
+.fp .card, .fp .stat, .fp .toolbar, .fp .post-card {
+  backdrop-filter: blur(14px) saturate(1.15); -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-color: var(--glass-line);
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 12px 28px -20px rgba(30,60,120,.28);
+}
+
 @keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
-@keyframes fp-flow { to { stroke-dashoffset: -247; } }
+@keyframes fp-flow { to { stroke-dashoffset: -225; } }
+@keyframes fp-node { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .fx svg .flow path { animation: none; }
+  .fp .fx .flow, .fp .fx .node, .fp .fx .sheen { animation: none; }
   .fp .fx .sheen { display: none; }
-  .fp .fx svg .flow path { display: none; }
 }
 `;
