@@ -20,6 +20,7 @@ type Item = {
   publishTime: string;
   likeCount: number;
   replyCount: number;
+  relevanceScore?: number; // AI 判定的關聯度 0~100，n8n rank 節點算的
   suggestedComment: string;
 };
 
@@ -208,7 +209,8 @@ export default function SocialMonitorLiffPage() {
     const arr = [...items];
     if (sortBy === 'likes') arr.sort((a, b) => b.likeCount - a.likeCount);
     else if (sortBy === 'replies') arr.sort((a, b) => b.replyCount - a.replyCount);
-    // relevant 沿用 n8n 原順序，不重排
+    // 最相關＝真的按 AI 關聯度排（n8n 回傳的原順序是按海巡時選的熱度標準排的，不是關聯度）
+    else arr.sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
     return limit > 0 ? arr.slice(0, limit) : arr;
   })();
 
@@ -496,7 +498,15 @@ function PostCard({
         </span>
       </div>
       <p className="post-body">{item.content}</p>
-      {item.publishTime && <p className="post-meta">📅 {item.publishTime}</p>}
+      <p className="post-meta">
+        {item.publishTime && <>📅 {item.publishTime}</>}
+        {typeof item.relevanceScore === 'number' && (
+          // 關聯度＝AI 判定這則跟關鍵字多相關（0~100）。低分多半是蹭到關鍵字的閒聊文，留言效益差
+          <span className={`rel-badge${item.relevanceScore >= 60 ? ' hi' : item.relevanceScore >= 30 ? ' mid' : ' lo'}`}>
+            關聯度 {item.relevanceScore}
+          </span>
+        )}
+      </p>
       <div className="suggest-box">
         <p className="lbl">建議留言</p>
         <p className="txt">{item.suggestedComment}</p>
@@ -710,7 +720,12 @@ const FP_CSS = `
 .fp .heat b { color: var(--blue-deep); font-weight: 700; }
 .fp .post-body { font-size: 12.5px; line-height: 1.7; color: #4E5568; margin: 0 0 11px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.fp .post-meta { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin: -6px 0 11px; }
+.fp .post-meta { font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); margin: -6px 0 11px; display: flex; align-items: center; gap: 8px; }
+/* 關聯度徽章：60+ 綠（值得留言）／30-59 藍（普通）／30 以下灰（多半是蹭關鍵字的閒聊文） */
+.fp .rel-badge { padding: 2px 7px; border-radius: 999px; font-size: 9px; letter-spacing: .02em; border: 1px solid transparent; }
+.fp .rel-badge.hi { color: #23AE6E; background: rgba(35,174,110,.10); border-color: rgba(35,174,110,.28); }
+.fp .rel-badge.mid { color: #2B5CE6; background: rgba(43,92,230,.10); border-color: rgba(43,92,230,.26); }
+.fp .rel-badge.lo { color: var(--ink-3); background: rgba(120,130,150,.10); border-color: rgba(120,130,150,.22); }
 .fp .suggest-box { background: var(--blue-soft); border: 1px solid rgba(43,92,230,.2); border-radius: 12px; padding: 10px 12px; margin-bottom: 11px; }
 .fp .suggest-box .lbl { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--blue); margin-bottom: 5px; }
 .fp .suggest-box .txt { font-size: 12.5px; line-height: 1.65; color: var(--ink); margin: 0; }
