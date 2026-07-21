@@ -211,7 +211,11 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
   return (
     <div className="fp">
       <style>{FP_CSS}</style>
-      <div className="fx" aria-hidden="true"><div className="grid" /></div>
+      <div className="fx" aria-hidden="true">
+        {/* 掃描線＋紙張紋：呼應「文件導入／掃描」主題（壓在毛玻璃卡後不擋字）*/}
+        <div className="paper" />
+        <div className="scanline" />
+      </div>
       <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
     </div>
   );
@@ -236,13 +240,20 @@ const FP_CSS = `
     linear-gradient(180deg, #EEF3FD 0%, #D9E4F7 100%);
 }
 .fp * { box-sizing: border-box; }
-.fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.fp .fx .grid {
+/* fixed：鎖住視窗，掃描線捲動時維持定位（沿用海巡做法）*/
+.fp .fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* 紙張橫紋：淡淡的文件行距線，中央清楚往邊緣淡出 */
+.fp .fx .paper {
   position: absolute; inset: 0;
-  background-image: radial-gradient(rgba(43,92,230,.12) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(circle at 50% 10%, #000 0%, transparent 62%);
-          mask-image: radial-gradient(circle at 50% 10%, #000 0%, transparent 62%);
+  background-image: repeating-linear-gradient(180deg, transparent, transparent 22px, rgba(43,92,230,.06) 22px, rgba(43,92,230,.06) 23px);
+  -webkit-mask-image: radial-gradient(circle at 50% 38%, #000 20%, transparent 78%);
+          mask-image: radial-gradient(circle at 50% 38%, #000 20%, transparent 78%);
+}
+/* 掃描線：一條發光橫線上下來回掃，像掃描器/影印機 */
+.fp .fx .scanline {
+  position: absolute; left: 0; right: 0; top: 8%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  box-shadow: 0 0 14px 2px var(--glow); animation: fp-scan 4.5s ease-in-out infinite;
 }
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
@@ -325,5 +336,9 @@ const FP_CSS = `
 .fp .ok {
   margin-bottom: 14px; border-radius: 12px; background: var(--green-soft); border: 1px solid rgba(35,174,110,.3);
   padding: 12px 14px; font-size: 13px; color: var(--green); line-height: 1.6;
+}
+@keyframes fp-scan { 0%, 100% { top: 8%; } 50% { top: 90%; } }
+@media (prefers-reduced-motion: reduce) {
+  /* 沿用海巡經驗：不關掃描線（多數手機預設開減少動態，關了就看不到）。紙張紋本來就是靜態 */
 }
 `;
