@@ -478,29 +478,12 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
     <div className="fp">
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
-        <div className="grid" />
-        <svg viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice" fill="none">
-          <g stroke="rgba(43,92,230,.16)" strokeWidth="1">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          <g fill="rgba(43,92,230,.5)">
-            <circle cx="120" cy="120" r="3" />
-            <circle cx="240" cy="90" r="3" />
-            <circle cx="300" cy="200" r="3" />
-            <circle cx="100" cy="520" r="3" />
-            <circle cx="280" cy="700" r="3" />
-          </g>
-          <g fill="rgba(35,174,110,.45)">
-            <circle cx="150" cy="90" r="3" />
-            <circle cx="130" cy="640" r="3" />
-          </g>
-        </svg>
-        <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
-        <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
-        <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
+        {/* 等化器波形：呼應「短影音／播放」主題，底部一排音波隨機跳動（壓在毛玻璃卡後不擋字）*/}
+        <div className="eq">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <i key={i} />
+          ))}
+        </div>
         <div className="sheen" />
       </div>
       <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
@@ -536,22 +519,23 @@ const FP_CSS = `
 }
 .fp * { box-sizing: border-box; }
 
-.fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.fp .fx .grid {
-  position: absolute; inset: 0;
-  background-image: radial-gradient(rgba(43,92,230,.12) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
-          mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
-}
-.fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* fixed：鎖住視窗，波形固定在底部（沿用海巡做法）*/
+.fp .fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* 等化器音波：底部一排上下跳動的長條，用 nth-child 錯開節奏做出隨機感 */
+.fp .fx .eq { position: absolute; bottom: 0; left: 0; right: 0; height: 150px;
+  display: flex; align-items: flex-end; justify-content: center; gap: 6px; opacity: .4; padding: 0 14px; }
+.fp .fx .eq i { width: 6px; border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--blue), var(--green)); animation: fp-eq 1.1s ease-in-out infinite; }
+.fp .fx .eq i:nth-child(3n) { animation-duration: 1.5s; }
+.fp .fx .eq i:nth-child(3n+1) { animation-duration: .9s; }
+.fp .fx .eq i:nth-child(2n) { animation-delay: -.4s; }
+.fp .fx .eq i:nth-child(4n) { animation-delay: -.7s; }
+.fp .fx .eq i:nth-child(5n) { animation-delay: -.2s; }
 .fp .fx .sheen {
   position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
   transform: skewX(-14deg); animation: fp-sheen 10s ease-in-out infinite;
 }
-.fp .cube { position: absolute; border-radius: 4px; transform: rotate(45deg);
-  background: linear-gradient(135deg, rgba(43,92,230,.28), rgba(43,92,230,.10)); }
 
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
@@ -691,8 +675,10 @@ const FP_CSS = `
 @keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
+@keyframes fp-eq { 0%, 100% { height: 14px; } 50% { height: 84px; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .tab .dot, .fp .pv-text-loading .spin { animation: none; }
+  /* 沿用海巡經驗：不關 ambient 波形（多數手機預設開減少動態，關了就看不到）；只收會掃過字的 sheen */
+  .fp .tab .dot, .fp .pv-text-loading .spin, .fp .fx .sheen { animation: none; }
   .fp .fx .sheen { display: none; }
 }
 `;
