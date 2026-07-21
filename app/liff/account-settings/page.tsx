@@ -472,4 +472,9 @@ const FP_CSS = `
   margin-bottom: 14px; border-radius: 12px; background: var(--green-soft); border: 1px solid rgba(35,174,110,.3);
   padding: 12px 14px; font-size: 13px; color: var(--green); line-height: 1.6;
 }
+@keyframes fp-spin { to { transform: rotate(360deg); } }
+@keyframes fp-float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(18px, -16px); } }
+@media (prefers-reduced-motion: reduce) {
+  /* 沿用海巡經驗：緩動 ambient 齒輪保留（多數手機預設開減少動態，關了就看不到）*/
+}
 `;

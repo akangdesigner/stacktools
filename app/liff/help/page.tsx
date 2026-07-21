@@ -130,7 +130,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="fp">
       <style>{FP_CSS}</style>
-      <div className="fx" aria-hidden="true"><div className="grid" /></div>
+      <div className="fx" aria-hidden="true">
+        {/* 柔光漂浮：安靜溫和的引導氛圍（壓在毛玻璃卡後不擋字）*/}
+        <div className="aura a1" />
+        <div className="aura a2" />
+        <div className="aura a3" />
+      </div>
       <div className="wrap">{children}</div>
     </div>
   );
