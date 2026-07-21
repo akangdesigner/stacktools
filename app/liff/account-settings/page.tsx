@@ -281,10 +281,32 @@ export default function AccountSettingsLiffPage() {
             <input value={fbGroupUrl} onChange={(e) => setFbGroupUrl(e.target.value)} placeholder="例：https://facebook.com/groups/xxx" />
           </div>
           <div className="field-row">
-            <label>圖片風格 <span className="opt">選填，影響 AI 生圖的畫風</span></label>
-            <select value={imageStyle} onChange={(e) => setImageStyle(e.target.value)}>
-              {IMAGE_STYLES.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
-            </select>
+            <label>圖片風格 <span className="opt">選填，點圖選 AI 生圖畫風</span></label>
+            {/* 3×2 示意圖網格，點圖選風格；右上圓點顯示已選 */}
+            <div className="style-grid">
+              {IMAGE_STYLES.filter((s) => s.code).map((s) => (
+                <button
+                  type="button"
+                  key={s.code}
+                  className={`style-item${imageStyle === s.code ? ' on' : ''}`}
+                  onClick={() => setImageStyle(s.code)}
+                  aria-pressed={imageStyle === s.code}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.img} alt={s.label} />
+                  <span className="style-radio" aria-hidden="true" />
+                  <span className="style-name">{s.label}</span>
+                </button>
+              ))}
+            </div>
+            {/* 不指定＝不佔格子，放網格下方 */}
+            <button
+              type="button"
+              className={`style-none${!imageStyle ? ' on' : ''}`}
+              onClick={() => setImageStyle('')}
+            >
+              {!imageStyle ? '✓ ' : ''}不指定（AI 依內容判斷）
+            </button>
           </div>
         </div>
       </section>
@@ -413,6 +435,27 @@ const FP_CSS = `
 .fp .field-row input:focus, .fp .field-row textarea:focus, .fp .field-row select:focus { border-color: rgba(43,92,230,.5); box-shadow: 0 0 0 3px rgba(43,92,230,.12); background: #fff; }
 .fp .field-row input::placeholder, .fp .field-row textarea::placeholder { color: var(--ink-3); }
 .fp .field-hint { font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin: 5px 2px 0; line-height: 1.5; }
+
+/* 圖片風格：3×2 示意圖網格 + 右上圓點 radio */
+.fp .style-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fp .style-item { position: relative; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 12px; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+.fp .style-item img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 12px;
+  border: 2px solid transparent; transition: border-color .15s, transform .1s; }
+.fp .style-item.on img { border-color: var(--blue); }
+.fp .style-item:active img { transform: scale(.97); }
+/* 名稱：壓在圖片底部的半透明黑條 */
+.fp .style-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 6px 5px; font-size: 10.5px; font-weight: 700;
+  color: #fff; text-align: center; line-height: 1.2; background: linear-gradient(to top, rgba(0,0,0,.62), transparent); pointer-events: none; }
+/* 圓點 radio：右上角，選中變藍打勾 */
+.fp .style-radio { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 999px;
+  border: 2px solid #fff; background: rgba(0,0,0,.22); box-shadow: 0 1px 4px rgba(0,0,0,.3); pointer-events: none; transition: background .15s; }
+.fp .style-item.on .style-radio { background: var(--blue); }
+.fp .style-item.on .style-radio::after { content: ""; position: absolute; top: 4px; left: 6px; width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+/* 不指定：網格下方小選項 */
+.fp .style-none { margin-top: 8px; width: 100%; padding: 9px 11px; border-radius: 10px; cursor: pointer; font-family: var(--sans);
+  font-size: 12px; font-weight: 700; border: 1px solid var(--line); background: var(--field); color: var(--ink-2); transition: all .15s; }
+.fp .style-none.on { border-color: var(--blue); background: var(--blue-soft); color: var(--blue-deep); }
 
 .fp .legacy-box { margin-top: 12px; padding: 11px 12px; border-radius: 10px; background: var(--amber-soft); border: 1px solid rgba(231,154,62,.35); }
 .fp .legacy-title { font-size: 11px; font-weight: 800; color: var(--amber); margin: 0 0 7px; }
