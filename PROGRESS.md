@@ -47,6 +47,16 @@ CRON_SECRET                   cron 端點驗證
 
 ---
 
+## AI 小編-社群海巡 LIFF `/liff/social-monitor`（正式版 2026-07-21）
+
+幫客戶掃 Threads＋FB 社團近 14 天的熱門相關貼文，AI 逐篇評分關聯度並代擬建議留言。
+
+- **Threads 爬蟲**：Apify `futurizerush/meta-threads-scraper-zh-tw`（支援 `search_filter` + `start_date=14 days`，做到「14 天內最熱門」）。舊 actor 切換備份見 `docs/social-monitor-actor-rollback.md`。
+- **pick 頁**可選：關鍵字（最多 3）、怎麼挑貼文（讚/留言/關聯度）、最熱門 vs 最新。
+- **結果頁**顯示 AI 關聯度徽章（60+ 綠／30-59 藍／30 以下灰），可按關聯度/讚/留言排序。
+- **架構**：n8n 跑 5～10 分鐘超過 Node fetch 300s 上限，改 callback——App 送出即放手，n8n 跑完打 `/api/liff-social-monitor/callback` 寫回，前端輪詢。jobs 表在 `lib/socialMonitorJobs.ts`。
+- n8n workflow：`AI小編-社群海巡-LIFF`（`8rjUoLUmShnsixhj`）。
+
 ## AI 小編 `/ai-editor`（開發中）
 
 ### 已完成
