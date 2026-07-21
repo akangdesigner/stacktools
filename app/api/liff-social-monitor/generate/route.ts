@@ -61,10 +61,11 @@ async function scan(
 
 // 送出掃描任務 → 立刻回 jobId
 export async function POST(req: NextRequest) {
-  const { line_uid, selected_keywords, sort_by } = (await req.json()) as {
+  const { line_uid, selected_keywords, sort_by, freshness } = (await req.json()) as {
     line_uid?: string;
     selected_keywords?: string[];
     sort_by?: string;
+    freshness?: string;
   };
   if (!line_uid || !line_uid.trim()) {
     return NextResponse.json({ error: '缺少 line_uid' }, { status: 400 });
@@ -72,6 +73,9 @@ export async function POST(req: NextRequest) {
 
   // 海巡排序標準：likes=讚數高 / replies=留言高 / relevant=關聯度高（決定 n8n 怎麼挑貼文）
   const sortBy = ['likes', 'replies', 'relevant'].includes(String(sort_by)) ? String(sort_by) : 'likes';
+
+  // 抓取新鮮度：relevant=最相關（Threads sortByRecent=false）/ recent=最新（sortByRecent=true）
+  const freshnessMode = String(freshness) === 'recent' ? 'recent' : 'relevant';
 
   const client = getClientByLineUid(line_uid.trim());
   if (!client) {
@@ -96,6 +100,7 @@ export async function POST(req: NextRequest) {
     line_uid: client.line_uid,
     selected_keywords: picked,
     sort_by: sortBy,
+    freshness: freshnessMode,
   };
 
   prune();

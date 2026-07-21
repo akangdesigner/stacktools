@@ -39,6 +39,13 @@ const PICK_SORT_OPTIONS: { key: SortBy; label: string; desc: string }[] = [
   { key: 'relevant', label: '關聯度高', desc: '優先撈跟關鍵字最相關的' },
 ];
 
+// 抓取新鮮度（決定 Threads 爬蟲的 sortByRecent）：relevant=最相關 / recent=最新
+type Freshness = 'relevant' | 'recent';
+const FRESHNESS_OPTIONS: { key: Freshness; label: string; desc: string }[] = [
+  { key: 'relevant', label: '最相關', desc: '跟關鍵字最貼近的貼文' },
+  { key: 'recent', label: '最新', desc: '剛發出來的貼文優先' },
+];
+
 // 總共顯示則數選項
 const LIMIT_OPTIONS: { value: number; label: string }[] = [
   { value: 5, label: '5 則' },
@@ -66,6 +73,7 @@ export default function SocialMonitorLiffPage() {
   const [keywords, setKeywords] = useState<string[]>([]); // 客戶產業關鍵字（可選項）
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]); // 用戶複選（最多 3）
   const [scanSort, setScanSort] = useState<SortBy>('likes'); // 海巡前選的排序標準，傳給 n8n 決定怎麼挑貼文
+  const [freshness, setFreshness] = useState<Freshness>('relevant'); // 抓取新鮮度，傳給 n8n 決定 Threads 爬最相關還是最新
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortBy>('relevant'); // 排序標準：最相關/最多讚/最多留言
   const [limit, setLimit] = useState<number>(20); // 顯示則數上限，0=全部（預設放大，才看得到多關鍵字撈到的量）
@@ -144,7 +152,12 @@ export default function SocialMonitorLiffPage() {
       const startRes = await fetch('/api/liff-social-monitor/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: lineUid, selected_keywords: selectedKeywords, sort_by: scanSort }),
+        body: JSON.stringify({
+          line_uid: lineUid,
+          selected_keywords: selectedKeywords,
+          sort_by: scanSort,
+          freshness,
+        }),
       });
       const startData = await startRes.json().catch(() => ({}));
       if (!startRes.ok || !startData.jobId) {
@@ -265,7 +278,28 @@ export default function SocialMonitorLiffPage() {
                   </button>
                 ))}
               </div>
-              <p className="kw-empty" style={{ marginTop: 10 }}>會自動過濾掉 7 天前的舊貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。選越多關鍵字，撈到的貼文越多。</p>
+              <div className="kw-hint" style={{ marginTop: 16 }}>抓最相關還是最新</div>
+              <div className="sort-wrap">
+                {FRESHNESS_OPTIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    className={`sort-opt${freshness === o.key ? ' on' : ''}`}
+                    onClick={() => setFreshness(o.key)}
+                  >
+                    <span className="so-label">{o.label}</span>
+                    <span className="so-desc">{o.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              <p className="kw-empty" style={{ marginTop: 10 }}>
+                會自動過濾掉 7 天前的舊貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。選越多關鍵字，撈到的貼文越多。
+              </p>
+              {freshness === 'recent' && (
+                <p className="kw-empty" style={{ marginTop: 6 }}>
+                  ⚠️ 選「最新」會撈剛發出來的貼文，互動數通常還很低，可能出現一堆 0 讚 0 留言的結果。
+                </p>
+              )}
             </div>
           </section>
 
