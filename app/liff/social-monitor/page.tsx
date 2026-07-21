@@ -40,11 +40,12 @@ const PICK_SORT_OPTIONS: { key: SortBy; label: string; desc: string }[] = [
   { key: 'relevant', label: '關聯度高', desc: '優先撈跟關鍵字最相關的' },
 ];
 
-// 抓取新鮮度（決定 Threads 爬蟲的 sortByRecent）：relevant=最相關 / recent=最新
+// 抓取模式（決定 Threads 爬蟲的 search_filter）：relevant→top 熱門 / recent→recent 最新。
+// 兩種都已由 actor 限定 14 天內，所以「熱門」不會再撈到 2025 年的爆文。
 type Freshness = 'relevant' | 'recent';
 const FRESHNESS_OPTIONS: { key: Freshness; label: string; desc: string }[] = [
-  { key: 'relevant', label: '最相關', desc: '跟關鍵字最貼近的貼文' },
-  { key: 'recent', label: '最新', desc: '剛發出來的貼文優先' },
+  { key: 'relevant', label: '最熱門', desc: '14 天內互動最高的' },
+  { key: 'recent', label: '最新', desc: '剛發出來的優先' },
 ];
 
 // 總共顯示則數選項
@@ -280,7 +281,7 @@ export default function SocialMonitorLiffPage() {
                   </button>
                 ))}
               </div>
-              <div className="kw-hint" style={{ marginTop: 16 }}>抓最相關還是最新</div>
+              <div className="kw-hint" style={{ marginTop: 16 }}>抓最熱門還是最新</div>
               <div className="sort-wrap">
                 {FRESHNESS_OPTIONS.map((o) => (
                   <button
@@ -295,7 +296,7 @@ export default function SocialMonitorLiffPage() {
               </div>
 
               <p className="kw-empty" style={{ marginTop: 10 }}>
-                會自動過濾掉 7 天前的舊貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。選越多關鍵字，撈到的貼文越多。
+                只會撈 14 天內的貼文；選「讚數高／留言高」時也會濾掉沒互動的貼文。選越多關鍵字，撈到的貼文越多。
               </p>
               {freshness === 'recent' && (
                 <p className="kw-empty" style={{ marginTop: 6 }}>
