@@ -817,7 +817,8 @@ const FP_CSS = `
 @keyframes fp-spin { to { transform: rotate(360deg); } }
 @keyframes fp-flow { from { left: 106%; } to { left: -8%; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .fx .pip, .fp .fx .cap, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
+  /* 資料流 pip/cap 是品牌輕背景動畫、且靠 left 動畫定位（關了會 left:auto 堆左邊消失），比照社群海巡保留不關 */
+  .fp .fx .sheen, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
   .fp .fx .sheen { display: none; }
 }
 `;
