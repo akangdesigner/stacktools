@@ -56,9 +56,12 @@ const LIMIT_OPTIONS: { value: number; label: string }[] = [
 ];
 
 const PROGRESS_CAP = 95;
-// 進度條依「選了幾個關鍵字」對準實際掃描時間：爬蟲＋AI逐筆評分都跟關鍵字數成正比。
-// 實測 2 關鍵字約 3 分鐘完成；tau=關鍵字數×60s → 約在 關鍵字數×180s 時爬到 90%，貼近真實。
-const TAU_PER_KEYWORD_MS = 60_000;
+// 進度條節奏：換成 futurizerush actor（14 天內熱門）後，撈回的資料量大增，
+// AI 要逐筆評分＋生留言，實測單關鍵字約 10 分鐘完成（爬蟲 ~4.5 分＋AI ~5 分）。
+// 指數曲線約在 2.2×tau 爬到 85%，所以 tau≈基底 150s＋每關鍵字 120s，讓 600s 時落在 85% 上下，
+// 不會像舊公式（tau=關鍵字×60s）3 分鐘就衝到 90% 然後乾等 7 分鐘。
+const TAU_BASE_MS = 150_000;
+const TAU_PER_KEYWORD_MS = 120_000;
 
 function formatCount(n: number): string {
   if (!n || n <= 0) return '0';
@@ -89,7 +92,7 @@ export default function SocialMonitorLiffPage() {
     if (phase !== 'loading') return;
     // 選越多關鍵字掃越久 → tau 隨關鍵字數放大，進度條節奏才對得準
     const kw = Math.min(3, Math.max(1, selectedKeywords.length));
-    const tau = kw * TAU_PER_KEYWORD_MS;
+    const tau = TAU_BASE_MS + kw * TAU_PER_KEYWORD_MS;
     const id = setInterval(() => {
       const start = runStartRef.current || Date.now();
       const elapsed = Date.now() - start;
@@ -332,10 +335,16 @@ export default function SocialMonitorLiffPage() {
               <div className="prog-fill" style={{ width: `${progress}%` }} />
             </div>
             <div className="prog-meta">
-              <span className="st">AI 掃描 Threads＋FB 社團＋評分中…</span>
+              <span className="st">
+                {progress < 45
+                  ? '爬取 Threads＋FB 社團貼文中…'
+                  : progress < 80
+                    ? 'AI 逐篇評分關聯度中…'
+                    : 'AI 撰寫建議留言中…'}
+              </span>
               <span className="pc">{Math.round(progress)}%</span>
             </div>
-            <p className="waited">請耐心等，別關閉頁面</p>
+            <p className="waited">深度掃描約需 5～10 分鐘，可以先放著，別關閉頁面</p>
           </div>
         </section>
       )}
