@@ -554,25 +554,11 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
         <div className="grid" />
-        <svg viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice" fill="none">
-          <g stroke="rgba(43,92,230,.16)" strokeWidth="1">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          <g fill="rgba(43,92,230,.5)">
-            <circle cx="120" cy="120" r="3" />
-            <circle cx="240" cy="90" r="3" />
-            <circle cx="300" cy="200" r="3" />
-            <circle cx="100" cy="520" r="3" />
-            <circle cx="280" cy="700" r="3" />
-          </g>
-          <g fill="rgba(35,174,110,.45)">
-            <circle cx="150" cy="90" r="3" />
-            <circle cx="130" cy="640" r="3" />
-          </g>
-        </svg>
+        {/* 新聞跑馬燈條：等寬資訊塊由右往左流動，像即時新聞 ticker（壓在毛玻璃卡後不擋字）*/}
+        <div className="ticker tk1" />
+        <div className="ticker tk2" />
+        <div className="ticker tk3" />
+        <div className="ticker tk4" />
         <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
         <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
         <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
@@ -629,7 +615,19 @@ const FP_CSS = `
   -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
           mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
 }
-.fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 新聞跑馬燈條：等寬資訊塊橫向流動；各條週期都 120px 故無縫循環，塊寬/速度/方向不同做出層次 */
+.fp .fx .ticker {
+  position: absolute; left: -50%; width: 200%; border-radius: 2px;
+  will-change: transform; animation: fp-ticker linear infinite;
+}
+.fp .fx .tk1 { top: 15%; height: 8px; animation-duration: 26s;
+  background: repeating-linear-gradient(90deg, rgba(43,92,230,.16) 0 34px, transparent 34px 120px); }
+.fp .fx .tk2 { top: 33%; height: 6px; animation-duration: 34s; animation-direction: reverse;
+  background: repeating-linear-gradient(90deg, rgba(35,174,110,.14) 0 22px, transparent 22px 120px); }
+.fp .fx .tk3 { top: 62%; height: 9px; animation-duration: 22s;
+  background: repeating-linear-gradient(90deg, rgba(43,92,230,.13) 0 48px, transparent 48px 120px); }
+.fp .fx .tk4 { top: 80%; height: 6px; animation-duration: 30s; animation-direction: reverse;
+  background: repeating-linear-gradient(90deg, rgba(43,92,230,.11) 0 28px, transparent 28px 120px); }
 .fp .fx .sheen {
   position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
@@ -791,8 +789,9 @@ const FP_CSS = `
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(43,92,230,.4); } 50% { box-shadow: 0 0 0 6px rgba(43,92,230,0); } }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
+@keyframes fp-ticker { to { transform: translateX(-120px); } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
+  .fp .fx .sheen, .fp .fx .ticker, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
   .fp .fx .sheen { display: none; }
 }
 `;
