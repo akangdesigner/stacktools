@@ -575,41 +575,37 @@ export default function FestivalLiffPage() {
 }
 
 // ── 外殼：品牌色背景＋電路特效層＋置中容器；樣式 scoped 在 .fp ──
+// 節慶主題背景：飄落彩帶（品牌藍/綠＋金黃點綴）。固定一組值，避免 SSR/CSR hydration 不一致。
+const CONFETTI = [
+  { l: '5%',  c: 'rgba(43,92,230,.55)',  w: 6, h: 13, d: '0s',    t: '7.6s' },
+  { l: '13%', c: 'rgba(240,182,42,.60)', w: 7, h: 11, d: '-2.2s', t: '8.5s' },
+  { l: '21%', c: 'rgba(35,174,110,.50)', w: 5, h: 14, d: '-4.1s', t: '7.1s' },
+  { l: '30%', c: 'rgba(43,92,230,.50)',  w: 8, h: 12, d: '-1.3s', t: '9.2s' },
+  { l: '39%', c: 'rgba(240,182,42,.50)', w: 6, h: 15, d: '-5.4s', t: '8.0s' },
+  { l: '47%', c: 'rgba(35,174,110,.55)', w: 7, h: 10, d: '-3.0s', t: '7.8s' },
+  { l: '55%', c: 'rgba(43,92,230,.55)',  w: 5, h: 13, d: '-6.2s', t: '8.9s' },
+  { l: '63%', c: 'rgba(240,182,42,.55)', w: 8, h: 12, d: '-0.7s', t: '7.3s' },
+  { l: '71%', c: 'rgba(35,174,110,.50)', w: 6, h: 14, d: '-4.8s', t: '9.0s' },
+  { l: '79%', c: 'rgba(43,92,230,.50)',  w: 7, h: 11, d: '-2.6s', t: '8.2s' },
+  { l: '86%', c: 'rgba(240,182,42,.60)', w: 5, h: 13, d: '-5.9s', t: '7.7s' },
+  { l: '93%', c: 'rgba(35,174,110,.55)', w: 7, h: 12, d: '-1.9s', t: '8.6s' },
+];
+
 function Shell({ children, center = false }: { children: React.ReactNode; center?: boolean }) {
   return (
     <div className="fp">
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
-        <div className="grid" />
-        <svg viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice" fill="none">
-          <g stroke="rgba(43,92,230,.16)" strokeWidth="1">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          {/* 流光層：沿電路線跑的亮光段，做出科技流動線條光感 */}
-          <g className="flow" fill="none">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          <g fill="rgba(43,92,230,.5)">
-            <circle cx="120" cy="120" r="3" />
-            <circle cx="240" cy="90" r="3" />
-            <circle cx="300" cy="200" r="3" />
-            <circle cx="100" cy="520" r="3" />
-            <circle cx="280" cy="700" r="3" />
-          </g>
-          <g fill="rgba(35,174,110,.45)">
-            <circle cx="150" cy="90" r="3" />
-            <circle cx="130" cy="640" r="3" />
-          </g>
-        </svg>
-        <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
-        <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
-        <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
+        {/* 漂浮微光暈＋飄落彩帶（呼應「節慶」主題，壓在毛玻璃卡後不擋字）*/}
+        <div className="glow g1" />
+        <div className="glow g2" />
+        {CONFETTI.map((c, i) => (
+          <span
+            key={i}
+            className="confetti"
+            style={{ left: c.l, width: c.w, height: c.h, background: c.c, animationDelay: c.d, animationDuration: c.t }}
+          />
+        ))}
         <div className="sheen" />
       </div>
       <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
@@ -655,32 +651,22 @@ const FP_CSS = `
 }
 .fp * { box-sizing: border-box; }
 
-.fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.fp .fx .grid {
-  position: absolute; inset: 0;
-  background-image: radial-gradient(rgba(43,92,230,.12) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
-          mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
-}
-.fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* 沿電路線流動的亮光段（stroke-dashoffset 讓一小段光跑完整條線循環）*/
-.fp .fx svg .flow path {
-  stroke: var(--blue); stroke-width: 1.6; stroke-linecap: round;
-  stroke-dasharray: 7 240; stroke-dashoffset: 0;
-  filter: drop-shadow(0 0 4px var(--glow));
-  animation: fp-flow 4s linear infinite;
-}
-.fp .fx svg .flow path:nth-child(2) { stroke: var(--green); animation-delay: -1.3s; animation-duration: 4.6s; }
-.fp .fx svg .flow path:nth-child(3) { animation-delay: -2.4s; animation-duration: 5.2s; }
-.fp .fx svg .flow path:nth-child(4) { stroke: var(--green); animation-delay: -0.7s; animation-duration: 4.3s; }
+/* fixed：鎖住視窗，背景動畫捲動時維持定位（沿用海巡做法）*/
+.fp .fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* 漂浮微光暈：柔和呼吸，襯出節慶暖度 */
+.fp .fx .glow { position: absolute; border-radius: 50%; filter: blur(46px); opacity: .5; }
+.fp .fx .glow.g1 { width: 260px; height: 260px; top: 8%; left: -60px;
+  background: radial-gradient(circle, rgba(43,92,230,.5), transparent 70%); animation: fp-float 11s ease-in-out infinite; }
+.fp .fx .glow.g2 { width: 220px; height: 220px; bottom: 6%; right: -50px;
+  background: radial-gradient(circle, rgba(35,174,110,.42), transparent 70%); animation: fp-float 13s ease-in-out infinite reverse; }
+/* 飄落彩帶：從畫面上方落下＋旋轉＋左右微擺 */
+.fp .fx .confetti { position: absolute; top: -6%; border-radius: 2px; opacity: 0;
+  animation-name: fp-fall; animation-timing-function: linear; animation-iteration-count: infinite; }
 .fp .fx .sheen {
   position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
   transform: skewX(-14deg); animation: fp-sheen 10s ease-in-out infinite;
 }
-.fp .cube { position: absolute; border-radius: 4px; transform: rotate(45deg);
-  background: linear-gradient(135deg, rgba(43,92,230,.28), rgba(43,92,230,.10)); }
 
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
@@ -839,11 +825,19 @@ const FP_CSS = `
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(43,92,230,.4); } 50% { box-shadow: 0 0 0 6px rgba(43,92,230,0); } }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
-@keyframes fp-flow { to { stroke-dashoffset: -247; } }
 @keyframes fp-dots { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
+@keyframes fp-float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(20px, -18px); } }
+@keyframes fp-fall {
+  0%   { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { transform: translateY(50vh) translateX(16px) rotate(180deg); }
+  90%  { opacity: 1; }
+  100% { transform: translateY(114vh) translateX(-6px) rotate(340deg); opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin,
-  .fp .fx svg .flow path, .fp .prog-meta .st .dots i { animation: none; }
-  .fp .fx .sheen, .fp .fx svg .flow path { display: none; }
+  /* 沿用海巡經驗：不要在減少動態時關掉彩帶/微光，否則多數手機（預設開減少動態）會看不到動畫；只收會掃過字的 sheen */
+  .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin,
+  .fp .prog-meta .st .dots i, .fp .fx .sheen { animation: none; }
+  .fp .fx .sheen { display: none; }
 }
 `;
