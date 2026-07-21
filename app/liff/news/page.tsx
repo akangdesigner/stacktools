@@ -554,11 +554,22 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
         <div className="grid" />
-        {/* 新聞跑馬燈條：等寬資訊塊由右往左流動，像即時新聞 ticker（壓在毛玻璃卡後不擋字）*/}
-        <div className="ticker tk1" />
-        <div className="ticker tk2" />
-        <div className="ticker tk3" />
-        <div className="ticker tk4" />
+        {/* 熱點資料流：離散發光點沿水平軌道由右往左流過，大小不一＝肉眼可鎖定單一顆＝看得出在動 */}
+        {NEWS_PIPS.map(([top, size, kind, dur, delay], i) => (
+          <span
+            key={`p${i}`}
+            className={`pip ${kind}`}
+            style={{ top: `${top}%`, width: size, height: size, marginTop: -size / 2, animationDuration: `${dur}s`, animationDelay: `-${delay}s` }}
+          />
+        ))}
+        {/* 標題膠囊剪影：較大、更慢，做景深層次（capsule = 淡淡的新聞條剪影）*/}
+        {NEWS_CAPS.map(([top, w, dur, delay], i) => (
+          <span
+            key={`c${i}`}
+            className="cap"
+            style={{ top: `${top}%`, width: w, animationDuration: `${dur}s`, animationDelay: `-${delay}s` }}
+          />
+        ))}
         <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
         <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
         <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
@@ -568,6 +579,20 @@ function Shell({ children, center = false }: { children: React.ReactNode; center
     </div>
   );
 }
+
+// 熱點資料流設定 — 資料點：[top%, 直徑px, 顏色(b藍/g綠), 速度s, 起始延遲s]
+// 同軌不同延遲讓點連續流過；大小不一＝可追蹤＝看得出在動（負延遲＝一進場就是流動中的狀態）
+const NEWS_PIPS: [number, number, 'b' | 'g', number, number][] = [
+  [12, 6, 'b', 9, 0], [12, 4, 'b', 11, 3.5], [12, 3, 'g', 10, 6.5],
+  [27, 5, 'b', 10, 1.5], [27, 3, 'b', 8, 5], [27, 6, 'g', 12, 8],
+  [44, 4, 'g', 9, 0.5], [44, 7, 'b', 11, 4], [44, 3, 'b', 10, 7.5],
+  [63, 6, 'b', 12, 2], [63, 4, 'b', 9, 6], [63, 3, 'g', 10, 9],
+  [82, 5, 'g', 10, 1], [82, 3, 'b', 11, 4.5], [82, 6, 'b', 9, 7],
+];
+// 膠囊剪影：[top%, 寬px, 速度s, 延遲s]
+const NEWS_CAPS: [number, number, number, number][] = [
+  [20, 90, 20, 0], [52, 70, 24, 7], [74, 110, 18, 11],
+];
 
 // 兩步驟指示珠子
 function Step({ label, done, now }: { label: string; done: boolean; now: boolean }) {
@@ -615,19 +640,20 @@ const FP_CSS = `
   -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
           mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
 }
-/* 新聞跑馬燈條：等寬資訊塊橫向流動；各條週期都 120px 故無縫循環，塊寬/速度/方向不同做出層次 */
-.fp .fx .ticker {
-  position: absolute; left: -50%; width: 200%; border-radius: 2px;
-  will-change: transform; animation: fp-ticker linear infinite;
+/* 熱點資料流：離散發光點沿水平軌道由右往左流過；用 left(%) 位移＝相對整個特效層寬，滿版視窗也能跑完全程 */
+.fp .fx .pip {
+  position: absolute; border-radius: 999px;
+  animation: fp-flow linear infinite; will-change: left;
 }
-.fp .fx .tk1 { top: 15%; height: 8px; animation-duration: 26s;
-  background: repeating-linear-gradient(90deg, rgba(43,92,230,.16) 0 34px, transparent 34px 120px); }
-.fp .fx .tk2 { top: 33%; height: 6px; animation-duration: 34s; animation-direction: reverse;
-  background: repeating-linear-gradient(90deg, rgba(35,174,110,.14) 0 22px, transparent 22px 120px); }
-.fp .fx .tk3 { top: 62%; height: 9px; animation-duration: 22s;
-  background: repeating-linear-gradient(90deg, rgba(43,92,230,.13) 0 48px, transparent 48px 120px); }
-.fp .fx .tk4 { top: 80%; height: 6px; animation-duration: 30s; animation-direction: reverse;
-  background: repeating-linear-gradient(90deg, rgba(43,92,230,.11) 0 28px, transparent 28px 120px); }
+.fp .fx .pip.b { background: radial-gradient(circle, rgba(43,92,230,.9) 0%, rgba(43,92,230,.15) 70%, transparent 72%);
+  box-shadow: 0 0 10px 1px rgba(43,92,230,.45); }
+.fp .fx .pip.g { background: radial-gradient(circle, rgba(35,174,110,.85) 0%, rgba(35,174,110,.14) 70%, transparent 72%);
+  box-shadow: 0 0 10px 1px rgba(35,174,110,.4); }
+.fp .fx .cap {
+  position: absolute; transform: translateY(-50%); height: 9px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(43,92,230,.02), rgba(43,92,230,.14), rgba(43,92,230,.02));
+  animation: fp-flow linear infinite; will-change: left;
+}
 .fp .fx .sheen {
   position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
@@ -789,9 +815,9 @@ const FP_CSS = `
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(43,92,230,.4); } 50% { box-shadow: 0 0 0 6px rgba(43,92,230,0); } }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
-@keyframes fp-ticker { to { transform: translateX(-120px); } }
+@keyframes fp-flow { from { left: 106%; } to { left: -8%; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .fx .ticker, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
+  .fp .fx .sheen, .fp .fx .pip, .fp .fx .cap, .fp .tab .dot, .fp .step.now .bead, .fp .pv-text-loading .spin { animation: none; }
   .fp .fx .sheen { display: none; }
 }
 `;
