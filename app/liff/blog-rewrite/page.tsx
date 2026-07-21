@@ -3,23 +3,32 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Liff } from '@line/liff';
 
-// 部落格文章改寫 LIFF：一開頁就自動「抓最新文章→AI 依品牌人設改寫」，過程顯示進度條。
-// 只有一個生成階段（不像節慶要生文+生圖兩步驟）；圖片沿用原文章的 OG 圖，唯讀不可改。
+// 部落格文章改寫 LIFF：進場先「讀取文章清單」→ 預覽要改寫的原文（預設最新一篇，可換舊文）→
+// 小編確認後才「AI 依品牌人設改寫」，過程顯示進度條。圖片沿用原文章的 OG 圖，唯讀不可改。
 // 視覺套 STACK AI 品牌色，與節慶頁一致（樣式 scoped 在 .fp 底下，見 FP_CSS）。
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID_BLOGREWRITE || '';
 
-type Phase = 'init' | 'rewriting' | 'ready' | 'done' | 'error';
+type Phase = 'init' | 'preview' | 'picklist' | 'rewriting' | 'ready' | 'done' | 'error';
 
 // 進度條：改寫比生圖快很多（抓文章+AI 改寫，約 10~30 秒），TAU 抓短一點。
 const PROGRESS_CAP = 95;
 const PROGRESS_TAU_MS = 12_000;
+
+type Article = { id: number; title: string; url: string };
+type Preview = { title: string; imageUrl: string; summary: string };
 
 export default function BlogRewriteLiffPage() {
   const [phase, setPhase] = useState<Phase>('init');
   const [progress, setProgress] = useState(0);
   const [uid, setUid] = useState('');
   const [customerName, setCustomerName] = useState('');
+
+  // 文章清單、選定要改的那篇、原文預覽
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [selected, setSelected] = useState<Article | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -42,12 +51,14 @@ export default function BlogRewriteLiffPage() {
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   // ── 內文框自動撐高：完整顯示全文，不要內部滑動 ──
+  // 依賴要含 phase：content 在改寫階段就設好，但 textarea 要到 phase='ready' 才 render，
+  // 若只依賴 content，撐高會在 textarea 還沒 mount 時就跑掉、之後不再觸發 → 框卡在一行高、文字被截。
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
-  }, [content]);
+  }, [content, phase]);
 
   // ── 進度條：依「經過時間」漸近爬向 95%（單調遞增，不倒退）──
   useEffect(() => {
@@ -61,7 +72,7 @@ export default function BlogRewriteLiffPage() {
     return () => clearInterval(id);
   }, [phase]);
 
-  // ── 啟動：liff init → 取 uid → 自動跑改寫 ─────────────
+  // ── 啟動：liff init → 取 uid → 讀文章清單（不再一進來就改寫）─────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -82,7 +93,7 @@ export default function BlogRewriteLiffPage() {
         }
         if (cancelled) return;
         setUid(resolvedUid);
-        await runAll(resolvedUid);
+        await loadArticles(resolvedUid);
       } catch (e) {
         if (!cancelled) {
           setError(`初始化失敗：${msg(e)}`);
@@ -95,30 +106,91 @@ export default function BlogRewriteLiffPage() {
     };
   }, []);
 
-  // ── 抓最新文章 → AI 改寫 ──────────────────────────────
-  async function runAll(lineUid: string) {
+  // ── 讀客戶的文章清單 → 預設預覽最新一篇 ──────────────────────
+  async function loadArticles(lineUid: string) {
+    setError('');
+    setPhase('init');
+    try {
+      const res = await fetch('/api/liff-blogrewrite/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_uid: lineUid }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setCustomerName(data.customerName || '');
+      const list: Article[] = data.articles || [];
+      setArticles(list);
+      if (!list.length) {
+        setError('找不到可改寫的文章，請先到「網站技術健檢／GSC」設定文章清單');
+        setPhase('error');
+        return;
+      }
+      // 預設最新一篇（清單已依 id 新到舊排序）→ 預覽原文
+      await openPreview(list[0]);
+    } catch (e) {
+      setError(`讀取文章失敗：${msg(e)}`);
+      setPhase('error');
+    }
+  }
+
+  // ── 抓某篇原文預覽（標題＋圖＋摘要），切到預覽畫面 ──────────────
+  async function openPreview(article: Article) {
+    setSelected(article);
+    setPreview(null);
+    setPreviewLoading(true);
+    setPhase('preview');
+    try {
+      const res = await fetch('/api/liff-blogrewrite/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: article.url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setPreview({
+        title: data.title || article.title,
+        imageUrl: data.imageUrl || '',
+        summary: data.summary || '',
+      });
+    } catch {
+      // 預覽失敗不致命：至少讓小編用清單標題直接改寫
+      setPreview({ title: article.title, imageUrl: '', summary: '（原文預覽載入失敗，仍可直接開始改寫）' });
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // ── 開始改寫選定的那篇 → AI 依品牌人設改寫 ─────────────────────
+  async function runRewrite() {
+    if (!selected) return;
     setError('');
     setProgress(0);
     runStartRef.current = Date.now();
     setPhase('rewriting');
 
-    const res = await fetch('/api/liff-blogrewrite/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ line_uid: lineUid }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(`改寫失敗：${data.error || `HTTP ${res.status}`}`);
+    try {
+      const res = await fetch('/api/liff-blogrewrite/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_uid: uid, article_url: selected.url }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(`改寫失敗：${data.error || `HTTP ${res.status}`}`);
+        setPhase('error');
+        return;
+      }
+      setContent(data.content || '');
+      setImageUrl(data.imageUrl || '');
+      setSourceTitle(data.sourceTitle || selected.title || '');
+      setCustomerName(data.customerName || customerName);
+      setProgress(100);
+      setPhase('ready');
+    } catch (e) {
+      setError(`改寫連線失敗：${msg(e)}`);
       setPhase('error');
-      return;
     }
-    setContent(data.content || '');
-    setImageUrl(data.imageUrl || '');
-    setSourceTitle(data.sourceTitle || '');
-    setCustomerName(data.customerName || '');
-    setProgress(100);
-    setPhase('ready');
   }
 
   // ── AI 改文案：依指示改寫現有內文 ──
@@ -200,7 +272,7 @@ export default function BlogRewriteLiffPage() {
     );
   }
 
-  // ── 生成中畫面（進度條）────────────────────────────────────
+  // ── 讀取中／改寫中畫面（進度條）────────────────────────────────
   if (phase === 'init' || phase === 'rewriting') {
     return (
       <Shell center>
@@ -211,7 +283,11 @@ export default function BlogRewriteLiffPage() {
               {phase === 'init' ? 'Loading' : 'Rewriting'}
             </div>
             <h2 className="loading-h">
-              {phase === 'init' ? '讀取中…' : customerName ? `正在幫 ${customerName} 改寫文章` : '正在改寫你的文章'}
+              {phase === 'init'
+                ? '讀取你的文章中…'
+                : customerName
+                  ? `正在幫 ${customerName} 改寫文章`
+                  : '正在改寫你的文章'}
             </h2>
 
             <div className="prog-track">
@@ -219,13 +295,104 @@ export default function BlogRewriteLiffPage() {
             </div>
             <div className="prog-meta">
               <span className="st">
-                抓最新文章＋AI 依品牌人設改寫中
+                {phase === 'init' ? '讀取文章清單中' : 'AI 依品牌人設改寫中'}
                 <span className="dots"><i>.</i><i>.</i><i>.</i></span>
               </span>
               <span className="pc">{Math.round(progress)}%</span>
             </div>
           </div>
         </section>
+      </Shell>
+    );
+  }
+
+  // ── 選文章清單畫面（換一篇）──────────────────────────────────
+  if (phase === 'picklist') {
+    return (
+      <Shell>
+        <header className="head">
+          <div className="mark">📝</div>
+          <div className="eyebrow">Blog Rewrite Studio</div>
+          <h1 className="title">選一篇文章</h1>
+          <p className="sub">挑一篇要改寫的部落格文章（最新在上）</p>
+        </header>
+
+        {error && <div className="err">{error}</div>}
+
+        <section className="card">
+          <div className="card-pad">
+            <div className="art-list">
+              {articles.map((a) => (
+                <button
+                  key={a.id}
+                  className={`art-item${selected?.url === a.url ? ' on' : ''}`}
+                  onClick={() => openPreview(a)}
+                >
+                  <span className="art-title">{a.title}</span>
+                  <span className="art-go">›</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      </Shell>
+    );
+  }
+
+  // ── 預覽原文畫面（確認後才改寫）──────────────────────────────
+  if (phase === 'preview') {
+    return (
+      <Shell>
+        <header className="head">
+          <div className="mark">📝</div>
+          <div className="eyebrow">Blog Rewrite Studio</div>
+          <h1 className="title">部落格文章改寫</h1>
+          <p className="sub">先確認要改寫的原文，沒問題再開始</p>
+          {customerName && (
+            <div className="tab">
+              <span className="dot" />
+              <span className="zh">{customerName}</span>
+              <span className="en">Blog</span>
+            </div>
+          )}
+        </header>
+
+        {error && <div className="err">{error}</div>}
+
+        <section className="card">
+          <div className="card-pad">
+            <div className="card-eyebrow">
+              <span className="lbl">Source · 原文預覽</span>
+              {articles.length > 1 && (
+                <button className="relink" onClick={() => setPhase('picklist')}>
+                  ⇄ 換一篇
+                </button>
+              )}
+            </div>
+
+            {previewLoading ? (
+              <div className="pv-loading-inline">
+                <span className="spin" />
+                讀取原文中…
+              </div>
+            ) : (
+              <>
+                <h2 className="src-title">{preview?.title || selected?.title}</h2>
+                {preview?.imageUrl && (
+                  <div className="imgwrap">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img className="genimg" src={preview.imageUrl} alt="原文配圖" />
+                  </div>
+                )}
+                {preview?.summary && <p className="src-summary">{preview.summary}</p>}
+              </>
+            )}
+          </div>
+        </section>
+
+        <button className="confirm" onClick={runRewrite} disabled={previewLoading}>
+          開始改寫這篇
+        </button>
       </Shell>
     );
   }
@@ -237,7 +404,7 @@ export default function BlogRewriteLiffPage() {
         <div className="mark">📝</div>
         <div className="eyebrow">Blog Rewrite Studio</div>
         <h1 className="title">部落格文章改寫</h1>
-        <p className="sub">把最新文章改寫成一則社群貼文</p>
+        <p className="sub">把文章改寫成一則社群貼文</p>
         {customerName && (
           <div className="tab">
             <span className="dot" />
@@ -249,10 +416,14 @@ export default function BlogRewriteLiffPage() {
 
       {error && <div className="err">{error}</div>}
 
-      {/* 錯誤時給重試 */}
+      {/* 錯誤時給重試：還沒選到文章就重讀清單，選過了就重改同一篇 */}
       {phase === 'error' && (
-        <button className="confirm" style={{ marginBottom: 16 }} onClick={() => uid && runAll(uid)}>
-          ↻ 重新改寫
+        <button
+          className="confirm"
+          style={{ marginBottom: 16 }}
+          onClick={() => (selected ? runRewrite() : uid && loadArticles(uid))}
+        >
+          ↻ 重新載入
         </button>
       )}
 
@@ -263,7 +434,7 @@ export default function BlogRewriteLiffPage() {
             <div className="card-pad">
               <div className="card-eyebrow">
                 <span className="lbl">Preview · 貼文預覽</span>
-                <button className="relink" onClick={() => uid && runAll(uid)}>
+                <button className="relink" onClick={runRewrite}>
                   ↻ 重新改寫
                 </button>
               </div>
@@ -476,6 +647,28 @@ const FP_CSS = `
 .fp .relink { border: 0; background: transparent; cursor: pointer; font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; color: var(--blue); display: inline-flex; align-items: center; gap: 4px; }
 
 .fp .source-hint { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin: 0 0 10px; letter-spacing: .02em; }
+
+/* 原文預覽（preview 階段）*/
+.fp .src-title { font-size: 16px; font-weight: 900; line-height: 1.5; color: var(--ink); margin: 0 0 12px; }
+.fp .src-summary { font-size: 12.5px; line-height: 1.85; color: var(--ink-2); margin: 12px 0 0; white-space: pre-wrap; }
+.fp .pv-loading-inline { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 26px 0;
+  font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--blue-deep); letter-spacing: .04em; }
+.fp .pv-loading-inline .spin {
+  width: 14px; height: 14px; border-radius: 999px; border: 2px solid var(--line-2); border-top-color: var(--blue);
+  animation: fp-spin .8s linear infinite;
+}
+
+/* 文章清單（picklist 階段）*/
+.fp .art-list { display: flex; flex-direction: column; gap: 8px; }
+.fp .art-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left;
+  border: 1px solid var(--line); background: var(--field); border-radius: 12px; padding: 13px 14px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.fp .art-item:active { transform: scale(.99); }
+.fp .art-item.on { border-color: rgba(43,92,230,.5); background: var(--blue-soft); }
+.fp .art-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.5; color: var(--ink); }
+.fp .art-go { flex-shrink: 0; font-size: 18px; font-weight: 700; color: var(--blue); }
 
 .fp .pv-text { position: relative; }
 .fp .pv-title-input {
