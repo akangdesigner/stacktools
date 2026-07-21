@@ -1,61 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getClientByLineUid } from '@/lib/aiEditorDb';
+import { createJob, getJob, deleteJob, pruneJobs, failJob } from '@/lib/socialMonitorJobs';
 
-// 社群海巡留言：n8n 掃 Threads＋FB＋逐篇評分＋生留言，實測要 4~5 分鐘，遠超 Cloudflare 對
-// 前端連線的 100 秒上限。改「送出→背景跑→前端輪詢」：POST 立刻回 jobId、背景打 n8n；
-// GET ?jobId 查進度。每個請求都很快、不會被 Cloudflare 切斷。
+// 社群海巡留言：n8n 掃 Threads＋FB＋逐篇評分＋生留言，實測要 5~10 分鐘。
+// App 這端不等 n8n 跑完（Node fetch 內建 300 秒 headers timeout，硬等會 TypeError）：
+// POST 立刻回 jobId 並把任務丟給 n8n；n8n 跑完打 /api/liff-social-monitor/callback 寫回；
+// GET ?jobId 查進度。每個請求都很快、不會被切斷。
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
 
 const N8N_WEBHOOK =
   process.env.N8N_SOCIAL_MONITOR_WEBHOOK ||
   'https://stack.zeabur.app/webhook/social-monitor-liff';
 
-type Job = {
-  status: 'pending' | 'done' | 'error';
-  items?: unknown[];
-  customerName?: string;
-  error?: string;
-  ts: number;
-};
+// n8n 跑完要打回來的位址（Zeabur 正式網域）
+const CALLBACK_URL =
+  process.env.SOCIAL_MONITOR_CALLBACK_URL ||
+  'https://tool.dg166.com/api/liff-social-monitor/callback';
 
-// 模組層 job 表；Zeabur 常駐 Node process 跨請求存活（process 重啟會清空，可接受）
-const g = globalThis as unknown as { __socialMonitorJobs?: Map<string, Job> };
-const jobs: Map<string, Job> = (g.__socialMonitorJobs ??= new Map());
-
-function prune() {
-  const now = Date.now();
-  for (const [k, v] of jobs) if (now - v.ts > 15 * 60 * 1000) jobs.delete(k);
-}
-
-// 背景掃描：完成/失敗都寫回 job 表
-async function scan(
-  jobId: string,
-  customer_data: Record<string, unknown>,
-  fallbackName: string
-) {
+// 把任務送給 n8n。webhook 是 onReceived 模式，會立刻回 200，不會久等。
+async function dispatch(jobId: string, customer_data: Record<string, unknown>) {
   try {
     const upstream = await fetch(N8N_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_data }),
+      body: JSON.stringify({ job_id: jobId, callback_url: CALLBACK_URL, customer_data }),
     });
 
     if (!upstream.ok) {
       const raw = await upstream.text();
-      jobs.set(jobId, { status: 'error', error: `掃描失敗（n8n ${upstream.status}）：${raw.slice(0, 300)}`, ts: Date.now() });
-      return;
+      failJob(jobId, `掃描啟動失敗（n8n ${upstream.status}）：${raw.slice(0, 300)}`);
     }
-
-    const data = (await upstream.json()) as { items?: unknown[]; customerName?: string };
-    jobs.set(jobId, {
-      status: 'done',
-      items: data.items || [],
-      customerName: data.customerName || fallbackName,
-      ts: Date.now(),
-    });
   } catch (err) {
-    jobs.set(jobId, { status: 'error', error: `掃描連線失敗：${String(err)}`, ts: Date.now() });
+    failJob(jobId, `掃描連線失敗：${String(err)}`);
   }
 }
 
@@ -103,10 +79,10 @@ export async function POST(req: NextRequest) {
     freshness: freshnessMode,
   };
 
-  prune();
+  pruneJobs();
   const jobId = crypto.randomUUID();
-  jobs.set(jobId, { status: 'pending', ts: Date.now() });
-  void scan(jobId, customer_data, client.name); // 背景跑，不 await
+  createJob(jobId);
+  void dispatch(jobId, customer_data); // 背景送出，不 await
   return NextResponse.json({ jobId });
 }
 
@@ -114,16 +90,16 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get('jobId');
   if (!jobId) return NextResponse.json({ error: '缺少 jobId' }, { status: 400 });
-  const job = jobs.get(jobId);
+  const job = getJob(jobId);
   if (!job) {
     return NextResponse.json({ status: 'error', error: '找不到此掃描任務（可能已過期，請重試）' }, { status: 404 });
   }
   if (job.status === 'done') {
-    jobs.delete(jobId);
+    deleteJob(jobId);
     return NextResponse.json({ status: 'done', items: job.items, customerName: job.customerName });
   }
   if (job.status === 'error') {
-    jobs.delete(jobId);
+    deleteJob(jobId);
     return NextResponse.json({ status: 'error', error: job.error });
   }
   return NextResponse.json({ status: 'pending' });
