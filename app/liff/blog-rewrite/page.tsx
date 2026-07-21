@@ -370,42 +370,27 @@ export default function BlogRewriteLiffPage() {
   );
 }
 
-// ── 外殼：品牌色背景＋電路特效層＋置中容器；樣式 scoped 在 .fp（與節慶頁共用同套設計語言）──
+// 文字流背景：深淺不一的文字行，長短錯落往上飄。固定一組值，避免 SSR/CSR hydration 不一致。
+const BLOG_LINES: React.CSSProperties[] = [
+  { top: '14%', left: '10%', width: 130, background: 'rgba(43,92,230,.12)', animationDelay: '0s' },
+  { top: '24%', left: '24%', width: 70, background: 'rgba(92,106,133,.13)', animationDelay: '-3.5s' },
+  { top: '40%', left: '12%', width: 100, background: 'rgba(43,92,230,.10)', animationDelay: '-6s' },
+  { top: '58%', left: '26%', width: 150, background: 'rgba(92,106,133,.12)', animationDelay: '-1.8s' },
+  { top: '72%', left: '14%', width: 90, background: 'rgba(43,92,230,.11)', animationDelay: '-4.6s' },
+  { top: '86%', left: '22%', width: 120, background: 'rgba(92,106,133,.10)', animationDelay: '-8s' },
+];
+
+// ── 外殼：品牌色背景＋文字流特效層＋置中容器；樣式 scoped 在 .fp（與節慶頁共用同套設計語言）──
 function Shell({ children, center = false }: { children: React.ReactNode; center?: boolean }) {
   return (
     <div className="fp">
       <style>{FP_CSS}</style>
       <div className="fx" aria-hidden="true">
-        <div className="grid" />
-        <svg viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice" fill="none">
-          <g stroke="rgba(43,92,230,.16)" strokeWidth="1">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          {/* 流光層：沿電路線跑的亮光段，做出科技流動線條光感 */}
-          <g className="flow" fill="none">
-            <path d="M20 120 H120 L150 90 H240" />
-            <path d="M380 60 V160 L340 200 H300" />
-            <path d="M40 520 H100 L130 550 V640" />
-            <path d="M360 700 H280 L250 730 V820" />
-          </g>
-          <g fill="rgba(43,92,230,.5)">
-            <circle cx="120" cy="120" r="3" />
-            <circle cx="240" cy="90" r="3" />
-            <circle cx="300" cy="200" r="3" />
-            <circle cx="100" cy="520" r="3" />
-            <circle cx="280" cy="700" r="3" />
-          </g>
-          <g fill="rgba(35,174,110,.45)">
-            <circle cx="150" cy="90" r="3" />
-            <circle cx="130" cy="640" r="3" />
-          </g>
-        </svg>
-        <div className="cube" style={{ width: 14, height: 14, top: 200, right: 26 }} />
-        <div className="cube" style={{ width: 10, height: 10, top: 470, left: 30, opacity: 0.7 }} />
-        <div className="cube" style={{ width: 12, height: 12, bottom: 150, right: 36, opacity: 0.8 }} />
+        {/* 文字流：一行行文字往上飄過（呼應「改寫／生成文章」），中央一條伸縮線代表 AI 正在生成 */}
+        {BLOG_LINES.map((s, i) => (
+          <span key={i} className="ln" style={s} />
+        ))}
+        <span className="writing" />
         <div className="sheen" />
       </div>
       <div className={center ? 'wrap wrap-center' : 'wrap'}>{children}</div>
@@ -441,32 +426,19 @@ const FP_CSS = `
 }
 .fp * { box-sizing: border-box; }
 
-.fp .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-.fp .fx .grid {
-  position: absolute; inset: 0;
-  background-image: radial-gradient(rgba(43,92,230,.12) 1px, transparent 1px);
-  background-size: 24px 24px;
-  -webkit-mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
-          mask-image: radial-gradient(circle at 50% 22%, #000 0%, transparent 80%);
-}
-.fp .fx svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* 沿電路線流動的亮光段（stroke-dashoffset 讓一小段光跑完整條線循環）*/
-.fp .fx svg .flow path {
-  stroke: var(--blue); stroke-width: 1.6; stroke-linecap: round;
-  stroke-dasharray: 7 240; stroke-dashoffset: 0;
-  filter: drop-shadow(0 0 4px var(--glow));
-  animation: fp-flow 4s linear infinite;
-}
-.fp .fx svg .flow path:nth-child(2) { stroke: var(--green); animation-delay: -1.3s; animation-duration: 4.6s; }
-.fp .fx svg .flow path:nth-child(3) { animation-delay: -2.4s; animation-duration: 5.2s; }
-.fp .fx svg .flow path:nth-child(4) { stroke: var(--green); animation-delay: -0.7s; animation-duration: 4.3s; }
+/* fixed：鎖住視窗，文字流捲動時維持定位（沿用海巡做法）*/
+.fp .fx { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* 文字行：長短不一的圓角條，往上飄並淡入淡出，像文章一行行流過 */
+.fp .fx .ln { position: absolute; height: 6px; border-radius: 3px; animation: fp-rise 10s linear infinite; }
+/* 生成中的一行：寬度來回伸縮，像 AI 正在打字生成文字 */
+.fp .fx .writing { position: absolute; top: 49%; left: 16%; height: 7px; width: 150px; border-radius: 3px;
+  background: linear-gradient(90deg, var(--blue), rgba(43,92,230,.1)); transform-origin: left center;
+  opacity: .5; animation: fp-write 2.6s ease-in-out infinite; }
 .fp .fx .sheen {
   position: absolute; top: -30%; left: -60%; width: 55%; height: 160%;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent);
   transform: skewX(-14deg); animation: fp-sheen 10s ease-in-out infinite;
 }
-.fp .cube { position: absolute; border-radius: 4px; transform: rotate(45deg);
-  background: linear-gradient(135deg, rgba(43,92,230,.28), rgba(43,92,230,.10)); }
 
 .fp .wrap { position: relative; z-index: 1; width: 100%; max-width: 420px; margin: 0 auto; padding: 0 16px; }
 .fp .wrap-center { min-height: 82vh; display: flex; flex-direction: column; justify-content: center; }
@@ -602,12 +574,13 @@ const FP_CSS = `
 @keyframes fp-sheen { 0% { transform: translateX(0) skewX(-14deg); } 55%, 100% { transform: translateX(360%) skewX(-14deg); } }
 @keyframes fp-blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
-@keyframes fp-flow { to { stroke-dashoffset: -247; } }
 @keyframes fp-dots { 0%, 60%, 100% { opacity: .2; } 30% { opacity: 1; } }
+@keyframes fp-rise { 0% { transform: translateY(40px); opacity: 0; } 15%, 85% { opacity: 1; } 100% { transform: translateY(-70px); opacity: 0; } }
+@keyframes fp-write { 0%, 100% { transform: scaleX(.2); opacity: .3; } 50% { transform: scaleX(1); opacity: .6; } }
 @media (prefers-reduced-motion: reduce) {
-  .fp .fx .sheen, .fp .tab .dot, .fp .pv-text-loading .spin,
-  .fp .fx svg .flow path, .fp .prog-meta .st .dots i { animation: none; }
+  /* 沿用海巡經驗：不關文字流（多數手機預設開減少動態，關了就看不到）；只收會掃過字的 sheen */
+  .fp .tab .dot, .fp .pv-text-loading .spin,
+  .fp .prog-meta .st .dots i, .fp .fx .sheen { animation: none; }
   .fp .fx .sheen { display: none; }
-  .fp .fx svg .flow path { display: none; }
 }
 `;
