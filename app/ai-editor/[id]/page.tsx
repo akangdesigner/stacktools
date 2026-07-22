@@ -274,6 +274,8 @@ export default function AiEditorClientPage() {
 function BillingSection({ client }: { client: AiEditorClient }) {
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState('');
+  const [canceling, setCanceling] = useState(false);
+  const [cancelErr, setCancelErr] = useState('');
 
   useEffect(() => { setOrigin(window.location.origin); }, []);
 
@@ -294,6 +296,30 @@ function BillingSection({ client }: { client: AiEditorClient }) {
     await navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  }
+
+  // 停止此客戶的自動扣款：呼叫綠界停用委託，成功後重載頁面反映最新狀態
+  async function stopBilling() {
+    if (!confirm(`確定要停止「${client.name}」的每月自動扣款嗎？\n這會向綠界送出停用委託，之後每月不再自動扣 NT$ ${amount.toLocaleString()}。`)) return;
+    setCanceling(true);
+    setCancelErr('');
+    try {
+      const res = await fetch('/api/ai-editor/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setCancelErr(data.error || '停用失敗，請稍後再試或改用綠界後台終止');
+        setCanceling(false);
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setCancelErr('連線失敗，請稍後再試');
+      setCanceling(false);
+    }
   }
 
   return (
@@ -342,6 +368,21 @@ function BillingSection({ client }: { client: AiEditorClient }) {
         </div>
         <p className="text-xs text-gray-400">客戶點開連結 → 綠界刷卡授權一次 → 之後每月自動扣款。授權結果會自動回填此頁狀態。</p>
       </div>
+
+      {/* 停止扣款：僅扣款中可用，向綠界送出停用委託 */}
+      {client.billing_status === 'active' && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
+          <button
+            onClick={stopBilling}
+            disabled={canceling}
+            className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {canceling ? '停用中…' : '停止扣款'}
+          </button>
+          <span className="text-xs text-gray-400">向綠界送出停用委託，停用後每月不再自動扣款</span>
+          {cancelErr && <span className="text-xs text-red-500 w-full">{cancelErr}</span>}
+        </div>
+      )}
     </div>
   );
 }

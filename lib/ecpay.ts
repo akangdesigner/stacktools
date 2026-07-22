@@ -184,3 +184,79 @@ export function buildPeriodCheckoutParams(input: PeriodCheckoutInput): {
   params.CheckMacValue = generateCheckMacValue(params);
   return { action: AIO_CHECKOUT_URL, params, merchantTradeNo: tradeNo };
 }
+
+// ── 新版加密 API：信用卡定期定額訂單作業（停用委託）──────────────
+// 「停用定期定額後續交易」只有綠界新版加密 API 提供，跟上方舊版 CheckMacValue 機制完全不同：
+// 端點是 ecpayment(.stage).ecpay.com.tw/1.0.0/...，請求／回應的 Data 欄位都要 AES-128-CBC 加解密。
+// 參考：https://developers.ecpay.com.tw/?p=12136
+
+// 定期定額訂單作業端點：測試站 vs 正式站
+export const PERIOD_ACTION_URL = IS_PROD
+  ? 'https://ecpayment.ecpay.com.tw/1.0.0/Cashier/CreditCardPeriodAction'
+  : 'https://ecpayment-stage.ecpay.com.tw/1.0.0/Cashier/CreditCardPeriodAction';
+
+// PHP urlencode 相容編碼（綠界 SDK 用）：空白→+，並額外編碼 !'()*，其餘同 encodeURIComponent
+function phpUrlEncode(raw: string): string {
+  return encodeURIComponent(raw)
+    .replace(/%20/g, '+')
+    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+function phpUrlDecode(raw: string): string {
+  return decodeURIComponent(raw.replace(/\+/g, '%20'));
+}
+
+// 綠界新版加密：JSON 物件 → urlencode → AES-128-CBC(PKCS7) → hex 小寫
+function ecpayAesEncrypt(dataObj: Record<string, unknown>): string {
+  const encoded = phpUrlEncode(JSON.stringify(dataObj));
+  const cipher = crypto.createCipheriv('aes-128-cbc', Buffer.from(HASH_KEY, 'utf8'), Buffer.from(HASH_IV, 'utf8'));
+  cipher.setAutoPadding(true); // PKCS7
+  return Buffer.concat([cipher.update(encoded, 'utf8'), cipher.final()]).toString('hex');
+}
+// 綠界新版解密：hex → AES 解密 → urldecode → JSON 物件
+function ecpayAesDecrypt(hex: string): Record<string, unknown> | null {
+  try {
+    const decipher = crypto.createDecipheriv('aes-128-cbc', Buffer.from(HASH_KEY, 'utf8'), Buffer.from(HASH_IV, 'utf8'));
+    decipher.setAutoPadding(true);
+    const dec = Buffer.concat([decipher.update(Buffer.from(hex, 'hex')), decipher.final()]).toString('utf8');
+    return JSON.parse(phpUrlDecode(dec));
+  } catch {
+    return null;
+  }
+}
+
+export interface PeriodActionResult {
+  RtnCode?: number;   // 1 = 成功
+  RtnMsg?: string;
+  MerchantTradeNo?: string;
+  [k: string]: unknown;
+}
+
+// 停用（取消）某筆定期定額委託。merchantTradeNo = 當初建立時的 ecpay_trade_no。
+// 回傳綠界解密後的結果物件（RtnCode=1 代表停用成功）；連線／解密失敗回 null。
+export async function cancelPeriod(merchantTradeNo: string): Promise<PeriodActionResult | null> {
+  const data = {
+    MerchantID: MERCHANT_ID,
+    MerchantTradeNo: merchantTradeNo,
+    Action: 'Cancel', // 停用定期定額後續交易
+  };
+  const body = {
+    MerchantID: MERCHANT_ID,
+    RqHeader: { Timestamp: Math.floor(Date.now() / 1000) }, // Unix 秒，綠界驗證窗 10 分鐘
+    Data: ecpayAesEncrypt(data),
+  };
+  try {
+    const res = await fetch(PERIOD_ACTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { Data?: string; TransCode?: number; TransMsg?: string };
+    // 外層 TransCode 只代表「傳輸」成功，實際業務結果在加密的 Data 裡
+    if (!json.Data) return { RtnCode: 0, RtnMsg: json.TransMsg || '綠界未回傳 Data' };
+    const decoded = ecpayAesDecrypt(json.Data);
+    return (decoded as PeriodActionResult) ?? null;
+  } catch {
+    return null;
+  }
+}
