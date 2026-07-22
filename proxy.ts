@@ -26,6 +26,6 @@ export default auth((req) => {
 export const config = {
   // 只保護頁面路由，API 路由不擋（外部服務如 n8n 需能直接呼叫）
   matcher: [
-    "/((?!api/|_next/static|_next/image|favicon\\.ico|.*\\.png$).*)",
+    "/((?!api/|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpe?g|gif|svg|webp|avif|ico)$).*)",
   ],
 }
