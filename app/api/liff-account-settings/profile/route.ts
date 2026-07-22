@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
       ig: !!client.ig_access_token,
     },
     billing: {
+      client_id: client.id, // 給 LIFF 組付款（授權）連結 /api/ai-editor/billing/create?clientId=
       status: client.billing_status,
       amount: client.billing_amount,
       next_charge_date: client.next_charge_date,

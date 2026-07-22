@@ -13,7 +13,7 @@ const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID_ACCOUNT_SETTINGS || '';
 type Phase = 'init' | 'ready' | 'error';
 
 type Connections = { fb: boolean; threads: boolean; ig: boolean };
-type Billing = { status: string; amount: number; next_charge_date: string };
+type Billing = { client_id: number; status: string; amount: number; next_charge_date: string };
 
 const BILLING_LABEL: Record<string, string> = {
   none: '尚未設定',
@@ -159,6 +159,13 @@ export default function AccountSettingsLiffPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // 開始／重新開通自動扣款（客戶自助）：導向綠界定期定額授權頁（create 會自動跳轉綠界刷卡）。
+  // 授權完成後綠界回呼會把狀態更新為 active，客戶回此頁即可看到「訂閱中」。
+  function startBilling() {
+    if (!billing?.client_id) return;
+    window.location.href = `/api/ai-editor/billing/create?clientId=${billing.client_id}`;
   }
 
   // 停止自動扣款（客戶自助）：用 line_uid 呼叫綠界停用委託，客戶只能停自己那筆。
@@ -372,12 +379,23 @@ export default function AccountSettingsLiffPage() {
             {billing.next_charge_date && (
               <div className="bill-row"><div className="bill-card"><span className="l">下次扣款日</span><span className="v">{billing.next_charge_date}</span></div></div>
             )}
-            {billing.status === 'active' && (
+            {billing.status === 'active' ? (
               <>
                 <button className="bill-stop" onClick={stopBilling} disabled={canceling}>
                   {canceling ? '停用中…' : '停止自動扣款'}
                 </button>
                 {cancelErr && <p className="bill-stop-err">{cancelErr}</p>}
+              </>
+            ) : (
+              <>
+                <button className="bill-pay" onClick={startBilling}>
+                  {billing.status === 'pending'
+                    ? '繼續完成付款授權'
+                    : billing.status === 'cancelled' || billing.status === 'failed'
+                    ? '重新開通自動扣款'
+                    : '開始訂閱（每月自動扣款）'}
+                </button>
+                <p className="bill-pay-note">點下後會前往綠界安全刷卡頁完成信用卡授權，完成後每月自動扣款。</p>
               </>
             )}
           </div>
@@ -533,6 +551,27 @@ const FP_CSS = `
   padding: 4px 10px; border-radius: 999px; background: var(--green-soft); color: var(--green);
 }
 .fp .bill-row + .bill-row { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
+
+/* 開始／重新開通付款：主色藍 CTA */
+.fp .bill-pay {
+  width: 100%; margin-top: 13px; border: 0; cursor: pointer; color: #fff;
+  font-family: var(--sans); font-size: 14px; font-weight: 800; letter-spacing: .03em;
+  padding: 13px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+  box-shadow: 0 12px 24px -12px var(--glow), inset 0 1px 0 rgba(255,255,255,.3);
+}
+.fp .bill-pay:active { transform: translateY(1px); }
+.fp .bill-pay-note { font-size: 10.5px; color: var(--ink-3); line-height: 1.6; margin: 8px 2px 0; text-align: center; }
+
+/* 停止扣款：次要、紅框（破壞性動作） */
+.fp .bill-stop {
+  width: 100%; margin-top: 13px; cursor: pointer;
+  font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: .02em;
+  padding: 11px; border-radius: 12px; color: #B42318;
+  background: #FEF2F2; border: 1px solid #FBD5D5;
+}
+.fp .bill-stop:disabled { opacity: .55; cursor: default; }
+.fp .bill-stop-err { font-size: 11px; color: #B42318; margin: 7px 2px 0; line-height: 1.6; }
 
 .fp .confirm {
   position: relative; width: 100%; border: 0; cursor: pointer; color: #FFFFFF;
