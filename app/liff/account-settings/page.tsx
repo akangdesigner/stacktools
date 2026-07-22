@@ -50,6 +50,8 @@ export default function AccountSettingsLiffPage() {
   const [connections, setConnections] = useState<Connections | null>(null);
   const [billing, setBilling] = useState<Billing | null>(null);
   const [legacyRaw, setLegacyRaw] = useState('');
+  const [canceling, setCanceling] = useState(false);
+  const [cancelErr, setCancelErr] = useState('');
 
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -156,6 +158,32 @@ export default function AccountSettingsLiffPage() {
       setError(`儲存失敗：${msg(e)}`);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // 停止自動扣款（客戶自助）：用 line_uid 呼叫綠界停用委託，客戶只能停自己那筆。
+  // 成功（綠界確實停用）後才把畫面狀態改成已取消。
+  async function stopBilling() {
+    if (!billing) return;
+    if (!confirm('確定要停止每月自動扣款嗎？停止後將不再自動續訂。')) return;
+    setCanceling(true);
+    setCancelErr('');
+    try {
+      const res = await fetch('/api/ai-editor/billing/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineUid: uid }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setCancelErr(data.error || '停用失敗，請稍後再試');
+        return;
+      }
+      setBilling({ ...billing, status: 'cancelled' });
+    } catch (e) {
+      setCancelErr(`連線失敗：${msg(e)}`);
+    } finally {
+      setCanceling(false);
     }
   }
 
@@ -343,6 +371,14 @@ export default function AccountSettingsLiffPage() {
             )}
             {billing.next_charge_date && (
               <div className="bill-row"><div className="bill-card"><span className="l">下次扣款日</span><span className="v">{billing.next_charge_date}</span></div></div>
+            )}
+            {billing.status === 'active' && (
+              <>
+                <button className="bill-stop" onClick={stopBilling} disabled={canceling}>
+                  {canceling ? '停用中…' : '停止自動扣款'}
+                </button>
+                {cancelErr && <p className="bill-stop-err">{cancelErr}</p>}
+              </>
             )}
           </div>
         </section>

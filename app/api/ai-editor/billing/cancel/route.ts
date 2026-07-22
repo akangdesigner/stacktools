@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAiEditorClient, updateClientBilling } from '@/lib/aiEditorDb';
+import { getAiEditorClient, getClientByLineUid, updateClientBilling } from '@/lib/aiEditorDb';
 import { cancelPeriod } from '@/lib/ecpay';
 
 export const dynamic = 'force-dynamic';
 
 // 停止某客戶的每月自動扣款。
+// 兩種識別：後台頁傳 clientId；客戶自助 LIFF 頁傳 lineUid（用 LINE 身分，客戶只能停自己那筆，
+// 避免前端竄改 clientId 停到別人的委託）。
 // 流程：查客戶 → 呼叫綠界新版「定期定額訂單作業」停用委託 →
 // 只有綠界回 RtnCode=1（真的停用成功）才把 billing_status 設為 cancelled，
 // 避免出現「DB 顯示已停、綠界卻還在扣」的危險不一致。
 export async function POST(req: NextRequest) {
-  const { clientId } = (await req.json()) as { clientId?: number };
-  if (!clientId) {
-    return NextResponse.json({ ok: false, error: '缺少 clientId' }, { status: 400 });
+  const { clientId, lineUid } = (await req.json()) as { clientId?: number; lineUid?: string };
+  const uid = lineUid?.trim();
+  if (!uid && !clientId) {
+    return NextResponse.json({ ok: false, error: '缺少 lineUid 或 clientId' }, { status: 400 });
   }
 
-  const client = getAiEditorClient(Number(clientId));
+  // lineUid 優先（客戶自助頁），其次 clientId（公司後台）
+  const client = uid ? getClientByLineUid(uid) : getAiEditorClient(Number(clientId));
   if (!client) {
     return NextResponse.json({ ok: false, error: '找不到客戶' }, { status: 404 });
   }
