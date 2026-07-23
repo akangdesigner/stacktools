@@ -142,7 +142,7 @@ export function twDatePlusMonths(months: number): string {
 export interface PeriodCheckoutInput {
   clientId: number;      // ai_editor_clients 的 id，回呼時用來對應是哪個客戶
   clientName: string;    // 客戶名稱，顯示在綠界付款頁
-  baseUrl: string;       // 你的公開網址（例：https://stacktools.zeabur.app），用來組回呼網址
+  baseUrl: string;       // 你的公開網址（例：https://tool.dg166.com），用來組回呼網址
   amount?: number;       // 月費，預設 MONTHLY_FEE(3000)
   merchantTradeNo?: string; // 可自帶交易編號，不帶則自動產生
 }
