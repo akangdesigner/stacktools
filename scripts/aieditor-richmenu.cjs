@@ -39,13 +39,14 @@ const ALIAS_FUNC = 'aieditor-func';         // 功能選單 分頁
 const DEFAULT_ALIAS = ALIAS_SETTINGS;
 
 // ── 點擊區座標（2500×1686）──
-// 上方長條：全寬、高 0~210；左右各半（切換分頁用）
-// 下方四格：210~1686 分成 2×2，左右在 x=1250 切、上下在 y=948 切
-const TOP = { y: 0, h: 210 };
+// 上方長條：全寬、高 0~350；左右各半（切換分頁用）
+// 下方四格：350~1686 分成 2×2，左右在 x=1250 切、上下在 y=1015 切
+// （數字對齊 2026-07-23 換的新版圖：分頁條較高、卡片列在 375~988 與 1040~1663）
+const TOP = { y: 0, h: 350 };
 const HALF_L = { x: 0, w: 1250 };
 const HALF_R = { x: 1250, w: 1250 };
-const ROW_T = { y: 210, h: 738 };
-const ROW_B = { y: 948, h: 738 };
+const ROW_T = { y: 350, h: 665 };
+const ROW_B = { y: 1015, h: 671 };
 const COL_L = { x: 0, w: 1250 };
 const COL_R = { x: 1250, w: 1250 };
 
