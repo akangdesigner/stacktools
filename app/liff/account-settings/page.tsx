@@ -10,7 +10,7 @@ import { IMAGE_STYLES } from '@/lib/imageStyles';
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID_ACCOUNT_SETTINGS || '';
 
-type Phase = 'init' | 'ready' | 'error';
+type Phase = 'init' | 'ready' | 'done' | 'error';
 
 type Connections = { fb: boolean; threads: boolean; ig: boolean };
 type Billing = { client_id: number; status: string; amount: number; next_charge_date: string };
@@ -154,6 +154,9 @@ export default function AccountSettingsLiffPage() {
       } else {
         setSavedMsg('資料已更新完成。');
       }
+      // 儲存成功直接切到整頁成功畫面，讓客戶明確知道有存到（比原本頁面上方一行綠字直觀）
+      setPhase('done');
+      window.scrollTo({ top: 0 });
     } catch (e) {
       setError(`儲存失敗：${msg(e)}`);
     } finally {
@@ -216,6 +219,23 @@ export default function AccountSettingsLiffPage() {
     );
   }
 
+  // ── 儲存成功畫面：只留「關閉提示」與「返回修改」，避免客戶不確定有沒有存到 ──
+  if (phase === 'done') {
+    return (
+      <Shell center>
+        <div className="done">
+          <div className="done-badge">✓</div>
+          <h1 className="done-title">已儲存 🎉</h1>
+          <p className="done-sub">{savedMsg}</p>
+          <p className="done-hint">可以直接點右上角的 ✕ 關閉此頁</p>
+          <button className="back" onClick={() => setPhase('ready')}>
+            返回繼續修改
+          </button>
+        </div>
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <header className="head">
@@ -226,7 +246,6 @@ export default function AccountSettingsLiffPage() {
       </header>
 
       {error && <div className="err">{error}</div>}
-      {savedMsg && <div className="ok">{savedMsg}</div>}
 
       <section className="card">
         <div className="card-pad">
@@ -582,13 +601,28 @@ const FP_CSS = `
 }
 .fp .confirm:disabled { opacity: .5; cursor: default; }
 
+/* 儲存成功整頁畫面（沿用節慶 LIFF 頁的 done 樣式） */
+.fp .done { text-align: center; }
+.fp .done-badge {
+  width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; font-size: 30px; color: #fff;
+  background: linear-gradient(135deg, var(--green), #1B9760);
+  box-shadow: 0 14px 30px -10px rgba(35,174,110,.6);
+}
+.fp .done-title { font-size: 20px; font-weight: 900; color: var(--ink); margin: 0 0 10px; }
+.fp .done-sub { font-size: 13px; color: var(--ink-2); line-height: 1.8; margin: 0 0 12px; }
+.fp .done-hint { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .04em; margin: 0 0 22px; }
+/* 返回修改：次要按鈕（主要動作是關閉視窗，所以不做成藍色 CTA） */
+.fp .back {
+  width: 100%; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 700;
+  padding: 12px; border-radius: 12px; color: var(--ink-2);
+  background: var(--field); border: 1px solid var(--line);
+}
+.fp .back:active { transform: translateY(1px); }
+
 .fp .err {
   margin-bottom: 14px; border-radius: 12px; background: #FEF2F2; border: 1px solid #FBD5D5;
   padding: 12px 14px; font-size: 13px; color: #B42318; line-height: 1.6;
-}
-.fp .ok {
-  margin-bottom: 14px; border-radius: 12px; background: var(--green-soft); border: 1px solid rgba(35,174,110,.3);
-  padding: 12px 14px; font-size: 13px; color: var(--green); line-height: 1.6;
 }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
 @keyframes fp-float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(18px, -16px); } }
