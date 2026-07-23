@@ -34,6 +34,12 @@ export default function VideoPostLiffPage() {
   const [textAdjust, setTextAdjust] = useState(''); // 定向改文案的需求文字
   const [rewriteLoading, setRewriteLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  // 這次要發到哪些平台（預設全開，送出時只送還亮著的）
+  const [platforms, setPlatforms] = useState<{ ig: boolean; fb: boolean; threads: boolean }>({
+    ig: true,
+    fb: true,
+    threads: true,
+  });
   const [error, setError] = useState('');
   const liffRef = useRef<Liff | null>(null);
   const runStartRef = useRef<number>(0);
@@ -233,13 +239,19 @@ export default function VideoPostLiffPage() {
       setError('內文、圖片都要有才能送出');
       return;
     }
+    // 至少要勾一個平台，不然送出去等於什麼都不發
+    const picked = (['ig', 'fb', 'threads'] as const).filter((p) => platforms[p]).join(',');
+    if (!picked) {
+      setError('至少要選一個發佈平台');
+      return;
+    }
     setError('');
     setConfirmLoading(true);
     try {
       const res = await fetch('/api/liff-videopost/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line_uid: uid, content, imageDataUrl: imageUrl }),
+        body: JSON.stringify({ line_uid: uid, content, imageDataUrl: imageUrl, platforms: picked }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -265,9 +277,9 @@ export default function VideoPostLiffPage() {
       <Shell center>
         <div className="done">
           <div className="done-badge">✓</div>
-          <h1 className="done-title">草稿已存好</h1>
+          <h1 className="done-title">已發佈</h1>
           <p className="done-sub">
-            回到 LINE 對話，按<b>「確認發佈」</b>就會發到你的社群。
+            貼文已經送到你選的社群平台，稍等一下就會出現。
           </p>
           <button className="confirm" onClick={closeLiff}>
             回到 LINE
@@ -463,8 +475,39 @@ export default function VideoPostLiffPage() {
             </div>
           </section>
 
+          {/* 發佈平台選擇（發文前自己勾要發到哪些） */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 2px 12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#5C6A85' }}>發佈到</span>
+            {(
+              [
+                ['ig', 'IG'],
+                ['fb', 'FB'],
+                ['threads', 'Threads'],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPlatforms((p) => ({ ...p, [k]: !p[k] }))}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: 999,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  border: `1px solid ${platforms[k] ? 'transparent' : 'rgba(43,92,230,.24)'}`,
+                  background: platforms[k] ? 'linear-gradient(135deg,#2B5CE6,#1E48C8)' : '#F2F5FC',
+                  color: platforms[k] ? '#fff' : '#5C6A85',
+                }}
+              >
+                {platforms[k] ? '✓ ' : ''}
+                {label}
+              </button>
+            ))}
+          </div>
+
           <button className="confirm" onClick={confirm} disabled={confirmLoading || rewriteLoading}>
-            {confirmLoading ? '存檔中…' : '確認使用這篇 ＋ 這張圖'}
+            {confirmLoading ? '發佈中…' : '確認發佈這篇 ＋ 這張圖'}
           </button>
         </>
       )}
