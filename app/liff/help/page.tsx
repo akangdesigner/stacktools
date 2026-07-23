@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 
 // 使用說明 LIFF：純靜態說明文件，不需要查客戶資料，開頁即顯示、不擋載入。
-// 依這次 LIFF 改版分三組：全新 LIFF 體驗（節慶/時事/部落格改寫/社群海巡留言）／
-// 帳號與內容管理／其他功能；內容已更新反映「頁面上直接改文/改圖」而非舊的打字對話流程。
+// 分兩組：全新 LIFF 體驗（節慶/時事/部落格改寫/社群海巡/短影音/文件導入）／帳號與內容管理（客戶資料設定）。
+// 內容對齊各頁實際流程：節慶/時事/部落格改寫＝頁面勾平台後直接發佈；只有短影音仍是存草稿回 LINE 按確認。
+// 原本的「其他功能」區（貼文確認與微調、FAQ）內容已過時且重複，2026-07-23 移除。
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID_HELP || '';
 
@@ -55,27 +56,41 @@ export default function HelpLiffPage() {
 
       <div className="sec-title hi"><span className="badge">✨ 全新 LIFF 體驗</span><span className="ln" /></div>
 
-      <FaqItem hi id="festival" icon="🎨" title="節慶主題規劃" sub="生成貼文＋配圖，頁面直接改" open={openKey === 'festival'} onToggle={toggle}>
-        點擊按鈕直接開啟頁面，AI 自動生成節慶貼文文案＋配圖。喜歡的話可以在頁面上直接調整文字或改圖，不用再打字說明；滿意後存檔，LINE 會收到「確認發佈」卡片。
+      <FaqItem hi id="festival" icon="🎨" title="節慶主題規劃" sub="生成貼文＋配圖，頁面上直接發佈" open={openKey === 'festival'} onToggle={toggle}>
+        <p style={{ margin: '0 0 8px' }}>
+          點擊按鈕直接開啟頁面，先選一個本月節慶主題，AI 自動生成貼文文案＋配圖。可以在頁面上直接調整文字或重新生圖，不用再打字說明。
+        </p>
+        <div className="note">滿意後勾選要發佈的平台（IG／FB／Threads），按確認就<b>直接發到你的社群</b>，不用回 LINE 再按一次。</div>
       </FaqItem>
 
       <FaqItem hi id="news" icon="🔥" title="時事互動貼文" sub="蹭熱門話題不失焦" open={openKey === 'news'} onToggle={toggle}>
-        AI 掃描 Threads 熱門話題，挑出跟你品牌相關的內容改寫成貼文＋配圖。頁面上一樣可直接調整文字或圖片，存檔後回 LINE 確認發佈。
+        <p style={{ margin: '0 0 8px' }}>
+          AI 掃描 Threads 熱門話題，挑出跟你品牌相關的內容改寫成貼文＋配圖。頁面上一樣可直接調整文字或圖片。
+        </p>
+        <div className="note">滿意後勾選要發佈的平台，按確認<b>直接發佈</b>。</div>
       </FaqItem>
 
-      <FaqItem hi id="blogrewrite" icon="📝" title="部落格文章改寫" sub="舊文章變新貼文" open={openKey === 'blogrewrite'} onToggle={toggle}>
-        AI 自動抓你網站最新一篇文章，依品牌語氣改寫成社群貼文，圖片沿用原文配圖。頁面上可直接調整文字，存檔後回 LINE 確認發佈。
+      <FaqItem hi id="blogrewrite" icon="📝" title="部落格文章改寫" sub="挑一篇舊文章變新貼文" open={openKey === 'blogrewrite'} onToggle={toggle}>
+        <div className="step"><span className="n">1</span><span>開啟頁面會先讀取你網站的文章清單，預設預覽<b>最新一篇</b>（標題＋封面圖＋摘要）</span></div>
+        <div className="step"><span className="n">2</span><span>想改別篇可以點「換一篇文章」從清單挑舊文，確認後才開始改寫</span></div>
+        <div className="step"><span className="n">3</span><span>AI 依品牌語氣改寫成社群貼文、圖片沿用原文配圖，頁面上可直接調整文字</span></div>
+        <div className="note">滿意後勾選要發佈的平台，按確認<b>直接發佈</b>。</div>
       </FaqItem>
 
       <FaqItem hi id="social" icon="📌" title="社群海巡留言" sub="候選貼文清單，複製留言就能用" open={openKey === 'social'} onToggle={toggle}>
         <p style={{ margin: '0 0 8px' }}>
-          點擊開啟頁面，AI 同時掃描 Threads 話題與你設定的 FB 社團熱門貼文，整理成候選清單並附上建議留言。
+          點擊開啟頁面，選好關鍵字與條件後，AI 同時掃描 Threads 話題與你設定的 FB 社團熱門貼文，整理成候選清單並附上建議留言。
         </p>
-        <div className="note">看到喜歡的直接複製留言，點連結去原文回覆即可，這個功能不需要確認發佈這一步。</div>
+        <div className="step"><span className="n">1</span><span>可選擇要撈「最相關」還是「最新」的貼文，另可依讚數高／留言高排序</span></div>
+        <div className="step"><span className="n">2</span><span>只會撈<b>14 天內</b>的貼文；選讚數／留言排序時會濾掉沒互動的貼文</span></div>
+        <div className="note">掃描＋逐篇寫留言約需 <b>5～10 分鐘</b>，請留在頁面等結果、不要關掉。看到喜歡的直接複製留言，點連結去原文回覆即可，這個功能不需要發佈這一步。</div>
       </FaqItem>
 
       <FaqItem hi id="video" icon="🎬" title="短影音轉貼文生成" sub="上傳影片，頁面直接改" open={openKey === 'video'} onToggle={toggle}>
-        點擊按鈕開啟頁面，上傳短影音影片（3 分鐘內），AI 自動轉逐字稿並依品牌人設寫成貼文＋配圖。頁面上可直接調整文字或圖片，存檔後回 LINE 確認發佈。
+        <p style={{ margin: '0 0 8px' }}>
+          點擊按鈕開啟頁面，上傳短影音影片（3 分鐘內），AI 自動轉逐字稿並依品牌人設寫成貼文＋配圖。頁面上可直接調整文字或圖片。
+        </p>
+        <div className="note">這支存檔後會<b>回 LINE 收到「確認發佈／丟棄」卡片</b>，按確認發佈才會上架。</div>
       </FaqItem>
 
       <FaqItem hi id="fileimport" icon="📂" title="客戶資料文件導入" sub="上傳/刪除 PDF，頁面直接管理" open={openKey === 'fileimport'} onToggle={toggle}>
@@ -86,18 +101,11 @@ export default function HelpLiffPage() {
 
       <FaqItem id="account" icon="👤" title="客戶資料設定" sub="初次使用請先完成這步" open={openKey === 'account'} onToggle={toggle}>
         <div className="step"><span className="n">1</span><span>點擊圖文選單「客戶資料管理」開啟設定頁</span></div>
-        <div className="step"><span className="n">2</span><span>第一次是空白表單，填寫品牌人設、關鍵字等資料後建立；之後點進去會直接看到現有資料，改完存檔即可</span></div>
-        <div className="note">建立完成後需等待一個工作日將帳戶加入系統，才能開始使用其他功能。</div>
-      </FaqItem>
-
-      <div className="sec-title"><span className="badge">🛠️ 其他功能</span><span className="ln" /></div>
-
-      <FaqItem id="publish" icon="🛠️" title="貼文確認與微調" sub="存檔後回 LINE 要做什麼" open={openKey === 'publish'} onToggle={toggle}>
-        節慶／時事／部落格改寫／短影音轉貼文在頁面存檔後，LINE 會收到「確認發佈／丟棄」卡片：按確認發佈會排程上架，丟棄則作廢草稿。（社群海巡留言不需要這一步）
-      </FaqItem>
-
-      <FaqItem id="faq" icon="❓" title="常見問題 FAQ" sub="其他問題快速解答" open={openKey === 'faq'} onToggle={toggle}>
-        節慶／時事／部落格改寫／短影音轉貼文都能在頁面上直接調整文字或圖片，改到滿意再存檔；社群海巡留言則是直接複製建議留言去回覆——都不需要再另外打字說明修改需求。若遇到生成失敗可重試一次，持續發生請聯繫小編後台協助排查。
+        <div className="step"><span className="n">2</span><span>第一次是空白表單，填完建立；之後點進去會直接看到現有資料，改完按「儲存變更」即可</span></div>
+        <div className="step"><span className="n">3</span><span>要填的內容：客戶名稱、社群帳號密碼（FB／Threads／IG 至少一種）、產業關鍵字、品牌小編人設、品牌資訊、近期活動、FB 海巡社團網址</span></div>
+        <div className="step"><span className="n">4</span><span><b>圖片風格</b>可從六張示意圖點選（電影感、日式動漫、復古底片等），之後 AI 生圖就會照這個畫風；不選則由 AI 依內容判斷</span></div>
+        <div className="step"><span className="n">5</span><span>頁面下方還可看到<b>社群授權狀態</b>與<b>帳務資訊</b>（每月扣款金額、下次扣款日），並可自行開通或停止自動扣款</span></div>
+        <div className="note">存好會跳出「已儲存」畫面，點右上角 ✕ 關閉即可。第一次建立完成後，需等待一個工作日將帳戶加入系統才能開始使用其他功能。</div>
       </FaqItem>
     </Shell>
   );
