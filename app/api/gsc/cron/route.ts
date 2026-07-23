@@ -114,6 +114,11 @@ async function writeSheet(accessToken: string, client: { sheet_id: string; sheet
   return batchRes.ok ? { updated: updates.length } : { updated: 0, error: 'write_failed' };
 }
 
+// ── 背景執行狀態（記在記憶體，重啟即歸零）──
+// running：避免排程重疊觸發；lastRun：給 GET 查上一次跑的結果
+let running = false;
+let lastRun: { startedAt: string; finishedAt?: string; result?: unknown; error?: string } | null = null;
+
 export async function POST(req: NextRequest) {
   // 簡單驗證 secret，防止任意觸發
   const secret = req.headers.get('x-cron-secret');
@@ -121,12 +126,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await getAccessToken();
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 401 });
+  if (running) {
+    return NextResponse.json({ started: false, reason: 'already_running', lastRun }, { status: 202 });
   }
+
+  // 立刻回應，實際抓取在背景跑
+  //（全客戶跑完常超過 Cloudflare 120 秒上限，同步等會被切成 524）
+  running = true;
+  const startedAt = new Date().toISOString();
+  lastRun = { startedAt };
+  void runCron()
+    .then((result) => { lastRun = { startedAt, finishedAt: new Date().toISOString(), result }; })
+    .catch((err) => { lastRun = { startedAt, finishedAt: new Date().toISOString(), error: String(err) }; })
+    .finally(() => { running = false; });
+
+  return NextResponse.json({ started: true, startedAt }, { status: 202 });
+}
+
+// 查上一次（或這一次）跑到哪了
+export async function GET(req: NextRequest) {
+  const secret = req.headers.get('x-cron-secret');
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return NextResponse.json({ running, lastRun });
+}
+
+async function runCron() {
+  const accessToken = await getAccessToken();
 
   // endDate = 今天往前兩天
   const endDate = new Date();
@@ -201,5 +228,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ date: endDateStr, keywords: kwResults, articles: artResults });
+  // 回純物件給 lastRun 存起來（不是 HTTP 回應，POST 早就回過 202 了）
+  return { date: endDateStr, keywords: kwResults, articles: artResults };
 }
