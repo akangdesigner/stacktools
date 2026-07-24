@@ -257,11 +257,13 @@ function isContentLink(url: string): boolean {
   if (/^(mailto:|tel:|javascript:)/i.test(url)) return false;
   if (/\/cdn-cgi\//i.test(url)) return false; // Cloudflare email 保護等
   if (/\/wp-(admin|login|json)/i.test(url)) return false; // WordPress 後台
+  // Next.js 自己的建置資源目錄——RSC 酬載掃描／無頭渲染撈到的 <link> href 常混進這裡，不是真的頁面
+  if (/\/_next\//i.test(url)) return false;
   // 登入/購物車/會員/搜尋等功能頁，對 SEO 稽核沒意義
   if (/\/(login|logout|register|signup|signin|cart|checkout|account|member|members|wishlist|favorite|search|compare)(\/|\?|$)/i.test(url)) return false;
   // 各平台的功能頁變體：sign_in（Shopline）、ShoppingCart/VipMember/TradesOrder/ECoupon/TraceSalePage（91APP）
   if (/(sign[-_]?in|sign[-_]?up|shoppingcart|vipmember|tradesorder|ecoupon|tracesalepage)/i.test(url)) return false;
-  if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|mp4|mp3)(\?|$)/i.test(url)) return false;
+  if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|mp4|mp3|css|js|mjs|json|woff2?|ttf|eot|ico|map)(\?|$)/i.test(url)) return false;
   return /^https?:/i.test(url);
 }
 
