@@ -63,7 +63,7 @@ async function runCollect(
   // 候選放寬到上限的 3 倍：sitemap 排前面的部落格單篇會被 AI 排除，
   // 不放寬的話它們會先佔掉額度、把排後面的產品頁擠掉；最終寫入量由使用者勾選控制
   progressTkdJob(jobId, '蒐集主選單與 sitemap 頁面中…');
-  const { pages: candidates, headlessError } = await collectCandidates(site, Math.min(limit * 3, MAX_LIMIT));
+  const candidates = await collectCandidates(site, Math.min(limit * 3, MAX_LIMIT));
   if (candidates.length === 0) {
     throw new Error('找不到任何頁面，請確認網址是否正確');
   }
@@ -75,8 +75,7 @@ async function runCollect(
   }
   progressTkdJob(jobId, `AI 判斷頁面型態中（共 ${kept.length} 頁）…`, 0, kept.length);
   const pages = await classifyPages(kept, site);
-  // headlessDebug：無頭瀏覽器渲染失敗時的錯誤訊息，暫留著方便確認 Zeabur 環境有沒有真的跑得起來
-  completeTkdJob(jobId, { ok: true, scope, platform, pageCount: pages.length, pages, headlessDebug: headlessError });
+  completeTkdJob(jobId, { ok: true, scope, platform, pageCount: pages.length, pages });
 }
 
 // 啟動蒐集任務：驗證參數後立刻回 jobId，管線丟到背景跑
