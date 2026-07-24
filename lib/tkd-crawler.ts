@@ -1,5 +1,6 @@
 import { parse, type HTMLElement } from 'node-html-parser';
 import { gunzipSync } from 'node:zlib';
+import { fetchPageSearchStats } from './site-audit-gsc';
 
 // h1 精修 callback：原始 <h1> 讀不到時，由呼叫端（平台 adapter）從 server 端最佳來源還原 h1。
 // 用注入方式而非直接 import 平台模組，讓 crawler 不依賴 tkd-platform（避免循環相依）
@@ -144,6 +145,19 @@ async function collectFromSitemap(site: string, limit: number): Promise<string[]
     }
   }
   return result;
+}
+
+// 從 GSC Search Analytics 補頁：純 fetch 爬蟲看不到前端框架動態插入的選單（如 React/Next.js
+// 用 JS 組出的導覽列，HTML 原始碼裡根本沒有 <a> 標籤），但 Google 的爬蟲有執行 JS 渲染再收錄，
+// 近 90 天有曝光的網址就代表 Google 找得到這頁——借這份清單補回選單/sitemap 漏掉的頁面。
+// 未授權該站 GSC 或無資料時回空陣列，靜默跳過不影響原本流程
+async function collectFromGsc(site: string): Promise<string[]> {
+  try {
+    const { stats } = await fetchPageSearchStats(site);
+    return [...stats.keys()];
+  } catch {
+    return [];
+  }
 }
 
 // 沒有 sitemap 時的退路：爬首頁，抓同網域的內部連結
@@ -357,8 +371,29 @@ export async function collectCandidates(siteInput: string, limit = 300): Promise
     /* base 一定來自合法網址，理論上不會走到這 */
   }
 
+  // GSC 優先於 sitemap：GSC 是「Google 實際觀察到有搜尋需求」的頁面，比 sitemap
+  // 硬塞的網址清單（常常一堆雜訊文章）更能代表「重要頁」，要先卡到 limit 名額，
+  // 不能等 sitemap 塞滿才輪到——大站 sitemap 頁數一多，GSC 頁會被排擠掉
   if (picked.size < limit) {
-    // sitemap 用轉址後的 base 抓（裸網域的 sitemap/內頁可能 404）
+    // GSC 用轉址後的 base 查 property，跟 sitemap 同一個基底
+    const fromGsc = await collectFromGsc(base);
+    for (const u of fromGsc) {
+      if (picked.size >= limit) break;
+      const clean = u.split('#')[0].replace(/\/+$/, '');
+      if (!isContentLink(clean)) continue;
+      try {
+        if (new URL(clean).host !== baseHost) continue;
+      } catch {
+        continue;
+      }
+      const key = keyOf(clean);
+      // 選單已收過的頁不重複收（保留選單頁名）
+      if (!picked.has(key)) picked.set(key, { url: clean });
+    }
+  }
+
+  if (picked.size < limit) {
+    // sitemap 用轉址後的 base 抓（裸網域的 sitemap/內頁可能 404）；補選單＋GSC 沒收到的頁
     const fromSitemap = await collectFromSitemap(base, limit * 3);
     for (const u of fromSitemap) {
       if (picked.size >= limit) break;
@@ -370,7 +405,7 @@ export async function collectCandidates(siteInput: string, limit = 300): Promise
         continue;
       }
       const key = keyOf(clean);
-      // 選單已收過的頁不重複收（保留選單頁名）；sitemap 來的沒頁名，寫入時用 title
+      // 選單/GSC 已收過的頁不重複收；sitemap 來的沒頁名，寫入時用 title
       if (!picked.has(key)) picked.set(key, { url: clean });
     }
   }
