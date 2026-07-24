@@ -48,7 +48,9 @@ async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Respons
 // 渲染過才看得到，這是唯一通用解法（不綁定特定框架的序列化方式）。
 // 任何失敗（executablePath 在非 Linux 環境跑不起來、渲染逾時等）都回傳 null，
 // 讓呼叫端自動退回原本的 fetch 流程，不讓整個蒐集功能被這一步卡死
-async function renderHomepage(url: string): Promise<{ html: string; finalUrl: string } | null> {
+async function renderHomepage(
+  url: string,
+): Promise<{ ok: true; html: string; finalUrl: string } | { ok: false; error: string }> {
   let browser: Awaited<ReturnType<typeof launch>> | null = null;
   try {
     browser = await launch({
@@ -62,9 +64,9 @@ async function renderHomepage(url: string): Promise<{ html: string; finalUrl: st
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
     const html = await page.content();
     const finalUrl = page.url();
-    return { html, finalUrl };
-  } catch {
-    return null;
+    return { ok: true, html, finalUrl };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
@@ -293,7 +295,7 @@ function scanRscHrefs(html: string): string[] {
 async function collectMenuPages(
   site: string,
   limit: number,
-): Promise<{ base: string; pages: PageRef[] }> {
+): Promise<{ base: string; pages: PageRef[]; headlessError?: string }> {
   let host: string;
   try {
     host = new URL(site).host;
@@ -326,7 +328,8 @@ async function collectMenuPages(
   // 也讀得到完整的顯示文字（比 RSC 酬載掃描沒頁名更好）；失敗（非 Linux 執行環境等）就
   // 自動退回下面的 plain fetch，不讓整個蒐集功能被這一步卡死
   const rendered = await renderHomepage(site);
-  if (rendered) {
+  let headlessError: string | undefined;
+  if (rendered.ok) {
     rawHtml = rendered.html;
     root = parse(rawHtml);
     base = rendered.finalUrl.replace(/\/+$/, '');
@@ -335,6 +338,8 @@ async function collectMenuPages(
     } catch {
       /* 保留原本 host */
     }
+  } else {
+    headlessError = rendered.error;
   }
 
   // 首頁抓失敗會讓整組蒐集垮掉（拿不到轉址後的 base，後面 sitemap 也會撈錯位置），
@@ -415,14 +420,18 @@ async function collectMenuPages(
     pages: Array.from(picked.values())
       .slice(0, limit)
       .map((p) => ({ url: p.url, label: withBlogPrefix(p.url, p.label ?? '') })),
+    headlessError,
   };
 }
 
 // 蒐集「候選頁」：選單頁（有頁名）＋整份 sitemap 合併、去重、硬規則過濾功能頁。
 // 這裡刻意收得寬，型態判斷與是否收錄交給 AI 分類（lib/tkd-classify.ts）與使用者勾選
-export async function collectCandidates(siteInput: string, limit = 300): Promise<PageRef[]> {
+export async function collectCandidates(
+  siteInput: string,
+  limit = 300,
+): Promise<{ pages: PageRef[]; headlessError?: string }> {
   const site = normalizeSite(siteInput);
-  const { base, pages } = await collectMenuPages(site, limit);
+  const { base, pages, headlessError } = await collectMenuPages(site, limit);
 
   // 去重 key：先統一編碼（選單連結經 new URL() 會把中文轉成 %E3%80%90...，
   // sitemap 來的是原始中文字，不先 decode 兩邊 key 對不上、同一頁會重複收），
@@ -483,7 +492,7 @@ export async function collectCandidates(siteInput: string, limit = 300): Promise
     }
   }
 
-  return Array.from(picked.values()).slice(0, limit);
+  return { pages: Array.from(picked.values()).slice(0, limit), headlessError };
 }
 
 // 檢查單頁是否 noindex（meta robots／googlebot 標籤或 X-Robots-Tag 回應標頭）。
@@ -529,7 +538,7 @@ export async function collectUrls(
 ): Promise<PageRef[]> {
   const site = normalizeSite(siteInput);
   if (scope === 'important') {
-    const candidates = await collectCandidates(site, limit);
+    const { pages: candidates } = await collectCandidates(site, limit);
     if (candidates.length > 0) return candidates;
   }
   // 全站/退路模式沒有選單名，label 留空（寫入時改用網址或標題當顯示文字）
