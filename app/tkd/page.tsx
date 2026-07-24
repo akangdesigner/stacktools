@@ -82,54 +82,6 @@ function pathSegs(u: string): string[] {
   }
 }
 
-// 該站「主要層」：最淺、且該層頁數 ≥3 的那層（穩健版）。
-// 只取最小層會被單一淺層索引頁拉低（如 Shopline 的 /products 全商品頁 → 把層數壓成 1）；
-// 改成「最淺、且有一定數量的層」才穩。沒有任一層達 3 頁就退回最小層。
-function mainDepthOf(pages: { url: string }[]): number {
-  const cnt: Record<number, number> = {};
-  for (const p of pages) {
-    const d = pathSegs(p.url).length;
-    if (d >= 1) cnt[d] = (cnt[d] ?? 0) + 1;
-  }
-  const depths = Object.keys(cnt)
-    .map(Number)
-    .sort((a, b) => a - b);
-  for (const d of depths) if (cnt[d] >= 3) return d;
-  return depths[0] ?? 1;
-}
-
-// 收錄頁的「路徑 key 集合」，用來判斷某頁的上層是否也被收錄
-function pathKeySet(pages: { url: string }[]): Set<string> {
-  return new Set(pages.map((p) => "/" + pathSegs(p.url).join("/")).filter((k) => k !== "/"));
-}
-
-// 是否主要目標頁（純用麵包屑判斷）：
-// 1) 首頁一定是；
-// 2) 若「有任一上層路徑也被收錄」→ 子頁（如 /products/xxx 的上層 /products 有被收，代表它是商品明細）；
-// 3) 若比該站主要層更深 → 子頁（接住沒有明確上層頁的文章列表，如 /blog/detail/xxx）；
-// 其餘＝主要目標頁（如 /categories/內衣 沒有 /categories 這個上層頁，就是主分頁）
-function isMainPage(url: string, mainDepth: number, keySet: Set<string>): boolean {
-  const segs = pathSegs(url);
-  if (segs.length === 0) return true; // 首頁
-  for (let i = 1; i < segs.length; i++) {
-    if (keySet.has("/" + segs.slice(0, i).join("/"))) return false; // 上層頁有被收 → 子頁
-  }
-  return segs.length <= mainDepth;
-}
-
-// 依「架構」自動選判斷主/子頁的規則（先看架構、再決定用哪種，避免被各平台網址結構搞爆）：
-// - 有抓到選單（有選單名的頁夠多）→ 用「在主選單裡＝主要目標頁」（最準，就是網站主人認定的重點頁）
-// - 抓不到選單（極少數全 JS 選單、連 ul 退路都撈不到）→ 退回「麵包屑結構」判斷
-function pickIsMain(
-  pages: { url: string; label?: string }[],
-): (p: { url: string; label?: string }) => boolean {
-  const hasMenu = pages.filter((p) => p.label && p.label.trim()).length >= 3; // 首頁＋≥2 選單項才算真的抓到選單
-  if (hasMenu) return (p) => !!(p.label && p.label.trim());
-  const mainDepth = mainDepthOf(pages);
-  const keySet = pathKeySet(pages);
-  return (p) => isMainPage(p.url, mainDepth, keySet);
-}
-
 // 批量勾選的分組維度
 export type PageGroup = { key: string; tag?: string; pages: CandidatePage[] };
 
@@ -278,19 +230,11 @@ export default function TkdPage() {
       );
       const plat = collected.platform ?? "generic";
       setPlatform(plat);
-      // 預設勾選：91APP 直接用後端 adapter 給的精準 include（產品/分類/首頁/形象=勾、
-      // 部落格單篇/功能頁=不勾）；91APP 沒選單名，用 pickIsMain 反而會被數字 ID 深路徑判亂。
-      // 其他平台維持原本規則：pickIsMain 依架構自動選，再排除促銷/功能頁。
-      const isMain = pickIsMain(collected.pages);
-      setCandidates(
-        collected.pages.map((p) => ({
-          ...p,
-          include:
-            plat === "91app"
-              ? p.include
-              : isMain(p) && p.type !== "促銷" && p.type !== "功能頁",
-        })),
-      );
+      // 預設勾選：直接沿用後端的 include 判斷（AI 分類＋規則強制：分類/產品/首頁/形象=勾，
+      // 部落格單篇/促銷/功能頁=不勾）。曾經試過用網址階層猜「主要頁」，但深淺層數在不同站
+      // 結構下不穩（GSC/sitemap 補回的重要頁常常沒有選單名，卻剛好落在比雜項頁更深的層，
+      // 依階層猜反而會被排除）——AI 分類是依語意判斷，不受網址結構影響，比較可靠。
+      setCandidates(collected.pages.map((p) => ({ ...p })));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
