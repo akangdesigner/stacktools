@@ -151,15 +151,15 @@ export default function VideoPostLiffPage() {
       setImagePrompt(tData.imagePrompt || '');
       setCustomerName(tData.customerName || '');
 
-      await genImage(tData.imagePrompt || '', '', false);
+      await genImage(tData.imagePrompt || '', '', false, uid);
     } catch (e) {
       setError(`生文案失敗：${msg(e)}`);
       setPhase('error');
     }
   }
 
-  // ── 生圖（adjustment=定向改圖需求；restart=true 單獨重生、重置計時）──
-  async function genImage(prompt: string, adj = '', restart = true) {
+  // ── 生圖（adjustment=定向改圖需求；restart=true 單獨重生、重置計時；notifyLineUid=首次生成完成才推播 LINE 通知）──
+  async function genImage(prompt: string, adj = '', restart = true, notifyLineUid?: string) {
     if (!prompt) {
       setError('沒有圖片提示詞，請重新生成');
       setPhase('error');
@@ -176,7 +176,12 @@ export default function VideoPostLiffPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // 有定向調整且手上有當前圖 → 帶上一張圖走 img2img（只改調整處、其餘不動）；首次/重新生成不帶
-        body: JSON.stringify({ imagePrompt: prompt, adjustment: adj, baseImage: adj && imageUrl ? imageUrl : undefined }),
+        body: JSON.stringify({
+          imagePrompt: prompt,
+          adjustment: adj,
+          baseImage: adj && imageUrl ? imageUrl : undefined,
+          notifyLineUid,
+        }),
       });
       const startData = await startRes.json().catch(() => ({}));
       if (!startRes.ok || !startData.jobId) {

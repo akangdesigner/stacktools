@@ -19,7 +19,25 @@ function prune() {
   for (const [k, v] of jobs) if (now - v.ts > 15 * 60 * 1000) jobs.delete(k);
 }
 
-async function generate(jobId: string, imagePrompt: string, adjustment?: string, baseImage?: string) {
+// 圖片真的生成完成才推播「生成好囉」——原本 n8n 在文案生成完就先推播，圖片其實還沒做完，會誤導使用者
+async function notifyDone(lineUid: string) {
+  const token = process.env.AIEDITOR_LINE_TOKEN;
+  if (!token) return;
+  try {
+    await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: lineUid,
+        messages: [{ type: 'text', text: '📰 你的時事貼文生成好囉！點開剛剛的視窗看看吧～' }],
+      }),
+    });
+  } catch {
+    // 推播失敗不影響生圖結果，忽略即可
+  }
+}
+
+async function generate(jobId: string, imagePrompt: string, adjustment?: string, baseImage?: string, notifyLineUid?: string) {
   const apiKey = process.env.OPENROUTER_IMAGE_API_KEY || process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     jobs.set(jobId, { status: 'error', error: '伺服器尚未設定 OPENROUTER_IMAGE_API_KEY 或 OPENROUTER_API_KEY 環境變數', ts: Date.now() });
@@ -84,6 +102,7 @@ async function generate(jobId: string, imagePrompt: string, adjustment?: string,
       return;
     }
     jobs.set(jobId, { status: 'done', dataUrl, ts: Date.now() });
+    if (notifyLineUid) void notifyDone(notifyLineUid);
   } catch (err) {
     const aborted = err instanceof Error && err.name === 'AbortError';
     jobs.set(jobId, {
@@ -97,14 +116,19 @@ async function generate(jobId: string, imagePrompt: string, adjustment?: string,
 }
 
 export async function POST(req: NextRequest) {
-  const { imagePrompt, adjustment, baseImage } = (await req.json()) as { imagePrompt?: string; adjustment?: string; baseImage?: string };
+  const { imagePrompt, adjustment, baseImage, notifyLineUid } = (await req.json()) as {
+    imagePrompt?: string;
+    adjustment?: string;
+    baseImage?: string;
+    notifyLineUid?: string; // 只有首次生成（非調整）才帶，完成時推播 LINE 通知
+  };
   if (!imagePrompt || !imagePrompt.trim()) {
     return NextResponse.json({ error: '缺少 imagePrompt' }, { status: 400 });
   }
   prune();
   const jobId = crypto.randomUUID();
   jobs.set(jobId, { status: 'pending', ts: Date.now() });
-  void generate(jobId, imagePrompt, adjustment, baseImage);
+  void generate(jobId, imagePrompt, adjustment, baseImage, notifyLineUid);
   return NextResponse.json({ jobId });
 }
 
