@@ -113,9 +113,16 @@ function DetailsToggle({ title, details }: { title: string; details: { url: stri
   );
 }
 
-// 只留寫回進度表需要的欄位
+// 只留寫回進度表需要的欄位（details 一併帶上，讓後端同步寫進「健檢明細」分頁）
 function toWriteChecks(checks: CheckItem[]) {
-  return checks.map((c) => ({ level: c.level, category: c.category, item: c.item, status: c.status, advice: c.advice }));
+  return checks.map((c) => ({
+    level: c.level,
+    category: c.category,
+    item: c.item,
+    status: c.status,
+    advice: c.advice,
+    details: c.details,
+  }));
 }
 
 // 單一階段的結果表格（標題 + 小計 + 表格）；readonly 只是語意上表示「已登記」的階段一
@@ -281,7 +288,8 @@ export default function SiteAuditPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "寫入失敗");
       const ap = data.appended ? `，另補上 ${data.appended} 列新項目（${data.appendedItems.join("、")}）` : "";
-      setWriteMsg({ ok: true, text: `已更新 ${data.updated} 列狀態${ap}` });
+      const dt = data.detailRows ? `；問題頁明細已寫入「健檢明細」分頁（${data.detailRows} 筆）` : "";
+      setWriteMsg({ ok: true, text: `已更新 ${data.updated} 列狀態${ap}${dt}` });
     } catch (err) {
       setWriteMsg({ ok: false, text: err instanceof Error ? err.message : "寫入失敗" });
     } finally {

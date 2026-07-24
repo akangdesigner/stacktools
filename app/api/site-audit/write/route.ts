@@ -37,6 +37,64 @@ async function resolveTabByGid(sheetId: string, gid: number, accessToken: string
   return data.sheets?.find((s) => s.properties?.sheetId === gid)?.properties?.title ?? null;
 }
 
+const DETAIL_TAB = '健檢明細';
+
+// 確保「健檢明細」分頁存在（沒有就建立），回傳分頁名稱
+async function ensureDetailTab(sheetId: string, accessToken: string): Promise<void> {
+  const res = await fetch(`${SHEETS_BASE}/${sheetId}?fields=sheets.properties(title)`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return;
+  const data = (await res.json()) as { sheets?: { properties?: { title?: string } }[] };
+  const exists = data.sheets?.some((s) => s.properties?.title === DETAIL_TAB);
+  if (exists) return;
+  await fetch(`${SHEETS_BASE}/${sheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: DETAIL_TAB } } }] }),
+  });
+}
+
+// 把每項檢查的「問題頁明細」(details) 攤平寫進「健檢明細」分頁：
+// 依「確認事項」合併——這次有送的項目整批換新，沒送到的項目（例如另一階段）保留原樣，
+// 避免階段一、階段二分開寫入時互相洗掉對方的明細。
+async function writeDetailsTab(
+  sheetId: string,
+  accessToken: string,
+  checks: { level: string; category: string; item: string; status: string; details?: { url: string; note: string }[] }[],
+): Promise<number> {
+  const newRows = checks.flatMap((c) =>
+    (c.details ?? []).map((d) => [c.item, STATUS_TEXT[c.status] ?? c.status, d.url, d.note]),
+  );
+  const touchedItems = new Set(checks.filter((c) => (c.details?.length ?? 0) > 0).map((c) => c.item));
+  if (newRows.length === 0 && touchedItems.size === 0) return 0;
+
+  await ensureDetailTab(sheetId, accessToken);
+
+  // 讀出既有內容，保留不屬於這次送出項目的舊資料列（前兩列是日期列＋標題列）
+  const readRes = await fetch(`${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(DETAIL_TAB)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const existing = readRes.ok ? (((await readRes.json()) as { values?: string[][] }).values ?? []) : [];
+  const keptRows = existing.slice(2).filter((r) => r[0] && !touchedItems.has(r[0]));
+
+  const today = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
+  const values = [[`健檢日期：${today}（最後更新）`], ['確認事項', '狀態', '網址', '問題說明'], ...keptRows, ...newRows];
+
+  // 先清空整頁再寫入（比照 Sheets 晶片下拉限制的既有作法：用 values:clear，不用 deleteDimension），避免舊資料殘留在新內容之後
+  await fetch(`${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(DETAIL_TAB)}:clear`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  await fetch(`${SHEETS_BASE}/${sheetId}/values/${encodeURIComponent(DETAIL_TAB)}!A1?valueInputOption=RAW`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values }),
+  });
+
+  return keptRows.length + newRows.length;
+}
+
 // 純值儲存格（可選底色、粗體）；不含 dataValidation，寫入時保留格子既有的下拉晶片樣式
 type Color = ReturnType<typeof rgb>;
 function cell(value: string, bg?: Color, bold = false) {
@@ -51,7 +109,7 @@ function cell(value: string, bg?: Color, bold = false) {
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     sheetUrl?: string;
-    checks?: { level: string; category: string; item: string; status: string; advice: string }[];
+    checks?: { level: string; category: string; item: string; status: string; advice: string; details?: { url: string; note: string }[] }[];
   };
 
   const sheetId = body.sheetUrl ? extractSheetId(body.sheetUrl) : null;
@@ -188,17 +246,19 @@ export async function POST(req: NextRequest) {
     requests.push({ appendCells: { sheetId: gid, rows: appendRows, fields: 'userEnteredValue,userEnteredFormat.backgroundColor,userEnteredFormat.textFormat' } });
   }
 
-  if (requests.length === 0) return NextResponse.json({ updated: 0, appended: 0, appendedItems: [] });
-
-  const batchRes = await fetch(`${SHEETS_BASE}/${sheetId}:batchUpdate`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requests }),
-  });
-  if (!batchRes.ok) {
-    const err = (await batchRes.json()) as { error?: { message: string } };
-    return NextResponse.json({ error: `寫入進度表失敗：${err.error?.message ?? batchRes.status}` }, { status: 502 });
+  if (requests.length > 0) {
+    const batchRes = await fetch(`${SHEETS_BASE}/${sheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    });
+    if (!batchRes.ok) {
+      const err = (await batchRes.json()) as { error?: { message: string } };
+      return NextResponse.json({ error: `寫入進度表失敗：${err.error?.message ?? batchRes.status}` }, { status: 502 });
+    }
   }
 
-  return NextResponse.json({ updated, appended: appendedItems.length, appendedItems, filledBlankRows: filled });
+  const detailRows = await writeDetailsTab(sheetId, accessToken, body.checks);
+
+  return NextResponse.json({ updated, appended: appendedItems.length, appendedItems, filledBlankRows: filled, detailRows });
 }
