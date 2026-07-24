@@ -1,6 +1,8 @@
 import { parse, type HTMLElement } from 'node-html-parser';
 import { gunzipSync } from 'node:zlib';
 import { fetchPageSearchStats } from './site-audit-gsc';
+import chromium from '@sparticuz/chromium';
+import { launch } from 'puppeteer-core';
 
 // h1 精修 callback：原始 <h1> 讀不到時，由呼叫端（平台 adapter）從 server 端最佳來源還原 h1。
 // 用注入方式而非直接 import 平台模組，讓 crawler 不依賴 tkd-platform（避免循環相依）
@@ -38,6 +40,33 @@ async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Respons
     });
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// 用無頭瀏覽器把首頁真的渲染出來再讀 DOM：純 fetch 只能拿到初始 HTML，前端框架用 JS
+// 動態插入的選單（沒有對應的 <a> 標籤、連 RSC 酬載掃描都掃不到的情況）只有真的執行 JS
+// 渲染過才看得到，這是唯一通用解法（不綁定特定框架的序列化方式）。
+// 任何失敗（executablePath 在非 Linux 環境跑不起來、渲染逾時等）都回傳 null，
+// 讓呼叫端自動退回原本的 fetch 流程，不讓整個蒐集功能被這一步卡死
+async function renderHomepage(url: string): Promise<{ html: string; finalUrl: string } | null> {
+  let browser: Awaited<ReturnType<typeof launch>> | null = null;
+  try {
+    browser = await launch({
+      args: chromium.args,
+      defaultViewport: { width: 1280, height: 900 },
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent(UA);
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 20000 });
+    const html = await page.content();
+    const finalUrl = page.url();
+    return { html, finalUrl };
+  } catch {
+    return null;
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 }
 
@@ -243,6 +272,20 @@ function withBlogPrefix(url: string, label: string): string {
   return isBlog && label && !label.startsWith('部落格') ? `部落格-${label}` : label;
 }
 
+// 前端框架（多為 Next.js App Router）常把選單資料序列化進 RSC 串流酬載
+// （<script>self.__next_f.push(...)</script> 裡一段跳脫過的 JSON），要等瀏覽器執行 JS
+// 才會真的組出 <a> 標籤——HTML 原始碼裡完全沒有 <a> 元素，純 DOM 選擇器抓不到。
+// 但酬載本身就是跳脫過的 JSON 字串，直接對整份 HTML 全文找 "href":"..." 這個鍵值對
+// 還是撈得到，不必真的執行 JS／裝 headless 瀏覽器；沒有對應顯示文字時留空，
+// 跟 sitemap 補的頁一樣，寫入時退回抓到的 title/h1
+function scanRscHrefs(html: string): string[] {
+  const out: string[] = [];
+  const re = /\\?"href\\?"\s*:\s*\\?"([^"\\]+)\\?"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) out.push(m[1]);
+  return out;
+}
+
 // 蒐集「選單頁」：首頁 + 主選單(header/nav)連結，並保留選單文字當頁名
 // 回傳 base（轉址後的最終網址，後續抓 sitemap 要用同一個基底）與頁面清單
 async function collectMenuPages(
@@ -275,6 +318,23 @@ async function collectMenuPages(
   // 直接用使用者輸入的網址組內頁會 404，所以抓到首頁後改用轉址後的最終網址
   let base = site;
   let root: ReturnType<typeof parse> | null = null;
+  let rawHtml = ''; // 保留原始 HTML 文字，給下面的 RSC 選單掃描用（root 解析後拿不到原文）
+
+  // 先試無頭瀏覽器把首頁真的渲染出來——這樣連純 JS 動態插入、沒有對應 <a> 標籤的選單項
+  // 也讀得到完整的顯示文字（比 RSC 酬載掃描沒頁名更好）；失敗（非 Linux 執行環境等）就
+  // 自動退回下面的 plain fetch，不讓整個蒐集功能被這一步卡死
+  const rendered = await renderHomepage(site);
+  if (rendered) {
+    rawHtml = rendered.html;
+    root = parse(rawHtml);
+    base = rendered.finalUrl.replace(/\/+$/, '');
+    try {
+      host = new URL(base).host;
+    } catch {
+      /* 保留原本 host */
+    }
+  }
+
   // 首頁抓失敗會讓整組蒐集垮掉（拿不到轉址後的 base，後面 sitemap 也會撈錯位置），
   // 偶發網路失敗值得重試一次
   for (let attempt = 0; attempt < 2 && !root; attempt++) {
@@ -285,7 +345,8 @@ async function collectMenuPages(
           base = res.url.replace(/\/+$/, '');
           host = new URL(base).host; // host 也同步更新，否則 www 連結會被同網域檢查濾掉
         }
-        root = parse(await res.text());
+        rawHtml = await res.text();
+        root = parse(rawHtml);
       }
     } catch {
       // 再試一次；兩次都失敗就只回傳首頁
@@ -334,6 +395,16 @@ async function collectMenuPages(
           }
         }
       }
+    }
+  }
+
+  // 掃 RSC 酬載補回前端動態插入、完全沒有 <a> 標籤的選單項（如安心檢測、購物須知）；
+  // 沒有顯示文字，靠 add() 既有的去重規則自然不蓋掉前面已收到頁名的同一頁
+  for (const href of scanRscHrefs(rawHtml)) {
+    try {
+      add(new URL(href, base).href);
+    } catch {
+      /* 略過無法解析的連結 */
     }
   }
 
