@@ -73,7 +73,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
         el!.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
         tocItems.push({ id, text });
-        if (client.faqEnabled && /faq/i.test(text)) {
+        if (client.faqEnabled && /faq|常見問題/i.test(text)) {
           faqSectionActive = true;
           h3Count = 1;
         }
