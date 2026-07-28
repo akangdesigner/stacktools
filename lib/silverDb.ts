@@ -29,6 +29,9 @@ db.exec(`
     nickname TEXT,
     age INTEGER,
     gender TEXT,
+    chronicDiseases TEXT,  -- 逗號分隔的 CHRONIC_DISEASES key，例如 "diabetes,kidney"
+    chronicOther TEXT,     -- 慢性病清單外的其他，自由文字
+    avoidFoods TEXT,       -- 使用者自訂不能吃/要避免的東西，自由文字
     createdAt TEXT DEFAULT (datetime('now', 'localtime')),
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
@@ -112,6 +115,25 @@ db.exec(`
     batchIndex INTEGER DEFAULT 0, -- 長輩目前看到第幾批（0=第一批 1~3 個，1=第二批 4~6 個…）
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS food_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId TEXT NOT NULL,
+    batchId TEXT NOT NULL,        -- 同一次拍照/描述辨識出的多品項共用同一個值，分組查詢用
+    foodName TEXT NOT NULL,
+    quantityDesc TEXT,
+    grams REAL,
+    calories REAL,
+    proteinG REAL,
+    carbG REAL,
+    fatG REAL,
+    hasVegetable INTEGER DEFAULT 0,
+    nutritionSource TEXT,          -- 'fda'=食藥署資料庫換算／'ai'=AI估算
+    sourceName TEXT,                -- 命中的食藥署資料庫食物名稱，AI 估算時為 null
+    adviceText TEXT,
+    source TEXT DEFAULT 'liff',
+    createdAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);
 
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
@@ -127,6 +149,16 @@ if (!silverUserColumns.some((c) => c.name === 'botName')) {
 }
 if (!silverUserColumns.some((c) => c.name === 'persona')) {
   db.exec('ALTER TABLE silver_users ADD COLUMN persona TEXT');
+}
+// 慢性病／避免食物（飲食拍照分析要用來提醒），舊資料庫可能還沒有這三個欄位，補上去
+if (!silverUserColumns.some((c) => c.name === 'chronicDiseases')) {
+  db.exec('ALTER TABLE silver_users ADD COLUMN chronicDiseases TEXT');
+}
+if (!silverUserColumns.some((c) => c.name === 'chronicOther')) {
+  db.exec('ALTER TABLE silver_users ADD COLUMN chronicOther TEXT');
+}
+if (!silverUserColumns.some((c) => c.name === 'avoidFoods')) {
+  db.exec('ALTER TABLE silver_users ADD COLUMN avoidFoods TEXT');
 }
 
 // recurring_reminders 舊資料庫可能還沒有 remindTime 欄位（原本固定每天 8:30 推播、
@@ -450,6 +482,9 @@ export interface SilverUser {
   gender: string | null;
   botName: string | null; // 使用者自訂的機器人名字，例如「小福」
   persona: string | null; // 機器人人設，見 PERSONA_KEYS
+  chronicDiseases: string | null; // 逗號分隔的 CHRONIC_DISEASES key
+  chronicOther: string | null; // 慢性病清單外的其他，自由文字
+  avoidFoods: string | null; // 不能吃/要避免的東西，自由文字
   createdAt: string;
   updatedAt: string;
 }
@@ -462,6 +497,15 @@ export function isValidPersona(value: string): value is PersonaKey {
   return (PERSONA_KEYS as readonly string[]).includes(value);
 }
 
+// 慢性病固定選項（給飲食拍照分析的 AI 建議用來判斷要不要提醒）。
+// 中文標籤交由呼叫端（ai-linebot）自己維護一份對照——跟 PERSONA_KEYS 同一套
+// 「兩邊手動同步 key」的做法，這裡只認得合法 key，不管顯示文字。
+export const CHRONIC_DISEASES = ['diabetes', 'hypertension', 'kidney', 'gout', 'heart', 'hyperlipidemia'] as const;
+export type ChronicDisease = (typeof CHRONIC_DISEASES)[number];
+export function isValidChronicDisease(value: string): value is ChronicDisease {
+  return (CHRONIC_DISEASES as readonly string[]).includes(value);
+}
+
 export function getUser(userId: string): SilverUser | null {
   return (db.prepare('SELECT * FROM silver_users WHERE userId = ?').get(userId) as SilverUser) ?? null;
 }
@@ -470,41 +514,63 @@ export function getAllUsers(): SilverUser[] {
   return db.prepare('SELECT * FROM silver_users ORDER BY updatedAt DESC').all() as SilverUser[];
 }
 
-export function upsertUser(
-  userId: string,
-  nickname: string | null,
-  age: number | null,
-  gender: string | null,
-  botName: string | null = null,
-  persona: string | null = null,
-): void {
+export interface SilverUserFields {
+  nickname: string | null;
+  age: number | null;
+  gender: string | null;
+  botName?: string | null;
+  persona?: string | null;
+  chronicDiseases?: string | null; // 逗號分隔字串，呼叫端（route.ts）負責驗證/組字串
+  chronicOther?: string | null;
+  avoidFoods?: string | null;
+}
+
+export function upsertUser(userId: string, fields: SilverUserFields): void {
   db.prepare(`
-    INSERT INTO silver_users (userId, nickname, age, gender, botName, persona, updatedAt)
-    VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    INSERT INTO silver_users (userId, nickname, age, gender, botName, persona, chronicDiseases, chronicOther, avoidFoods, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     ON CONFLICT(userId) DO UPDATE SET
       nickname = COALESCE(excluded.nickname, silver_users.nickname),
       age = COALESCE(excluded.age, silver_users.age),
       gender = COALESCE(excluded.gender, silver_users.gender),
       botName = COALESCE(excluded.botName, silver_users.botName),
       persona = COALESCE(excluded.persona, silver_users.persona),
+      chronicDiseases = COALESCE(excluded.chronicDiseases, silver_users.chronicDiseases),
+      chronicOther = COALESCE(excluded.chronicOther, silver_users.chronicOther),
+      avoidFoods = COALESCE(excluded.avoidFoods, silver_users.avoidFoods),
       updatedAt = excluded.updatedAt
-  `).run(userId, nickname, age, gender, botName, persona);
+  `).run(
+    userId,
+    fields.nickname,
+    fields.age,
+    fields.gender,
+    fields.botName ?? null,
+    fields.persona ?? null,
+    fields.chronicDiseases ?? null,
+    fields.chronicOther ?? null,
+    fields.avoidFoods ?? null,
+  );
 }
 
 // 編輯用戶基本資料：直接覆蓋（允許清空成 null，跟 upsertUser 的 COALESCE 保留舊值不同）
-export function updateUser(
-  userId: string,
-  nickname: string | null,
-  age: number | null,
-  gender: string | null,
-  botName: string | null = null,
-  persona: string | null = null,
-): void {
+export function updateUser(userId: string, fields: SilverUserFields): void {
   db.prepare(`
     UPDATE silver_users
-    SET nickname = ?, age = ?, gender = ?, botName = ?, persona = ?, updatedAt = datetime('now', 'localtime')
+    SET nickname = ?, age = ?, gender = ?, botName = ?, persona = ?,
+        chronicDiseases = ?, chronicOther = ?, avoidFoods = ?,
+        updatedAt = datetime('now', 'localtime')
     WHERE userId = ?
-  `).run(nickname, age, gender, botName, persona, userId);
+  `).run(
+    fields.nickname,
+    fields.age,
+    fields.gender,
+    fields.botName ?? null,
+    fields.persona ?? null,
+    fields.chronicDiseases ?? null,
+    fields.chronicOther ?? null,
+    fields.avoidFoods ?? null,
+    userId,
+  );
 }
 
 // 刪除用戶，連同該用戶所有關聯資料一起清掉，避免留下孤兒資料
@@ -517,6 +583,7 @@ export function deleteUser(userId: string): void {
     db.prepare('DELETE FROM news_preferences WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM auto_bless_sends WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM family_recipes WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM food_logs WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM silver_users WHERE userId = ?').run(uid);
   });
   tx(userId);
@@ -874,4 +941,111 @@ export function resetTravelBatch(userId: string): void {
   db.prepare(`
     UPDATE travel_cache SET batchIndex = 0, updatedAt = datetime('now', 'localtime') WHERE userId = ?
   `).run(userId);
+}
+
+// ── Food Logs（飲食拍照分析，一次拍照/描述可能對應多列，共用同一個 batchId）────────
+
+export interface FoodLogItemInput {
+  foodName: string;
+  quantityDesc: string | null;
+  grams: number | null;
+  calories: number | null;
+  proteinG: number | null;
+  carbG: number | null;
+  fatG: number | null;
+  hasVegetable: boolean;
+  nutritionSource: 'fda' | 'ai' | null;
+  sourceName: string | null;
+}
+
+export interface FoodLog {
+  id: number;
+  userId: string;
+  batchId: string;
+  foodName: string;
+  quantityDesc: string | null;
+  grams: number | null;
+  calories: number | null;
+  proteinG: number | null;
+  carbG: number | null;
+  fatG: number | null;
+  hasVegetable: number;
+  nutritionSource: string | null;
+  sourceName: string | null;
+  adviceText: string | null;
+  source: string;
+  createdAt: string;
+}
+
+// 一次拍照/描述辨識出的多品項一起寫入，共用同一個 batchId；用 crypto.randomUUID
+// 而不是給呼叫端自己傳，確保每次呼叫都是新的一批（跟 hb_food_logs 的做法一致）
+export function createFoodLogBatch(
+  userId: string,
+  items: FoodLogItemInput[],
+  advice: string,
+  source = 'liff'
+): { batchId: string; items: FoodLog[] } {
+  const batchId = crypto.randomUUID();
+  const insert = db.prepare(`
+    INSERT INTO food_logs
+      (userId, batchId, foodName, quantityDesc, grams, calories, proteinG, carbG, fatG, hasVegetable, nutritionSource, sourceName, adviceText, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const tx = db.transaction((rows: FoodLogItemInput[]) => {
+    for (const item of rows) {
+      insert.run(
+        userId,
+        batchId,
+        item.foodName,
+        item.quantityDesc,
+        item.grams,
+        item.calories,
+        item.proteinG,
+        item.carbG,
+        item.fatG,
+        item.hasVegetable ? 1 : 0,
+        item.nutritionSource,
+        item.sourceName,
+        advice,
+        source
+      );
+    }
+  });
+  tx(items);
+  return { batchId, items: getFoodLogBatch(batchId) };
+}
+
+// 同批多列 insert 的 createdAt 時間戳太接近，只排 createdAt 順序會不穩定，
+// 這是 health-butler 那邊踩過兩次的坑（見 [[same-insert-timestamp-ordering]]），
+// 這裡直接用 id 當 tiebreaker。
+export function getFoodLogBatch(batchId: string): FoodLog[] {
+  return db.prepare('SELECT * FROM food_logs WHERE batchId = ? ORDER BY id ASC').all(batchId) as FoodLog[];
+}
+
+// 該使用者最新一批（LIFF 頁進頁顯示「上次辨識結果」用）
+export function getLatestFoodLogBatch(userId: string): FoodLog[] {
+  const latest = db.prepare(`
+    SELECT batchId FROM food_logs WHERE userId = ? ORDER BY id DESC LIMIT 1
+  `).get(userId) as { batchId: string } | undefined;
+  if (!latest) return [];
+  return getFoodLogBatch(latest.batchId);
+}
+
+// 使用者在 LIFF 頁編輯單一品項後儲存（品名/份量改了會由呼叫端重新估算好數字再傳進來）
+export function updateFoodLogItem(
+  id: number,
+  fields: {
+    foodName: string;
+    quantityDesc: string | null;
+    calories: number | null;
+    proteinG: number | null;
+    carbG: number | null;
+    fatG: number | null;
+  }
+): void {
+  db.prepare(`
+    UPDATE food_logs SET
+      foodName = ?, quantityDesc = ?, calories = ?, proteinG = ?, carbG = ?, fatG = ?
+    WHERE id = ?
+  `).run(fields.foodName, fields.quantityDesc, fields.calories, fields.proteinG, fields.carbG, fields.fatG, id);
 }
