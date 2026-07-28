@@ -3,12 +3,18 @@ import { createRecurringReminder, getUserRecurringReminders, getAllRecurringRemi
 
 export const dynamic = 'force-dynamic';
 
+// "HH:00" 整點格式；沒帶或格式不對就用預設 08:00（維持跟舊版一樣的行為）
+function normalizeTime(raw: unknown): string {
+  if (typeof raw === 'string' && /^([01]\d|2[0-3]):00$/.test(raw)) return raw;
+  return '08:00';
+}
+
 export async function POST(req: NextRequest) {
-  const { userId, description, daysOfWeek } = await req.json();
+  const { userId, description, daysOfWeek, remindTime } = await req.json();
   if (!userId || !description || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
     return NextResponse.json({ error: '缺少 userId、description 或 daysOfWeek' }, { status: 400 });
   }
-  const id = createRecurringReminder(userId, description, daysOfWeek);
+  const id = createRecurringReminder(userId, description, daysOfWeek, normalizeTime(remindTime));
   return NextResponse.json({ id });
 }
 

@@ -53,7 +53,16 @@ db.exec(`
     userId TEXT NOT NULL,
     description TEXT NOT NULL,
     daysOfWeek TEXT NOT NULL,
+    remindTime TEXT NOT NULL DEFAULT '08:00',
     createdAt TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS reminder_sends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reminderId INTEGER NOT NULL,
+    slot TEXT NOT NULL,
+    createdAt TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(reminderId, slot)
   );
 
   CREATE TABLE IF NOT EXISTS auto_bless_sends (
@@ -126,6 +135,13 @@ if (!silverUserColumns.some((c) => c.name === 'botName')) {
 }
 if (!silverUserColumns.some((c) => c.name === 'persona')) {
   db.exec('ALTER TABLE silver_users ADD COLUMN persona TEXT');
+}
+
+// recurring_reminders 舊資料庫可能還沒有 remindTime 欄位（原本固定每天 8:30 推播、
+// 沒有讓長輩自己選時間），補上去；預設 '08:00' 讓舊資料的行為跟以前最接近
+const reminderColumns = db.prepare("PRAGMA table_info(recurring_reminders)").all() as { name: string }[];
+if (!reminderColumns.some((c) => c.name === 'remindTime')) {
+  db.exec("ALTER TABLE recurring_reminders ADD COLUMN remindTime TEXT NOT NULL DEFAULT '08:00'");
 }
 
 const SHORT_TERM_NOTE_LIMIT = 20;
@@ -350,14 +366,20 @@ export interface RecurringReminder {
   userId: string;
   description: string;
   daysOfWeek: string; // 逗號分隔，0=週日～6=週六，例如 "1,4"
+  remindTime: string; // "HH:00"，長輩自選整點推播時間，例如 "08:00"
   createdAt: string;
 }
 
-export function createRecurringReminder(userId: string, description: string, daysOfWeek: number[]): number {
+export function createRecurringReminder(
+  userId: string,
+  description: string,
+  daysOfWeek: number[],
+  remindTime = '08:00',
+): number {
   const result = db.prepare(`
-    INSERT INTO recurring_reminders (userId, description, daysOfWeek)
-    VALUES (?, ?, ?)
-  `).run(userId, description, daysOfWeek.join(','));
+    INSERT INTO recurring_reminders (userId, description, daysOfWeek, remindTime)
+    VALUES (?, ?, ?, ?)
+  `).run(userId, description, daysOfWeek.join(','), remindTime);
   return result.lastInsertRowid as number;
 }
 
@@ -366,17 +388,41 @@ export function getUserRecurringReminders(userId: string): RecurringReminder[] {
 }
 
 export function deleteRecurringReminder(id: number): void {
-  db.prepare('DELETE FROM recurring_reminders WHERE id = ?').run(id);
+  const tx = db.transaction((reminderId: number) => {
+    db.prepare('DELETE FROM reminder_sends WHERE reminderId = ?').run(reminderId);
+    db.prepare('DELETE FROM recurring_reminders WHERE id = ?').run(reminderId);
+  });
+  tx(id);
 }
 
 export function getAllRecurringReminders(): RecurringReminder[] {
   return db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[];
 }
 
+// 舊版：只看星期幾，不管時間（保留給還沒切換掉的 n8n 排程用，新的推播邏輯改用下面那支）
 export function getRecurringRemindersDueToday(): RecurringReminder[] {
   const today = String(new Date().getDay());
   return (db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[])
     .filter((r) => r.daysOfWeek.split(',').includes(today));
+}
+
+// 這個時間點（台灣時區的星期幾＋整點）該推的提醒。dayOfWeek: 0=週日～6=週六，hour: 0-23
+export function getRecurringRemindersDueAt(dayOfWeek: number, hour: number): RecurringReminder[] {
+  const day = String(dayOfWeek);
+  const time = `${String(hour).padStart(2, '0')}:00`;
+  return (db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[])
+    .filter((r) => r.daysOfWeek.split(',').includes(day) && r.remindTime === time);
+}
+
+// 排程可能因為延遲、重疊而在同一個時段跑好幾次；這裡用 slot（例如 "2026-07-28_08"）
+// 擋掉同一則提醒同一個時段被推兩次，做法跟 auto_bless_sends 同一套
+export function markReminderSent(reminderId: number, slot: string): { alreadySent: boolean } {
+  try {
+    db.prepare('INSERT INTO reminder_sends (reminderId, slot) VALUES (?, ?)').run(reminderId, slot);
+    return { alreadySent: false };
+  } catch {
+    return { alreadySent: true };
+  }
 }
 
 // ── Silver Users ────────────────────────────────────────────────────────────
@@ -450,6 +496,7 @@ export function deleteUser(userId: string): void {
   const tx = db.transaction((uid: string) => {
     db.prepare('DELETE FROM user_notes WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM health_events WHERE userId = ?').run(uid);
+    db.prepare('DELETE FROM reminder_sends WHERE reminderId IN (SELECT id FROM recurring_reminders WHERE userId = ?)').run(uid);
     db.prepare('DELETE FROM recurring_reminders WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM user_state WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM news_preferences WHERE userId = ?').run(uid);
