@@ -57,14 +57,6 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
 
-  CREATE TABLE IF NOT EXISTS reminder_sends (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    reminderId INTEGER NOT NULL,
-    slot TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now', 'localtime')),
-    UNIQUE(reminderId, slot)
-  );
-
   CREATE TABLE IF NOT EXISTS auto_bless_sends (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     userId TEXT NOT NULL,
@@ -520,7 +512,6 @@ export function deleteUser(userId: string): void {
   const tx = db.transaction((uid: string) => {
     db.prepare('DELETE FROM user_notes WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM health_events WHERE userId = ?').run(uid);
-    db.prepare('DELETE FROM reminder_sends WHERE reminderId IN (SELECT id FROM recurring_reminders WHERE userId = ?)').run(uid);
     db.prepare('DELETE FROM recurring_reminders WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM user_state WHERE userId = ?').run(uid);
     db.prepare('DELETE FROM news_preferences WHERE userId = ?').run(uid);
