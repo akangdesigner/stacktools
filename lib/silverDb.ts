@@ -144,6 +144,25 @@ if (!reminderColumns.some((c) => c.name === 'remindTime')) {
   db.exec("ALTER TABLE recurring_reminders ADD COLUMN remindTime TEXT NOT NULL DEFAULT '08:00'");
 }
 
+// bless_preferences 第一版存的是語意類別（morning/night/festival/wisdom），
+// 上線沒多久就改成整點時段（06/09/12/15/18/21，對應排程 cron 實際觸發的時刻）。
+// 舊格式的值跟新的合法時段完全不重疊，parseBlessCategories 會全部濾掉變成
+// 空字串，接著被誤判成「使用者自己取消勾選全部」而整個退訂——實際上只是
+// 資料格式換了，使用者從沒表達過這個意願。清掉舊格式的列，讓它們退回
+// 「沒設定過＝全部時段都要」的預設值，才是這批人真正的原意。
+const VALID_BLESS_HOUR_TOKENS = ['06', '09', '12', '15', '18', '21'];
+const staleBlessRows = db.prepare('SELECT userId, category FROM bless_preferences').all() as {
+  userId: string;
+  category: string;
+}[];
+for (const row of staleBlessRows) {
+  const tokens = row.category.split(',').map((s) => s.trim());
+  const hasValidToken = tokens.some((t) => VALID_BLESS_HOUR_TOKENS.includes(t));
+  if (!hasValidToken) {
+    db.prepare('DELETE FROM bless_preferences WHERE userId = ?').run(row.userId);
+  }
+}
+
 const SHORT_TERM_NOTE_LIMIT = 20;
 
 // 固定的新聞類別清單（長輩可從這裡複選；順序就是選單顯示順序）
@@ -234,19 +253,24 @@ export function toggleNewsCategory(
   return setPreferenceCategories(userId, next);
 }
 
-// ── Bless Preferences（長輩圖自動發送要收哪些類別）───────────────────────────
-// 跟 news_preferences 同一套玩法：沒設定過（bless_preferences 沒有這個 userId 的
-// 資料列）視為「全部類別都要」——這樣舊使用者不會因為這個新功能上線就突然被
-// 退訂，行為跟現在完全一樣，除非使用者自己進 LIFF 頁去關掉某個類別。
+// ── Bless Preferences（長輩圖自動發送要收哪幾個固定時段）───────────────────
+// 排程（「銀髮機器人」的「自動長輩圖排程」節點）cron 是 `0 6,9,12,15,18,21 * * *`，
+// 一天固定發 6 次，不是每人各自挑任意時間——所以偏好設定是「這 6 個時段裡，
+// 哪幾個我要收」，不是隨便選時間。跟 news_preferences 同一套玩法：沒設定過
+// （bless_preferences 沒有這個 userId 的資料列）視為「全部時段都要」——這樣
+// 舊使用者不會因為這個新功能上線就突然被退訂，行為跟現在完全一樣，除非使用者
+// 自己進 LIFF 頁去關掉某個時段。
 
-export const BLESS_CATEGORIES = ['morning', 'night', 'festival', 'wisdom'] as const;
+export const BLESS_CATEGORIES = ['06', '09', '12', '15', '18', '21'] as const;
 export type BlessCategory = (typeof BLESS_CATEGORIES)[number];
 
 export const BLESS_CATEGORY_LABELS: Record<BlessCategory, string> = {
-  morning: '早安',
-  night: '晚安',
-  festival: '節慶',
-  wisdom: '哲理長輩圖',
+  '06': '早上6點',
+  '09': '早上9點',
+  '12': '中午12點',
+  '15': '下午3點',
+  '18': '下午6點',
+  '21': '晚上9點',
 };
 
 export function isValidBlessCategory(value: string): value is BlessCategory {
@@ -388,18 +412,14 @@ export function getUserRecurringReminders(userId: string): RecurringReminder[] {
 }
 
 export function deleteRecurringReminder(id: number): void {
-  const tx = db.transaction((reminderId: number) => {
-    db.prepare('DELETE FROM reminder_sends WHERE reminderId = ?').run(reminderId);
-    db.prepare('DELETE FROM recurring_reminders WHERE id = ?').run(reminderId);
-  });
-  tx(id);
+  db.prepare('DELETE FROM recurring_reminders WHERE id = ?').run(id);
 }
 
 export function getAllRecurringReminders(): RecurringReminder[] {
   return db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[];
 }
 
-// 舊版：只看星期幾，不管時間（保留給還沒切換掉的 n8n 排程用，新的推播邏輯改用下面那支）
+// 舊版：只看星期幾，不管時間（保留相容；沒人叫這支了但留著無妨）
 export function getRecurringRemindersDueToday(): RecurringReminder[] {
   const today = String(new Date().getDay());
   return (db.prepare('SELECT * FROM recurring_reminders').all() as RecurringReminder[])
@@ -414,15 +434,19 @@ export function getRecurringRemindersDueAt(dayOfWeek: number, hour: number): Rec
     .filter((r) => r.daysOfWeek.split(',').includes(day) && r.remindTime === time);
 }
 
-// 排程可能因為延遲、重疊而在同一個時段跑好幾次；這裡用 slot（例如 "2026-07-28_08"）
-// 擋掉同一則提醒同一個時段被推兩次，做法跟 auto_bless_sends 同一套
-export function markReminderSent(reminderId: number, slot: string): { alreadySent: boolean } {
-  try {
-    db.prepare('INSERT INTO reminder_sends (reminderId, slot) VALUES (?, ?)').run(reminderId, slot);
-    return { alreadySent: false };
-  } catch {
-    return { alreadySent: true };
-  }
+// 台灣時區的「現在」星期幾＋整點，n8n 排程改成每小時跑一次時，/due 用這個算現在該推哪個時段
+// （伺服器本身在 UTC，不能直接用 new Date().getDay()/getHours()，踩過同一個坑很多次了）
+export function taipeiDayAndHour(): { dayOfWeek: number; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Taipei',
+    weekday: 'short',
+    hour: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  // hour12:false 的 24 時制在午夜會回 "24"，要當 0 點看
+  return { dayOfWeek: weekdayMap[get('weekday')] ?? 0, hour: Number(get('hour')) % 24 };
 }
 
 // ── Silver Users ────────────────────────────────────────────────────────────

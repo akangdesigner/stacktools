@@ -90,29 +90,28 @@ export async function GET(req: NextRequest) {
 
   const festival = FESTIVALS[mmdd];
   // theme 是要印在圖上的具體字樣（母親節/早安…），category 是給偏好設定用的機器 key
-  // （見 bless-preferences），兩者分開是因為節慶的 theme 每天都不同，不能拿來當偏好選項。
-  let theme: string, content: string, visual: string, category: 'morning' | 'night' | 'festival' | 'wisdom';
+  // ——排程（自動長輩圖排程）cron 固定在 6/9/12/15/18/21 點各發一次，所以 category
+  // 就是這次觸發的整點時刻（見 bless-preferences），不是「早安/晚安」這種語意分類，
+  // 節慶當天不管幾點觸發，category 一樣是當下的整點，只有 theme 顯示的字換成節慶名。
+  let theme: string, content: string, visual: string;
+  const category = pad(hour);
 
   if (festival) {
     theme = festival.theme;
     content = festival.content;
     visual = pick(FESTIVAL_SCENES);
-    category = 'festival';
   } else if (hour === 6) {
     theme = '早安';
     content = pick(MORNING);
     visual = pick(MORNING_SCENES);
-    category = 'morning';
   } else if (hour === 21) {
     theme = '晚安';
     content = pick(NIGHT);
     visual = pick(NIGHT_SCENES);
-    category = 'night';
   } else {
     theme = '哲理長輩圖';
     content = pick(WISDOM);
     visual = pick(WISDOM_SCENES);
-    category = 'wisdom';
   }
 
   return NextResponse.json({ userId, slot, theme, category, content, visual });

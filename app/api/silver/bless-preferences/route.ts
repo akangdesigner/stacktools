@@ -15,7 +15,7 @@ const AVAILABLE = BLESS_CATEGORIES.map((value) => ({ value, label: BLESS_CATEGOR
 
 // GET /api/silver/bless-preferences?userId=xxx
 //   → { userId, categories: 已選類別[]（沒設定過就回全部類別）, available }
-// GET /api/silver/bless-preferences?category=morning&recipients=1
+// GET /api/silver/bless-preferences?category=06&recipients=1
 //   → { category, users: [{userId, ...}] }，銀髮-長輩圖生成 排程用，決定這次要發給誰
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get('userId');
