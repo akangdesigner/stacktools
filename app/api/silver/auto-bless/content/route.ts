@@ -89,25 +89,31 @@ export async function GET(req: NextRequest) {
   const mmdd = `${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
   const festival = FESTIVALS[mmdd];
-  let theme: string, content: string, visual: string;
+  // theme 是要印在圖上的具體字樣（母親節/早安…），category 是給偏好設定用的機器 key
+  // （見 bless-preferences），兩者分開是因為節慶的 theme 每天都不同，不能拿來當偏好選項。
+  let theme: string, content: string, visual: string, category: 'morning' | 'night' | 'festival' | 'wisdom';
 
   if (festival) {
     theme = festival.theme;
     content = festival.content;
     visual = pick(FESTIVAL_SCENES);
+    category = 'festival';
   } else if (hour === 6) {
     theme = '早安';
     content = pick(MORNING);
     visual = pick(MORNING_SCENES);
+    category = 'morning';
   } else if (hour === 21) {
     theme = '晚安';
     content = pick(NIGHT);
     visual = pick(NIGHT_SCENES);
+    category = 'night';
   } else {
     theme = '哲理長輩圖';
     content = pick(WISDOM);
     visual = pick(WISDOM_SCENES);
+    category = 'wisdom';
   }
 
-  return NextResponse.json({ userId, slot, theme, content, visual });
+  return NextResponse.json({ userId, slot, theme, category, content, visual });
 }

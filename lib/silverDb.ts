@@ -90,6 +90,12 @@ db.exec(`
     updatedAt TEXT DEFAULT (datetime('now', 'localtime'))
   );
 
+  CREATE TABLE IF NOT EXISTS bless_preferences (
+    userId TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    updatedAt TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  );
+
   CREATE TABLE IF NOT EXISTS news_cache (
     userId TEXT PRIMARY KEY,
     date TEXT NOT NULL,           -- 快取日期 YYYY-MM-DD，判斷是不是今天抓的
@@ -111,6 +117,15 @@ db.exec(`
 const userNotesColumns = db.prepare("PRAGMA table_info(user_notes)").all() as { name: string }[];
 if (!userNotesColumns.some((c) => c.name === 'importance')) {
   db.exec("ALTER TABLE user_notes ADD COLUMN importance TEXT NOT NULL DEFAULT 'short_term'");
+}
+
+// silver_users 舊資料庫可能還沒有 botName / persona 欄位（客戶資料設定新增的），補上去
+const silverUserColumns = db.prepare("PRAGMA table_info(silver_users)").all() as { name: string }[];
+if (!silverUserColumns.some((c) => c.name === 'botName')) {
+  db.exec('ALTER TABLE silver_users ADD COLUMN botName TEXT');
+}
+if (!silverUserColumns.some((c) => c.name === 'persona')) {
+  db.exec('ALTER TABLE silver_users ADD COLUMN persona TEXT');
 }
 
 const SHORT_TERM_NOTE_LIMIT = 20;
@@ -201,6 +216,83 @@ export function toggleNewsCategory(
   const shouldHave = action === 'add' ? true : action === 'remove' ? false : !has;
   const next = shouldHave ? [...current, category] : current.filter((c) => c !== category);
   return setPreferenceCategories(userId, next);
+}
+
+// ── Bless Preferences（長輩圖自動發送要收哪些類別）───────────────────────────
+// 跟 news_preferences 同一套玩法：沒設定過（bless_preferences 沒有這個 userId 的
+// 資料列）視為「全部類別都要」——這樣舊使用者不會因為這個新功能上線就突然被
+// 退訂，行為跟現在完全一樣，除非使用者自己進 LIFF 頁去關掉某個類別。
+
+export const BLESS_CATEGORIES = ['morning', 'night', 'festival', 'wisdom'] as const;
+export type BlessCategory = (typeof BLESS_CATEGORIES)[number];
+
+export const BLESS_CATEGORY_LABELS: Record<BlessCategory, string> = {
+  morning: '早安',
+  night: '晚安',
+  festival: '節慶',
+  wisdom: '哲理長輩圖',
+};
+
+export function isValidBlessCategory(value: string): value is BlessCategory {
+  return (BLESS_CATEGORIES as readonly string[]).includes(value);
+}
+
+function parseBlessCategories(raw: string | null | undefined): BlessCategory[] {
+  if (!raw) return [];
+  const chosen = new Set(
+    raw.split(',').map((s) => s.trim()).filter(isValidBlessCategory),
+  );
+  return BLESS_CATEGORIES.filter((c) => chosen.has(c));
+}
+
+function normalizeBlessCategories(categories: string[]): BlessCategory[] {
+  const chosen = new Set(categories.map((s) => s.trim()).filter(isValidBlessCategory));
+  return BLESS_CATEGORIES.filter((c) => chosen.has(c));
+}
+
+export interface BlessPreference {
+  userId: string;
+  categories: BlessCategory[];
+  updatedAt: string;
+}
+
+interface BlessPreferenceRow {
+  userId: string;
+  category: string;
+  updatedAt: string;
+}
+
+// 回傳 null 代表這個人沒設定過（=全部類別都要），跟「設定過但全部取消」不一樣
+export function getBlessPreference(userId: string): BlessPreference | null {
+  const row = db
+    .prepare('SELECT * FROM bless_preferences WHERE userId = ?')
+    .get(userId) as BlessPreferenceRow | undefined;
+  if (!row) return null;
+  return { userId: row.userId, categories: parseBlessCategories(row.category), updatedAt: row.updatedAt };
+}
+
+export function setBlessPreferenceCategories(userId: string, categories: string[]): BlessCategory[] {
+  const clean = normalizeBlessCategories(categories);
+  db.prepare(`
+    INSERT INTO bless_preferences (userId, category, updatedAt)
+    VALUES (?, ?, datetime('now', 'localtime'))
+    ON CONFLICT(userId) DO UPDATE SET
+      category = excluded.category,
+      updatedAt = excluded.updatedAt
+  `).run(userId, clean.join(','));
+  return clean;
+}
+
+// 排程推播長輩圖時用：這個類別要發給誰。沒設定過偏好的人一律算「要」，
+// 設定過的人要看清單裡有沒有這個類別。
+export function getUsersForBlessCategory(category: BlessCategory): SilverUser[] {
+  const users = getAllUsers();
+  const prefRows = db.prepare('SELECT userId, category FROM bless_preferences').all() as BlessPreferenceRow[];
+  const prefMap = new Map(prefRows.map((r) => [r.userId, parseBlessCategories(r.category)]));
+  return users.filter((u) => {
+    const chosen = prefMap.get(u.userId);
+    return chosen === undefined || chosen.includes(category);
+  });
 }
 
 // ── Health Events ──────────────────────────────────────────────────────────
@@ -294,8 +386,18 @@ export interface SilverUser {
   nickname: string | null;
   age: number | null;
   gender: string | null;
+  botName: string | null; // 使用者自訂的機器人名字，例如「小福」
+  persona: string | null; // 機器人人設，見 PERSONA_KEYS
   createdAt: string;
   updatedAt: string;
+}
+
+// 機器人人設選項，語氣描述交由呼叫端（ai-linebot lib/persona.ts）決定，
+// 這裡只認得合法的 key，避免存進亂七八糟的值
+export const PERSONA_KEYS = ['gentle', 'funny', 'boss', 'butler'] as const;
+export type PersonaKey = (typeof PERSONA_KEYS)[number];
+export function isValidPersona(value: string): value is PersonaKey {
+  return (PERSONA_KEYS as readonly string[]).includes(value);
 }
 
 export function getUser(userId: string): SilverUser | null {
@@ -306,25 +408,41 @@ export function getAllUsers(): SilverUser[] {
   return db.prepare('SELECT * FROM silver_users ORDER BY updatedAt DESC').all() as SilverUser[];
 }
 
-export function upsertUser(userId: string, nickname: string | null, age: number | null, gender: string | null): void {
+export function upsertUser(
+  userId: string,
+  nickname: string | null,
+  age: number | null,
+  gender: string | null,
+  botName: string | null = null,
+  persona: string | null = null,
+): void {
   db.prepare(`
-    INSERT INTO silver_users (userId, nickname, age, gender, updatedAt)
-    VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+    INSERT INTO silver_users (userId, nickname, age, gender, botName, persona, updatedAt)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     ON CONFLICT(userId) DO UPDATE SET
       nickname = COALESCE(excluded.nickname, silver_users.nickname),
       age = COALESCE(excluded.age, silver_users.age),
       gender = COALESCE(excluded.gender, silver_users.gender),
+      botName = COALESCE(excluded.botName, silver_users.botName),
+      persona = COALESCE(excluded.persona, silver_users.persona),
       updatedAt = excluded.updatedAt
-  `).run(userId, nickname, age, gender);
+  `).run(userId, nickname, age, gender, botName, persona);
 }
 
 // 編輯用戶基本資料：直接覆蓋（允許清空成 null，跟 upsertUser 的 COALESCE 保留舊值不同）
-export function updateUser(userId: string, nickname: string | null, age: number | null, gender: string | null): void {
+export function updateUser(
+  userId: string,
+  nickname: string | null,
+  age: number | null,
+  gender: string | null,
+  botName: string | null = null,
+  persona: string | null = null,
+): void {
   db.prepare(`
     UPDATE silver_users
-    SET nickname = ?, age = ?, gender = ?, updatedAt = datetime('now', 'localtime')
+    SET nickname = ?, age = ?, gender = ?, botName = ?, persona = ?, updatedAt = datetime('now', 'localtime')
     WHERE userId = ?
-  `).run(nickname, age, gender, userId);
+  `).run(nickname, age, gender, botName, persona, userId);
 }
 
 // 刪除用戶，連同該用戶所有關聯資料一起清掉，避免留下孤兒資料
