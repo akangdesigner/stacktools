@@ -133,11 +133,9 @@ async function runPipeline(
     const row = new Array(headerLen).fill('');
     // 「#」欄照寫入順序放流水號（1 起算）
     if (idxNum >= 0) row[idxNum] = String(rows.length + 1);
-    // 頁面欄寫成「中文名＋超連結」：優先選單名，退頁面 h1（91APP 這類無選單名的站，
-    // h1 就是乾淨的中文頁名＝產品名／分類名／文章標題），再退頁面分類（如無 og/JSON-LD 資料
-    // 的 91APP 自訂頁／形象頁，title 是全站共用的固定文案、同分類重複顯示才是正確的），
-    // 再退 title，都沒有才退可讀網址
-    row[idxPage] = sheetLink(p.url, p.label || p.h1 || typeByUrl.get(p.url) || p.title || prettyUrl(p.url));
+    // 頁面欄寫成「中文名＋超連結」：優先顯示頁面分類（首頁／分類頁／產品頁／形象頁…，
+    // 同分類重複顯示是正常的），沒分類才退選單名，再退 h1，再退 title，都沒有才退可讀網址
+    row[idxPage] = sheetLink(p.url, typeByUrl.get(p.url) || p.label || p.h1 || p.title || prettyUrl(p.url));
     if (idxTitle >= 0) row[idxTitle] = p.title;
     if (idxDesc >= 0) row[idxDesc] = p.description;
     if (idxKw >= 0) row[idxKw] = p.keywords;
