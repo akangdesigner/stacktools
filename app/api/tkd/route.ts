@@ -68,6 +68,9 @@ async function runPipeline(
   if (urls.length === 0) {
     throw new Error('找不到任何頁面，請確認網址是否正確，或該站是否有 sitemap.xml');
   }
+  // 型態（分類頁/產品頁/形象頁…）只有 selectedPages 帶得到，存成 url→type 對照表，
+  // 給「頁面」欄連結文字當退路用（選單名／h1 都沒有時，例如無 og 資料的 91APP 自訂頁）
+  const typeByUrl = new Map((selectedPages ?? []).map((p) => [p.url, p.type]));
 
   // 2. 逐頁抓現有 TKD
   // 91APP 的 h1 由 JS 渲染、server 讀不到，偵測到就傳入 extract91appH1 從 og:title／麵包屑還原
@@ -131,9 +134,10 @@ async function runPipeline(
     // 「#」欄照寫入順序放流水號（1 起算）
     if (idxNum >= 0) row[idxNum] = String(rows.length + 1);
     // 頁面欄寫成「中文名＋超連結」：優先選單名，退頁面 h1（91APP 這類無選單名的站，
-    // h1 就是乾淨的中文頁名＝產品名／分類名／文章標題），再退 title（如品牌介紹頁沒 h1），
-    // 都沒有才退可讀網址
-    row[idxPage] = sheetLink(p.url, p.label || p.h1 || p.title || prettyUrl(p.url));
+    // h1 就是乾淨的中文頁名＝產品名／分類名／文章標題），再退頁面分類（如無 og/JSON-LD 資料
+    // 的 91APP 自訂頁／形象頁，title 是全站共用的固定文案、同分類重複顯示才是正確的），
+    // 再退 title，都沒有才退可讀網址
+    row[idxPage] = sheetLink(p.url, p.label || p.h1 || typeByUrl.get(p.url) || p.title || prettyUrl(p.url));
     if (idxTitle >= 0) row[idxTitle] = p.title;
     if (idxDesc >= 0) row[idxDesc] = p.description;
     if (idxKw >= 0) row[idxKw] = p.keywords;
