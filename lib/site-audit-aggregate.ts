@@ -1,5 +1,6 @@
 import { LEVEL, CATEGORY, STAGE_OF, ITEM_ORDER, type CheckResult } from './site-audit-rules';
-import { runAiChecks } from './site-audit-ai';
+import { runEeatCheck } from './site-audit-ai';
+import { buildLocalBizCheck, buildSchemaCompletenessCheck } from './site-audit-schema';
 import { runGscChecks, filterIndexedByGsc, type GscChecks } from './site-audit-gsc';
 import { normalizeUrl, type CrawlResult } from './site-audit-crawler';
 
@@ -20,9 +21,6 @@ function sortByTable(checks: CheckResult[]): CheckResult[] {
 function toPath(origin: string, u: string): string {
   return normalizeUrl(u).replace(origin, '') || '/';
 }
-
-// LocalBusiness 及常見子型別
-const LOCAL_TYPES = ['LocalBusiness', 'Store', 'Restaurant', 'Dentist', 'MedicalClinic', 'HealthAndBeautyBusiness', 'ProfessionalService', 'HomeAndConstructionBusiness', 'JewelryStore'];
 
 export async function aggregateChecks(
   crawl: CrawlResult,
@@ -139,13 +137,9 @@ export async function aggregateChecks(
     }
   }
 
-  // 6. Local Business
+  // 6. Local Business：欄位完整度（地址/電話/營業時間）直接從真實 JSON-LD 算，不再要求人工複核
   if (inStage('localbiz')) {
-    const hit = [...new Set(pages.flatMap((p) => p.jsonLdTypes).filter((t) => LOCAL_TYPES.includes(t)))];
-    const base = { key: 'localbiz', level: LEVEL.EFFICIENCY, category: CATEGORY.LOCAL_BRAND, item: 'Local Business 標籤設定' };
-    push(hit.length
-      ? { ...base, status: 'warn', advice: `全站已部署 ${hit.join('、')} 標籤，欄位完整度（地址、電話、營業時間）建議人工複核`, evidence: hit.join('、') }
-      : { ...base, status: 'fail', advice: '全站未偵測到 LocalBusiness 標籤，建議於後台基本資料設定並部署', evidence: '（無）' });
+    push(buildLocalBizCheck(pages));
   }
 
   // 7. 麵包屑
@@ -256,28 +250,17 @@ export async function aggregateChecks(
       : { ...base, status: 'ok', advice: `爬取 ${Y} 頁標題結構完整`, evidence: `共 ${Y} 頁皆正常` });
   }
 
-  // 13. 結構化數據（Schema）＝優先 GSC（Google 實際辨識到的型別）、退回 AI；22. E-E-A-T ＝ AI（取樣首頁等頁面）
-  // 只有在「需要 AI」時才呼叫：eeat 一定要 AI；schema 只有在 GSC 沒給時才需要 AI
-  const needSchemaAi = inStage('schema') && !gsc.schema;
-  if (inStage('eeat') || needSchemaAi) {
-    const home = htmlPages.find((p) => p.isHome) ?? htmlPages[0];
-    const allTypes = [...new Set(pages.flatMap((p) => p.jsonLdTypes))];
-    const sampleText = htmlPages.slice(0, 3).map((p) => p.mainText).join('\n\n').slice(0, 3000);
-    const ai = await runAiChecks({
-      url: home?.url ?? origin,
-      jsonLdTypes: allTypes,
-      jsonLdRaw: allTypes.length ? `全站偵測到的 Schema 型別：${allTypes.join('、')}` : '',
-      mainText: sampleText,
-    });
-    if (needSchemaAi) {
-      const aiSchema = ai.find((c) => c.key === 'schema');
-      if (aiSchema) push(aiSchema);
-    }
-    const aiEeat = ai.find((c) => c.key === 'eeat');
-    if (inStage('eeat') && aiEeat) push(aiEeat);
+  // 13. 結構化數據（Schema）＝優先 GSC（Google 實際辨識到的型別）、退回純規則欄位完整度檢查（不再叫 AI 猜）
+  if (inStage('schema')) {
+    push(gsc.schema ?? buildSchemaCompletenessCheck(pages));
   }
-  // Schema 有 GSC 結果就直接用
-  if (inStage('schema') && gsc.schema) push(gsc.schema);
+
+  // 22. E-E-A-T：語意題交給 AI（取樣首頁等頁面）
+  if (inStage('eeat')) {
+    const home = htmlPages.find((p) => p.isHome) ?? htmlPages[0];
+    const sampleText = htmlPages.slice(0, 3).map((p) => p.mainText).join('\n\n').slice(0, 3000);
+    push(await runEeatCheck({ url: home?.url ?? origin, mainText: sampleText }));
+  }
 
   // 14. llms.txt
   if (inStage('llms')) {

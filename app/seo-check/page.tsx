@@ -29,6 +29,15 @@ const tools = [
     color: "bg-sky-50 border-sky-200 hover:border-sky-400",
     iconBg: "bg-sky-100",
   },
+  {
+    href: "/schema-check",
+    title: "Schema 檢查工具",
+    description:
+      "貼一個網址，直接抓該頁真實部署的 JSON-LD 結構化資料，核對在地商家 / 商品 / 文章的關鍵欄位有沒有缺，不是叫 AI 猜。",
+    icon: "🏷️",
+    color: "bg-violet-50 border-violet-200 hover:border-violet-400",
+    iconBg: "bg-violet-100",
+  },
 ];
 
 export default function SeoCheckHubPage() {

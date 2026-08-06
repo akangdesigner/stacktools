@@ -10,7 +10,7 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
-async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<Response> {
+export async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -39,6 +39,7 @@ export interface PageFacts {
   imgAltEmptyNames: string[];
   imgLegacy: number;     // 非 WebP/AVIF 的圖數
   jsonLdTypes: string[];
+  jsonLdNodes: Record<string, unknown>[]; // 解析後的 JSON-LD 節點（完整欄位，給 Schema 完整度規則判斷用，非只留 @type）
   hasBreadcrumb: boolean;
   canonical: string;
   noindex: boolean;
@@ -101,21 +102,24 @@ function isCrawlableHref(raw: string): boolean {
   return true;
 }
 
-// 從 root 抓所有 JSON-LD 的 @type（含巢狀 @graph）
-function extractJsonLdTypes(root: NHTMLElement): string[] {
+// 從 root 抓所有 JSON-LD 節點（含巢狀 @graph），回傳型別清單與完整節點（給欄位完整度檢查用）
+export function extractJsonLd(root: NHTMLElement): { types: string[]; nodes: Record<string, unknown>[] } {
   const types = new Set<string>();
+  const nodes: Record<string, unknown>[] = [];
   for (const script of root.querySelectorAll('script[type="application/ld+json"]')) {
     const text = script.rawText?.trim();
     if (!text) continue;
     try {
       const data = JSON.parse(text);
-      const nodes: unknown[] = Array.isArray(data)
+      const items: unknown[] = Array.isArray(data)
         ? data
         : Array.isArray((data as { '@graph'?: unknown[] })['@graph'])
           ? (data as { '@graph': unknown[] })['@graph']
           : [data];
-      for (const node of nodes) {
-        const t = (node as { '@type'?: unknown })?.['@type'];
+      for (const node of items) {
+        if (!node || typeof node !== 'object') continue;
+        nodes.push(node as Record<string, unknown>);
+        const t = (node as { '@type'?: unknown })['@type'];
         if (typeof t === 'string') types.add(t);
         else if (Array.isArray(t)) t.forEach((x) => typeof x === 'string' && types.add(x));
       }
@@ -123,7 +127,7 @@ function extractJsonLdTypes(root: NHTMLElement): string[] {
       /* 解析失敗略過 */
     }
   }
-  return [...types];
+  return { types: [...types], nodes };
 }
 
 // 擷取單頁事實
@@ -150,7 +154,7 @@ function extractPageFacts(html: string, url: string, depth: number, status: numb
     return src && !/\.(webp|avif)$/.test(src);
   }).length;
 
-  const jsonLdTypes = extractJsonLdTypes(root);
+  const { types: jsonLdTypes, nodes: jsonLdNodes } = extractJsonLd(root);
   const hasBreadcrumb =
     jsonLdTypes.includes('BreadcrumbList') ||
     !!root.querySelector('nav[aria-label*="breadcrumb" i], nav[class*="breadcrumb" i], [class*="breadcrumb" i]');
@@ -207,6 +211,7 @@ function extractPageFacts(html: string, url: string, depth: number, status: numb
     imgAltEmptyNames,
     imgLegacy: legacy,
     jsonLdTypes,
+    jsonLdNodes,
     hasBreadcrumb,
     canonical: (root.querySelector('link[rel="canonical"]')?.getAttribute('href') ?? '').trim(),
     noindex: /noindex/.test(robots) || /noindex/.test(googlebot),
@@ -221,7 +226,7 @@ function extractPageFacts(html: string, url: string, depth: number, status: numb
 }
 
 // 抓 sitemap.xml，解析出所有頁面網址（支援 sitemapindex 巢狀，最多抓 30 份、2000 個網址）
-async function fetchSitemapUrls(origin: string): Promise<string[]> {
+export async function fetchSitemapUrls(origin: string): Promise<string[]> {
   const seen = new Set<string>();
   const queue = [`${origin}/sitemap.xml`];
   const out = new Set<string>();
@@ -384,7 +389,7 @@ function emptyFacts(url: string, depth: number, status: number, ok: boolean, ori
     url, depth, ok, status,
     title: '', description: '', h1: 0, h2: 0,
     imgTotal: 0, imgAltEmpty: 0, imgAltEmptyNames: [], imgLegacy: 0,
-    jsonLdTypes: [], hasBreadcrumb: false, canonical: '', noindex: false, hasViewport: false,
+    jsonLdTypes: [], jsonLdNodes: [], hasBreadcrumb: false, canonical: '', noindex: false, hasViewport: false,
     analytics: [], internalLinks: [], externalCount: 0, isHome, mainText: '', viaSitemap,
   };
 }

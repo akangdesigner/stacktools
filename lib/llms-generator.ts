@@ -201,6 +201,7 @@ function makeFacts(p: { url: string; title: string; description: string; noindex
     imgAltEmptyNames: [],
     imgLegacy: 0,
     jsonLdTypes: [],
+    jsonLdNodes: [],
     hasBreadcrumb: false,
     canonical: '',
     noindex: p.noindex,
