@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from "next/link";
+import OpenRouterUsageWidget from "@/components/OpenRouterUsageWidget";
 
 type Tool = {
   href: string;
@@ -256,39 +257,46 @@ export default function HomePage() {
         </div>
       </div>
     )}
-    <div className="p-8 max-w-2xl space-y-10">
-      {/* 行銷部 */}
-      <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">行銷部</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {marketingTools.map((tool) => renderCard(tool))}
-        </div>
-      </div>
-
-      {/* HR 總部 */}
-      <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">HR 總部</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {hrTools.map((tool) => renderCard(tool))}
-        </div>
-      </div>
-
-      {/* 技術部（有工具才顯示） */}
-      {techTools.length > 0 && (
+    <div className="p-8 flex gap-10">
+      <div className="max-w-2xl flex-1 space-y-10">
+        {/* 行銷部 */}
         <div>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">技術部</h2>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">行銷部</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {techTools.map((tool) => renderCard(tool))}
+            {marketingTools.map((tool) => renderCard(tool))}
           </div>
         </div>
-      )}
 
-      {/* 外部產品 */}
-      <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">外部產品</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {externalTools.map((tool) => renderCard(tool))}
+        {/* HR 總部 */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">HR 總部</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {hrTools.map((tool) => renderCard(tool))}
+          </div>
         </div>
+
+        {/* 技術部（有工具才顯示） */}
+        {techTools.length > 0 && (
+          <div>
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">技術部</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {techTools.map((tool) => renderCard(tool))}
+            </div>
+          </div>
+        )}
+
+        {/* 外部產品 */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">外部產品</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {externalTools.map((tool) => renderCard(tool))}
+          </div>
+        </div>
+      </div>
+
+      {/* 右側欄 */}
+      <div className="w-96 shrink-0 hidden lg:block">
+        <OpenRouterUsageWidget />
       </div>
     </div>
     <Link
