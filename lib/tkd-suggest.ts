@@ -20,6 +20,7 @@ export type TkdSuggestion = {
   description: string;
   keywords: string;
   h1: string;
+  understanding: string; // AI 對這頁在講什麼／賣什麼的判斷，給人審查用，不寫入 sheet
 };
 
 async function askOpenRouter(prompt: string, apiKey: string): Promise<string> {
@@ -46,20 +47,18 @@ async function askOpenRouter(prompt: string, apiKey: string): Promise<string> {
   return data.choices?.[0]?.message?.content ?? '';
 }
 
-function buildPrompt(p: SuggestInput): string {
-  // 有指定關鍵字時，額外加一段硬性規則
-  const extraBlock = p.extraKeywords
+function buildPrompt(p: SuggestInput, relevantKeywords?: string[]): string {
+  // 指定關鍵字的相關性已在前一步（classifyRelevantKeywords）判斷完畢，
+  // 這裡只負責「怎麼自然寫進去」，不再要求 AI 同時兼顧相關性判斷，減少邏輯負擔、避免各欄位標準不一致
+  const extraBlock = relevantKeywords && relevantKeywords.length > 0
     ? `
-【使用者指定關鍵字｜最高優先，務必照做】
-使用者指定了一批「必用關鍵字」：${p.extraKeywords}
-第一步：先從中挑出「跟這一頁主題相關」的（門檻放寬，只要沾得上邊就算相關）。
-接著把這些相關的指定關鍵字，依下列**強制規則**融入四個欄位——這是硬性要求，不是建議：
-- **title（最重要）：開頭就必須用「最相關的 1 個」指定關鍵字**，字數還夠就再帶第 2 個。title 一定要看得到指定關鍵字，不能只用你自己想的同義詞。
-- **description：必須自然帶入「至少 2～3 個」相關的指定關鍵字**，80 字內盡量塞好塞滿，但要通順、像人話。
-- **keywords 欄：所有相關的指定關鍵字全部列入**，不受前面「3～6 個」上限。
+【已確認與這頁相關的指定關鍵字｜請自然融入】
+以下關鍵字已經確認跟這一頁的主體相關，請自然融入四個欄位（不必再判斷相關性，也不要納入下面清單以外的指定關鍵字）：${relevantKeywords.join('、')}
+- **title：用「最相關的 1 個」放在前面**，字數還夠可再帶第 2 個。若硬放會讓句子不通順或語意怪，可改用意思相近的說法。
+- **description：自然帶入**，語句要通順、像人話，不要為了塞字硬湊。
+- **keywords 欄：可列入上面這批關鍵字**，不受前面「3～6 個」上限，但不要多加清單以外的指定關鍵字。
 - **h1：包含 title 用到的主關鍵字。**
-【鐵則】只要有任何一個指定關鍵字跟這頁相關，title 和 description 就「絕對不可以」一個都沒用到。請優先確保這些關鍵字實際出現在 t/d 的文字裡（通順為前提，但寧可調整句子也要放進去），不要另外自創一套沒用到指定關鍵字的寫法。
-只有「整批指定關鍵字都跟這頁完全無關」時，才可略過、照原本原則寫。
+**通順、像人話永遠優先於硬塞字數**——寧可少放一個關鍵字，也不要寫出不通順的句子。
 `
     : '';
   // 微調的修正指示：優先權最高，一定要遵守（例如專有名詞的正確寫法）
@@ -101,8 +100,61 @@ ${extraBlock}
 ${(p.content || '').slice(0, 1500) || '(抓不到內容)'}
 
 【輸出格式】
-只回傳 JSON，不要任何多餘說明或 markdown：
-{"title":"...","description":"...","keywords":"...","h1":"..."}`;
+只回傳 JSON，不要任何多餘說明或 markdown。understanding 是給人看的審查欄，用一句話白話說明你判斷這頁「在講什麼／賣什麼」（依上面第一步判斷的頁面性質寫，不是重複 title）：
+{"title":"...","description":"...","keywords":"...","h1":"...","understanding":"..."}`;
+}
+
+// 判斷指定關鍵字裡，哪些真的跟這一頁的主體相關（獨立一步，邏輯單純，AI 比較不會判斷失準）
+function buildRelevancePrompt(p: SuggestInput, candidates: string[]): string {
+  return `以下是一個網頁的資料，和一批候選關鍵字。請判斷每個候選關鍵字是否為「這一頁真正在賣／在講的主體」。
+門檻要嚴：只有候選字本身就是這頁的主角才算相關；同網站、同品牌、同類別但講的是別的具體對象（例如候選字是某款商品，但這頁是別款商品、分類總覽頁、部落格總覽頁），一律算不相關。
+
+【頁面資料】
+頁名：${p.label || ''}
+網址：${p.url}
+現有標題：${p.title || '(空)'}
+頁面內容摘要：${(p.content || '').slice(0, 800) || '(抓不到內容)'}
+
+【候選關鍵字】
+${candidates.join('、')}
+
+只回傳 JSON 陣列，只列出判定為相關的關鍵字（原字串，不要改寫），沒有任何相關就回傳空陣列，不要多餘說明：
+["..."]`;
+}
+
+async function classifyRelevantKeywords(p: SuggestInput, apiKey: string): Promise<string[]> {
+  const candidates = (p.extraKeywords || '')
+    .split(/[,，、\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (candidates.length === 0) return [];
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://stack.zeabur.app',
+      'X-Title': 'Stacktools TKD',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [{ role: 'user', content: buildRelevancePrompt(p, candidates) }],
+      max_tokens: 200, // 只回一個小 JSON 陣列，成本很低
+      temperature: 0.2,
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!res.ok) return []; // 判斷失敗就當作沒有相關的，退回原本不塞指定關鍵字的寫法，比硬塞安全
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const text = data.choices?.[0]?.message?.content ?? '';
+  const m = text.match(/\[[\s\S]*\]/);
+  if (!m) return [];
+  try {
+    const arr = JSON.parse(m[0]) as unknown;
+    return Array.isArray(arr) ? arr.map((x) => String(x).trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 // 從 AI 回覆中解析出 JSON（容忍 ```json 包裹或前後有雜訊）
@@ -117,6 +169,7 @@ function parseSuggestion(text: string): TkdSuggestion | null {
       description: String(o.description ?? '').trim(),
       keywords: kw.trim(),
       h1: String(o.h1 ?? '').trim(),
+      understanding: String(o.understanding ?? '').trim(),
     };
   } catch {
     return null;
@@ -127,7 +180,9 @@ function parseSuggestion(text: string): TkdSuggestion | null {
 export async function generateSuggestion(p: SuggestInput): Promise<TkdSuggestion> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('缺少 OPENROUTER_API_KEY 環境變數');
-  const text = await askOpenRouter(buildPrompt(p), apiKey);
+  // 有指定關鍵字時，先用一次小呼叫判斷跟這頁真正相關的子集，再交給主生成呼叫自然融入
+  const relevantKeywords = p.extraKeywords ? await classifyRelevantKeywords(p, apiKey) : undefined;
+  const text = await askOpenRouter(buildPrompt(p, relevantKeywords), apiKey);
   const parsed = parseSuggestion(text);
   if (!parsed) throw new Error('AI 回傳格式無法解析');
   return parsed;

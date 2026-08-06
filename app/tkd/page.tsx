@@ -12,7 +12,7 @@ interface PageTkd {
   keywords: string;
   h1: string;
   error?: string;
-  suggest?: { title: string; description: string; keywords: string; h1: string }; // 這次生成的建議值
+  suggest?: { title: string; description: string; keywords: string; h1: string; understanding?: string }; // 這次生成的建議值
 }
 
 // 後端 /api/tkd 的成功回傳
@@ -751,6 +751,7 @@ export default function TkdPage() {
                   <th className="text-left px-3 py-2 font-medium">建議 description</th>
                   <th className="text-left px-3 py-2 font-medium">建議 keywords</th>
                   <th className="text-left px-3 py-2 font-medium">建議 H1</th>
+                  <th className="text-left px-3 py-2 font-medium">AI 理解（審查用）</th>
                 </tr>
               </thead>
               <tbody>
@@ -772,6 +773,7 @@ export default function TkdPage() {
                     <td className="px-3 py-2 text-gray-700">{p.suggest?.description}</td>
                     <td className="px-3 py-2 text-gray-700">{p.suggest?.keywords}</td>
                     <td className="px-3 py-2 text-gray-700">{p.suggest?.h1}</td>
+                    <td className="px-3 py-2 max-w-[220px] text-gray-500 italic">{p.suggest?.understanding}</td>
                   </tr>
                 ))}
               </tbody>
