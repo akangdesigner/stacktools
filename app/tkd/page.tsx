@@ -12,6 +12,7 @@ interface PageTkd {
   keywords: string;
   h1: string;
   error?: string;
+  contentEmpty?: boolean; // 正文抓不到（常見於純 CSR 頁面），AI 建議可能不可信，需人工確認
   suggest?: { title: string; description: string; keywords: string; h1: string; understanding?: string }; // 這次生成的建議值
 }
 
@@ -768,6 +769,9 @@ export default function TkdPage() {
                         {p.url}
                       </a>
                       {p.error && <span className="block text-red-400">抓取失敗：{p.error}</span>}
+                      {p.contentEmpty && (
+                        <span className="block text-amber-500">⚠️ 內容抓不到（可能是 CSR 頁面），建議人工確認</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-gray-700">{p.suggest?.title}</td>
                     <td className="px-3 py-2 text-gray-700">{p.suggest?.description}</td>

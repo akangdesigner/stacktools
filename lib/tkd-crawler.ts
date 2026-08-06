@@ -16,6 +16,7 @@ export type PageTkd = {
   h1: string;         // 現有第一個 <h1>
   content?: string;   // 頁面主要內容摘要（供 AI 生成建議時參考）
   error?: string;     // 抓取失敗時的錯誤訊息
+  contentEmpty?: boolean; // 正文抓到的內容近乎空白（常見於純 CSR 頁面，JS 才渲染），AI 建議可能不可信
 };
 
 // 頁面參照：網址 + 選單名稱（label 只有重點頁模式會帶）
@@ -541,8 +542,11 @@ export async function fetchPageTkd(page: PageRef, refineH1?: RefineH1): Promise<
       root.querySelector('body') ??
       root;
     const content = main.text.replace(/\s+/g, ' ').trim().slice(0, 1500);
+    // 內容近乎空白：常見於純 CSR 頁面（如 91APP 部分分頁切換頁），server 端 HTML 沒有真正文字，
+    // JS 才會渲染出畫面上看到的內容，AI 沒東西可讀，生出來的建議不可信，標記讓使用者知道要人工確認
+    const contentEmpty = content.length < 20;
 
-    return { url, label, title, description, keywords, h1, content };
+    return { url, label, title, description, keywords, h1, content, contentEmpty };
   } catch (e) {
     return { ...base, error: e instanceof Error ? e.message : String(e) };
   }
