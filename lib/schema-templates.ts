@@ -39,10 +39,27 @@ const LOCAL_BIZ_FORM_FIELDS: FormFieldDef[] = [
 
 const ADDRESS_KEYS = ['streetAddress', 'addressLocality', 'postalCode', 'addressCountry'];
 
+// logo/image 常見寫成巢狀 ImageObject（{"@type":"ImageObject","url":"..."}），不是純字串網址，
+// 常見於 WordPress Yoast SEO 產出的 schema；純字串就直接用，物件就取裡面的 url/contentUrl
+function stringField(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    if (typeof o.url === 'string') return o.url;
+    if (typeof o.contentUrl === 'string') return o.contentUrl;
+  }
+  return '';
+}
+
 export function formFieldsFor(label: NodeEval['label']): FormFieldDef[] | null {
   if (label === 'Organization') return ORG_FORM_FIELDS;
   if (label === 'LocalBusiness') return LOCAL_BIZ_FORM_FIELDS;
   return null;
+}
+
+// 生成工具從零開始時的空白節點（沒有匯入既有資料）
+export function emptyNode(label: 'LocalBusiness' | 'Organization'): Record<string, unknown> {
+  return { '@context': 'https://schema.org', '@type': label };
 }
 
 // 把既有節點的值帶進表單預設值，缺的欄位留空讓使用者填
@@ -62,8 +79,7 @@ export function buildFormDefaults(node: Record<string, unknown>, label: NodeEval
       out[f.key] = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').join('\n') : '';
       continue;
     }
-    const v = node[f.key];
-    out[f.key] = typeof v === 'string' ? v : '';
+    out[f.key] = stringField(node[f.key]);
   }
   return out;
 }

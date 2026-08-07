@@ -1,79 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parse, HTMLElement as NHTMLElement } from 'node-html-parser';
-import { extractJsonLd, fetchWithTimeout, fetchSitemapUrls } from '@/lib/site-audit-crawler';
+import { parse } from 'node-html-parser';
+import { crawlSite, extractJsonLd, fetchWithTimeout, normalizeUrl } from '@/lib/site-audit-crawler';
+import { fetchPageSearchStats } from '@/lib/site-audit-gsc';
 import { evalNode } from '@/lib/site-audit-schema';
 
-// Schema 檢查 API：貼一個網址，自動抓該頁＋同網域內看起來像「聯絡我們/關於我們」的頁面
-// （很多站的 LocalBusiness 資料只掛在這類頁面，不在首頁），逐頁跑真實 JSON-LD 抽取＋欄位完整度檢查。
-// 找候選頁優先看 sitemap.xml（不受 JS 動態選單影響，stack.com.tw 首頁選單就是 JS 產生、
-// 靜態連結掃不到「聯絡我們」，但 sitemap 裡有），首頁連結文字比對當備援。
-// 跟 site-audit 共用同一套解析（extractJsonLd）與欄位規則（evalNode）。
+// Schema 檢查 API：貼一個網址，用跟網站技術健檢同一套 BFS 爬蟲（首頁 2 層內連結 + sitemap 補爬）
+// 撈一批頁面，再疊上 GSC 有曝光的頁面（如果這個網域有連結使用者的 GSC 帳號），逐頁做真實 JSON-LD
+// 抽取＋欄位完整度檢查。比只挑「聯絡我們」候選頁廣很多，才撈得到 Product/Article 這類分散在
+// 各頁的 schema，不是只有全站共用的 Organization/LocalBusiness。
 
-const MAX_PAGES = 4; // 首頁 + 最多 3 個自動找到的候選頁
-const CONTACT_KEYWORDS = ['contact', '聯絡', '联系', 'about', '關於', '关于', 'location', '門市', '门市', '據點', '据点', 'store', '分店', 'find-us'];
+// BFS + sitemap 補爬的頁數上限。實測 stack.com.tw：50 頁要價 77 秒，25 頁 35 秒——
+// 這支是同步等結果的 API（不是背景 job），怕撞 Cloudflare 反代的 100 秒逾時，抓保守一點
+const MAX_CRAWL_PAGES = 25;
+const MAX_GSC_EXTRA = 15; // GSC 有曝光、但爬蟲沒抓到的頁面，額外補抓上限（依曝光排序取前幾個）
 
 function normalizeInput(u: string): string {
   const trimmed = u.trim();
   return /^https?:\/\//i.test(trimmed) ? trimmed : 'https://' + trimmed;
 }
 
-// sitemap／連結裡的網址常是 percent-encoded 中文（如 %e8%81%af%e7%b5%a1...），
-// 不解碼永遠比對不到「聯絡」這種關鍵字
-function decodedPath(u: string): string {
-  try {
-    return decodeURIComponent(new URL(u).pathname).toLowerCase();
-  } catch {
-    return u.toLowerCase();
-  }
-}
-
-function scoreCandidate(path: string, text: string): number {
-  return CONTACT_KEYWORDS.reduce((s, kw) => s + (path.includes(kw) || text.includes(kw) ? 1 : 0), 0);
-}
-
-// 找看起來像「聯絡我們/關於我們」的同網域頁面：sitemap.xml 優先，首頁連結文字比對當備援
-async function findContactLikeCandidates(homeRoot: NHTMLElement, homeUrl: string, origin: string): Promise<string[]> {
-  const hits = new Map<string, number>(); // url → 命中關鍵字數（排序用）
-
-  try {
-    const sitemapUrls = await fetchSitemapUrls(origin);
-    for (const u of sitemapUrls) {
-      const score = scoreCandidate(decodedPath(u), '');
-      if (score > 0) hits.set(u, Math.max(hits.get(u) ?? 0, score));
-    }
-  } catch {
-    /* sitemap 抓不到就只靠首頁連結 */
-  }
-
-  for (const a of homeRoot.querySelectorAll('a[href]')) {
-    const raw = (a.getAttribute('href') ?? '').trim();
-    if (!raw || raw.startsWith('#') || /^(mailto:|tel:|javascript:)/i.test(raw)) continue;
-    if (/\/cdn-cgi\//i.test(raw)) continue; // Cloudflare 信箱防爬連結，文字常包住「聯絡我們」但不是真的頁面
-    let abs: URL;
-    try {
-      abs = new URL(raw, homeUrl);
-    } catch {
-      continue;
-    }
-    if (abs.origin !== origin) continue;
-    const key = abs.href.split('#')[0];
-    const score = scoreCandidate(decodedPath(key), a.textContent.trim().toLowerCase());
-    if (score > 0) hits.set(key, Math.max(hits.get(key) ?? 0, score));
-  }
-
-  return [...hits.entries()].sort((a, b) => b[1] - a[1]).map(([url]) => url);
-}
-
-async function fetchAndExtract(pageUrl: string) {
+async function fetchAndExtractExtra(pageUrl: string) {
   const res = await fetchWithTimeout(pageUrl, 15000);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const ct = res.headers.get('content-type') ?? '';
   if (!ct.includes('html')) throw new Error('不是 HTML 頁面');
   const html = await res.text();
   const root = parse(html);
-  const { types, nodes } = extractJsonLd(root);
-  const evals = nodes.map((node) => ({ node, ...evalNode(node) }));
-  return { root, types, evals };
+  return extractJsonLd(root);
 }
 
 export async function POST(req: NextRequest) {
@@ -91,28 +44,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '網址格式不正確' }, { status: 400 });
   }
 
-  type FetchResult = Awaited<ReturnType<typeof fetchAndExtract>>;
-  type PageResult = { url: string; source: string; types: FetchResult['types']; evals: FetchResult['evals'] };
-  let home: FetchResult;
+  type PageResult = { url: string; source: string; types: string[]; evals: ReturnType<typeof buildEvals> };
+  function buildEvals(nodes: Record<string, unknown>[]) {
+    return nodes.map((node) => ({ node, ...evalNode(node) }));
+  }
+
+  let crawl;
   try {
-    home = await fetchAndExtract(homeUrl);
+    crawl = await crawlSite(homeUrl, { maxPages: MAX_CRAWL_PAGES, maxDepth: 2 });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? `抓取失敗：${err.message}` : '抓取失敗' }, { status: 400 });
   }
-  const results: PageResult[] = [{ url: homeUrl, source: '首頁', types: home.types, evals: home.evals }];
-
-  const candidates = (await findContactLikeCandidates(home.root, homeUrl, origin)).filter((u) => u !== homeUrl).slice(0, MAX_PAGES - 1);
-  for (const url of candidates) {
-    try {
-      const r = await fetchAndExtract(url);
-      results.push({ url, source: '自動找到的相關頁', types: r.types, evals: r.evals });
-    } catch {
-      /* 候選頁是自動找的，抓失敗就略過，不擋主要結果 */
-    }
+  if (crawl.pages.length === 0 || !crawl.pages.some((p) => p.ok)) {
+    return NextResponse.json({ error: '抓取失敗：網站沒有回應或無法連線' }, { status: 400 });
   }
 
-  // 一個候選都沒有：sitemap 也沒有、首頁連結也掃不到，讓前端提示改貼具體頁面網址
-  const noCandidatesFound = candidates.length === 0;
+  const results: PageResult[] = crawl.pages
+    .filter((p) => p.ok)
+    .map((p) => ({
+      url: p.url,
+      source: p.isHome ? '首頁' : p.viaSitemap ? 'Sitemap 補爬頁面' : '爬蟲找到的頁面',
+      types: p.jsonLdTypes,
+      evals: buildEvals(p.jsonLdNodes),
+    }));
 
-  return NextResponse.json({ results, noCandidatesFound });
+  // GSC 有實際曝光、但爬蟲沒抓到的頁面（依曝光排序取前幾個）額外補抓一次；這個網域沒連結
+  // 使用者的 GSC 帳號時 property 會是 null，靜默略過不報錯，不影響爬蟲抓到的結果
+  let gscChecked = false;
+  try {
+    const { property, stats } = await fetchPageSearchStats(origin);
+    if (property) {
+      gscChecked = true;
+      const covered = new Set(crawl.pages.map((p) => normalizeUrl(p.url)));
+      const extraUrls = [...stats.entries()]
+        .filter(([url]) => !covered.has(url))
+        .sort((a, b) => b[1].impressions - a[1].impressions)
+        .slice(0, MAX_GSC_EXTRA)
+        .map(([url]) => url);
+      const extras = await Promise.all(
+        extraUrls.map(async (url) => {
+          try {
+            const { types, nodes } = await fetchAndExtractExtra(url);
+            return { url, source: 'GSC 有曝光的頁面', types, evals: buildEvals(nodes) } as PageResult;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const e of extras) if (e) results.push(e);
+    }
+  } catch {
+    /* GSC 查詢失敗不擋主要結果，退回純爬蟲 */
+  }
+
+  // 只有首頁一頁：代表沒有其他站內連結、sitemap 也沒有補到，且沒有 GSC 資料可用
+  const onlyHomePage = results.length <= 1;
+
+  return NextResponse.json({ results, onlyHomePage, gscChecked, reachedCap: crawl.reachedCap });
 }

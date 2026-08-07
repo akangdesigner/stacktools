@@ -1,17 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { formFieldsFor, buildFormDefaults, mergeFormIntoNode } from "@/lib/schema-templates";
+import { formFieldsFor, buildFormDefaults, mergeFormIntoNode, emptyNode } from "@/lib/schema-templates";
 
 // 單一 JSON-LD 節點的檢查結果（對應後端 /api/schema-check 回傳的 evals）
 interface DisplayField {
   label: string;
   value: string;
 }
+type TrackedLabel = "LocalBusiness" | "Organization";
 interface NodeEval {
   node: Record<string, unknown>;
   types: string[];
-  label: "" | "LocalBusiness" | "Organization" | "Product" | "Article";
+  label: "" | TrackedLabel | "Product" | "Article";
   missing: string[];
   fields: DisplayField[];
 }
@@ -31,93 +32,28 @@ const LABEL_TEXT: Record<NodeEval["label"], string> = {
   "": "",
 };
 
-// 「補完 Schema」表單：左邊抓到的現有資料、右邊補缺欄位，即時組出可直接複製貼回網站的完整 JSON-LD
-function CompleteForm({ ev }: { ev: NodeEval }) {
-  const fields = formFieldsFor(ev.label);
-  const [values, setValues] = useState<Record<string, string>>(() => buildFormDefaults(ev.node, ev.label));
-  const [copied, setCopied] = useState(false);
-  if (!fields) return null;
+type Mode = "pick" | "check" | "generate";
 
-  const merged = mergeFormIntoNode(ev.node, ev.label, values);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(merged, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* 複製失敗就略過 */
-    }
-  }
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pb-4">
-      <div>
-        <p className="text-xs font-medium text-gray-400 mb-2">抓到的現有資料</p>
-        {ev.fields.length > 0 ? (
-          <dl className="space-y-1.5">
-            {ev.fields.map((f, i) => (
-              <div key={i} className="text-xs">
-                <dt className="text-gray-400">{f.label}</dt>
-                <dd className="text-gray-700 break-all">{f.value}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : (
-          <p className="text-xs text-gray-400">沒有抓到既有欄位</p>
-        )}
-      </div>
-      <div>
-        <p className="text-xs font-medium text-gray-400 mb-2">補完欄位（會自動併入既有資料，其餘欄位原樣保留）</p>
-        <div className="space-y-2">
-          {fields.map((f) => (
-            <div key={f.key}>
-              <label className="block text-xs text-gray-500 mb-0.5">{f.label}</label>
-              {f.multiline ? (
-                <textarea
-                  value={values[f.key] ?? ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                  placeholder={f.placeholder}
-                  rows={2}
-                  className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={values[f.key] ?? ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                  placeholder={f.placeholder}
-                  className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <button type="button" onClick={handleCopy} className="mt-3 text-xs text-orange-600 hover:text-orange-700 hover:underline">
-          {copied ? "已複製完整 JSON-LD ✓" : "複製補完後的 JSON-LD"}
-        </button>
-        <pre className="mt-2 bg-gray-900 text-gray-100 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-words leading-relaxed max-h-64 overflow-y-auto">
-          {JSON.stringify(merged, null, 2)}
-        </pre>
-      </div>
-    </div>
-  );
-}
-
-// 單一 JSON-LD 節點卡片：好讀欄位清單 + 補完表單（可展開）+ 收合的原始 JSON
-function NodeCard({ ev, copied, onCopy }: { ev: NodeEval; copied: boolean; onCopy: () => void }) {
-  const [showForm, setShowForm] = useState(false);
-  const hasForm = !!formFieldsFor(ev.label);
+// 單一 JSON-LD 節點卡片：好讀欄位清單 + 匯入生成工具的捷徑 + 收合的原始 JSON
+function NodeCard({
+  ev,
+  copied,
+  onCopy,
+  onImport,
+}: {
+  ev: NodeEval;
+  copied: boolean;
+  onCopy: () => void;
+  onImport: (ev: NodeEval & { label: TrackedLabel }) => void;
+}) {
+  const canImport = ev.label === "LocalBusiness" || ev.label === "Organization";
+  const templateFields = canImport ? formFieldsFor(ev.label) : null;
+  const templateValues = templateFields ? buildFormDefaults(ev.node, ev.label) : null;
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="flex items-center flex-wrap justify-between gap-2 px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-gray-700">{ev.types.join("、") || "（無 @type）"}</span>
-          {ev.label && (
-            <span className="text-xs font-medium bg-sky-50 text-sky-700 border border-sky-200 rounded-full px-2 py-0.5">
-              {LABEL_TEXT[ev.label]}關鍵型別
-            </span>
-          )}
+          <span className="text-sm font-medium text-gray-700">{LABEL_TEXT[ev.label]}</span>
           {ev.label && ev.missing.length === 0 && (
             <span className="text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">
               欄位完整
@@ -134,7 +70,25 @@ function NodeCard({ ev, copied, onCopy }: { ev: NodeEval; copied: boolean; onCop
         </button>
       </div>
 
-      {ev.fields.length > 0 ? (
+      {templateFields && templateValues ? (
+        // 在地商家／組織品牌有固定欄位表可對照：跟生成工具用同一套欄位定義，逐項列出有值/未設定，才看得懂缺什麼
+        <dl className="divide-y divide-gray-50">
+          {templateFields.map((f) => {
+            const v = templateValues[f.key] ?? "";
+            const present = v.trim().length > 0;
+            return (
+              <div key={f.key} className="flex gap-3 px-4 py-2 text-sm">
+                <dt className="w-28 shrink-0 text-gray-400">{f.label.replace(/（.*?）/, "")}</dt>
+                {present ? (
+                  <dd className="text-gray-700 break-all whitespace-pre-line">{v}</dd>
+                ) : (
+                  <dd className="text-amber-500 text-xs">未設定</dd>
+                )}
+              </div>
+            );
+          })}
+        </dl>
+      ) : ev.fields.length > 0 ? (
         <dl className="divide-y divide-gray-50">
           {ev.fields.map((f, j) => (
             <div key={j} className="flex gap-3 px-4 py-2 text-sm">
@@ -147,17 +101,14 @@ function NodeCard({ ev, copied, onCopy }: { ev: NodeEval; copied: boolean; onCop
         <p className="px-4 py-3 text-xs text-gray-400">這個節點沒有解析到可呈現的欄位（可能只有 @type，其餘欄位是巢狀物件或空的）。</p>
       )}
 
-      {hasForm && (
-        <div className="border-t border-gray-100">
-          <button
-            type="button"
-            onClick={() => setShowForm((o) => !o)}
-            className="w-full text-left px-4 py-2 text-xs font-medium text-orange-600 hover:text-orange-700"
-          >
-            {showForm ? "收合補完表單 ▲" : "補完這個 Schema ▼"}
-          </button>
-          {showForm && <CompleteForm ev={ev} />}
-        </div>
+      {canImport && (
+        <button
+          type="button"
+          onClick={() => onImport(ev as NodeEval & { label: TrackedLabel })}
+          className="w-full text-left px-4 py-2 text-xs font-medium text-orange-600 hover:text-orange-700 border-t border-gray-100"
+        >
+          匯入到生成工具補完 →
+        </button>
       )}
 
       <details className="border-t border-gray-100">
@@ -170,12 +121,14 @@ function NodeCard({ ev, copied, onCopy }: { ev: NodeEval; copied: boolean; onCop
   );
 }
 
-export default function SchemaCheckPage() {
+// 檢索模式：貼網址，抓真實部署的 JSON-LD，核對關鍵欄位
+function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLabel }) => void }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<PageResult[] | null>(null);
-  const [noCandidatesFound, setNoCandidatesFound] = useState(false);
+  const [onlyHomePage, setOnlyHomePage] = useState(false);
+  const [gscChecked, setGscChecked] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   async function handleCheck(e?: React.FormEvent) {
@@ -184,7 +137,8 @@ export default function SchemaCheckPage() {
     setLoading(true);
     setError("");
     setResults(null);
-    setNoCandidatesFound(false);
+    setOnlyHomePage(false);
+    setGscChecked(false);
     try {
       const res = await fetch("/api/schema-check", {
         method: "POST",
@@ -194,7 +148,8 @@ export default function SchemaCheckPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "抓取失敗");
       setResults(data.results as PageResult[]);
-      setNoCandidatesFound(!!data.noCandidatesFound);
+      setOnlyHomePage(!!data.onlyHomePage);
+      setGscChecked(!!data.gscChecked);
     } catch (err) {
       setError(err instanceof Error ? err.message : "抓取失敗");
     } finally {
@@ -213,19 +168,10 @@ export default function SchemaCheckPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-800">Schema 檢查工具</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          貼一個網址，直接抓真實部署的 JSON-LD 結構化資料（不是叫 AI 猜），並核對在地商家 / 商品 / 文章常見的關鍵欄位有沒有缺。
-        </p>
-        <p className="text-xs text-gray-400 mt-1">
-          會自動抓首頁，並從頁內連結找「聯絡我們／關於我們」之類看起來相關的頁面一併檢查——在地商家資料常只掛在這類頁面，不一定在首頁。
-        </p>
-        <p className="text-xs text-gray-400 mt-1">
-          這裡抓的是伺服器端回傳的原始 HTML。如果網站用 JavaScript 動態插入 Schema（常見於 91APP 等平台），瀏覽器渲染後才出現的完整版本這裡可能看不到，建議搭配瀏覽器開發者工具的 Elements 分頁或 Google 的 Rich Results Test 交叉確認。
-        </p>
-      </div>
+    <div>
+      <p className="text-sm text-gray-500 mb-4">
+        貼網址，用網站健檢同一套爬蟲抓最多 25 頁（首頁 2 層內連結＋sitemap 補爬），有連結你的 GSC 帳號的話再疊上有曝光的頁面，逐頁核對在地商家/商品/文章的關鍵欄位。只讀伺服器端原始碼，JS 動態插入的 Schema（如 91APP）可能看不到，建議搭配 Rich Results Test 交叉確認。頁數比較多，可能要 30~50 秒。
+      </p>
 
       <form onSubmit={handleCheck}>
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
@@ -254,46 +200,238 @@ export default function SchemaCheckPage() {
 
       {error && <div className="mt-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">{error}</div>}
 
-      {noCandidatesFound && (
+      {onlyHomePage && (
         <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3">
-          沒有自動找到「聯絡我們」之類的相關頁面（可能是選單用 JS 動態產生，或這個網站本來就沒有另開頁面），只自動查了首頁——下面就是首頁的檢查結果。如果你知道其他頁面的網址，也可以貼上再查一次。
+          只查得到首頁——爬蟲沒找到其他站內連結、sitemap 也沒有補到頁面{gscChecked ? "，GSC 也沒有其他頁面的曝光資料" : "（這個網域也還沒連結 GSC 帳號）"}。如果你知道其他頁面的網址，也可以貼上再查一次。
         </div>
       )}
 
-      {results && (
-        <div className="mt-6 space-y-8">
-          {results.map((r, pi) => (
-            <div key={pi} className="space-y-3">
-              <div className="text-sm text-gray-500 border-b border-gray-100 pb-2 flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200 rounded-full px-2 py-0.5 whitespace-nowrap">
-                  {r.source}
-                </span>
-                <span className="text-gray-700 break-all">{r.url}</span>
-              </div>
+      {results &&
+        (() => {
+          // 同一份 Organization/LocalBusiness schema 常是全站共用（WordPress/Yoast 這類 CMS 每頁都塞一樣的），
+          // 首頁跟自動找到的相關頁抓到的其實是同一筆資料，去重只顯示一次，避免重複的卡片洗版
+          type Entry = { ev: NodeEval; pages: { url: string; source: string }[] };
+          const map = new Map<string, Entry>();
+          for (const r of results) {
+            for (const ev of r.evals) {
+              if (ev.label === "") continue;
+              const id = ev.node["@id"];
+              const dedupeKey = typeof id === "string" && id ? id : JSON.stringify(ev.node);
+              const existing = map.get(dedupeKey);
+              if (existing) existing.pages.push({ url: r.url, source: r.source });
+              else map.set(dedupeKey, { ev, pages: [{ url: r.url, source: r.source }] });
+            }
+          }
+          const entries = [...map.values()];
 
-              {r.evals.length === 0 ? (
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">
-                  這個網址沒有偵測到任何 JSON-LD 結構化資料。
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="text-sm text-gray-600">
-                    偵測到型別：
-                    {r.types.map((t) => (
-                      <span key={t} className="ml-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">
-                        {t}
-                      </span>
-                    ))}
+          if (entries.length === 0) {
+            return (
+              <div className="mt-6 bg-gray-50 border border-gray-200 text-gray-500 text-sm rounded-lg px-4 py-3">
+                沒有偵測到在地商家/組織品牌/商品/文章相關的 Schema。
+              </div>
+            );
+          }
+
+          return (
+            <div className="mt-6 space-y-6">
+              {entries.map((entry, i) => {
+                const key = `${i}`;
+                return (
+                  <div key={key} className="space-y-1.5">
+                    {entry.pages.length <= 3 ? (
+                      <p className="text-xs text-gray-400">出現在：{entry.pages.map((p) => p.url).join("、")}</p>
+                    ) : (
+                      <details className="text-xs text-gray-400">
+                        <summary className="cursor-pointer hover:text-gray-600">
+                          出現在 {entry.pages.length} 個頁面（{entry.pages[0].url} 等，點開看清單）
+                        </summary>
+                        <ul className="mt-1 pl-4 list-disc space-y-0.5">
+                          {entry.pages.map((p, j) => (
+                            <li key={j} className="break-all">{p.url}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                    <NodeCard ev={entry.ev} copied={copiedKey === key} onCopy={() => handleCopy(key, entry.ev.node)} onImport={onImport} />
                   </div>
-                  {r.evals.map((ev, i) => {
-                    const key = `${pi}-${i}`;
-                    return <NodeCard key={key} ev={ev} copied={copiedKey === key} onCopy={() => handleCopy(key, ev.node)} />;
-                  })}
-                </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+    </div>
+  );
+}
+
+// 生成/補完模式：選型別、填表單，即時組出 JSON-LD；可從檢索結果匯入既有資料當起點
+function GenerateView({
+  label,
+  setLabel,
+  baseNode,
+  setBaseNode,
+  values,
+  setValues,
+}: {
+  label: TrackedLabel;
+  setLabel: (l: TrackedLabel) => void;
+  baseNode: Record<string, unknown>;
+  setBaseNode: (n: Record<string, unknown>) => void;
+  values: Record<string, string>;
+  setValues: (v: Record<string, string>) => void;
+}) {
+  const fields = formFieldsFor(label)!;
+  const merged = mergeFormIntoNode(baseNode, label, values);
+  const [copied, setCopied] = useState(false);
+
+  function switchLabel(l: TrackedLabel) {
+    setLabel(l);
+    setBaseNode(emptyNode(l));
+    setValues({});
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(merged, null, 2));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* 複製失敗就略過 */
+    }
+  }
+
+  return (
+    <div>
+      <p className="text-sm text-gray-500 mb-4">選型別、填欄位，右邊即時產生可直接複製貼回網站的 JSON-LD。也可以先去「檢索」查一個網址，找到現有節點後按「匯入到生成工具補完」，帶著既有資料回來這裡補。</p>
+
+      <div className="flex gap-2 mb-4">
+        {(["LocalBusiness", "Organization"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => switchLabel(l)}
+            className={`text-sm font-medium rounded-lg px-4 py-2 border ${
+              label === l ? "bg-orange-500 border-orange-500 text-white" : "bg-white border-gray-200 text-gray-600 hover:border-orange-300"
+            }`}
+          >
+            {LABEL_TEXT[l]}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+          {fields.map((f) => (
+            <div key={f.key}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
+              {f.multiline ? (
+                <textarea
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  rows={2}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
               )}
             </div>
           ))}
         </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="mb-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg px-4 py-2"
+          >
+            {copied ? "已複製 ✓" : "複製 JSON-LD"}
+          </button>
+          <pre className="bg-gray-900 text-gray-100 text-xs p-4 rounded-xl overflow-x-auto whitespace-pre-wrap break-words leading-relaxed max-h-[520px] overflow-y-auto">
+            {`<script type="application/ld+json">\n${JSON.stringify(merged, null, 2)}\n</script>`}
+          </pre>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SchemaCheckPage() {
+  const [mode, setMode] = useState<Mode>("pick");
+  const [genLabel, setGenLabel] = useState<TrackedLabel>("LocalBusiness");
+  const [genBaseNode, setGenBaseNode] = useState<Record<string, unknown>>(() => emptyNode("LocalBusiness"));
+  const [genValues, setGenValues] = useState<Record<string, string>>({});
+
+  function handleImport(ev: NodeEval & { label: TrackedLabel }) {
+    setGenLabel(ev.label);
+    setGenBaseNode(ev.node);
+    setGenValues(buildFormDefaults(ev.node, ev.label));
+    setMode("generate");
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-gray-800">Schema 檢查工具</h1>
+        <p className="text-sm text-gray-500 mt-1">先選要「檢索」網站現有的結構化資料，還是直接「生成」補完。</p>
+      </div>
+
+      {mode === "pick" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+          <button
+            type="button"
+            onClick={() => setMode("check")}
+            className="text-left p-5 rounded-xl border-2 bg-sky-50 border-sky-200 hover:border-sky-400 transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center text-xl mb-3">🔍</div>
+            <h3 className="font-semibold text-gray-900 mb-1">檢索現有 Schema</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">貼網址，抓真實部署的 JSON-LD，核對關鍵欄位有沒有缺。</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("generate")}
+            className="text-left p-5 rounded-xl border-2 bg-violet-50 border-violet-200 hover:border-violet-400 transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center text-xl mb-3">✨</div>
+            <h3 className="font-semibold text-gray-900 mb-1">生成/補完 Schema</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">選型別填表單，即時產生 JSON-LD；也可以匯入檢索到的資料再補。</p>
+          </button>
+        </div>
+      )}
+
+      {mode !== "pick" && (
+        <>
+          <div className="flex gap-2 mb-6 border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setMode("check")}
+              className={`text-sm font-medium px-4 py-2 border-b-2 -mb-px ${
+                mode === "check" ? "border-orange-500 text-orange-600" : "border-transparent text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              🔍 檢索
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("generate")}
+              className={`text-sm font-medium px-4 py-2 border-b-2 -mb-px ${
+                mode === "generate" ? "border-orange-500 text-orange-600" : "border-transparent text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              ✨ 生成/補完
+            </button>
+          </div>
+
+          {mode === "check" && <CheckView onImport={handleImport} />}
+          {mode === "generate" && (
+            <GenerateView label={genLabel} setLabel={setGenLabel} baseNode={genBaseNode} setBaseNode={setGenBaseNode} values={genValues} setValues={setGenValues} />
+          )}
+        </>
       )}
     </div>
   );
