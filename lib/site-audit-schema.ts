@@ -7,6 +7,8 @@ import { LEVEL, CATEGORY, type CheckResult } from './site-audit-rules';
 export const LOCAL_TYPES = ['LocalBusiness', 'Store', 'Restaurant', 'Dentist', 'MedicalClinic', 'HealthAndBeautyBusiness', 'ProfessionalService', 'HomeAndConstructionBusiness', 'JewelryStore'];
 const ARTICLE_TYPES = ['Article', 'NewsArticle', 'BlogPosting'];
 const PRODUCT_TYPES = ['Product'];
+// 純線上品牌/電商常見標法（如 91APP 站台），沒有實體門市所以不套 LocalBusiness 的地址/營業時間規則
+const ORG_TYPES = ['Organization', 'Corporation'];
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -47,6 +49,15 @@ function missingArticleFields(node: JsonLdNode): string[] {
   const missing: string[] = [];
   if (!truthy(node.author)) missing.push('作者');
   if (!truthy(node.datePublished)) missing.push('發布日期');
+  return missing;
+}
+
+// Organization 關鍵欄位：品牌識別（Logo）、聯絡方式、社群連結——不檢查地址/營業時間（純線上品牌常沒有）
+function missingOrganizationFields(node: JsonLdNode): string[] {
+  const missing: string[] = [];
+  if (!truthy(node.logo) && !truthy(node.image)) missing.push('品牌 Logo');
+  if (!truthy(node.telephone) && !truthy(node.email)) missing.push('聯絡方式（電話或 Email）');
+  if (!truthy(node.sameAs)) missing.push('社群連結 (sameAs)');
   return missing;
 }
 
@@ -131,7 +142,7 @@ export function extractDisplayFields(node: JsonLdNode): DisplayField[] {
 // 單一節點的型別分類、關鍵欄位判斷（label 為空字串代表不是我們追蹤完整度的關鍵型別）與好讀欄位清單
 export interface NodeEval {
   types: string[];
-  label: '' | 'LocalBusiness' | 'Product' | 'Article';
+  label: '' | 'LocalBusiness' | 'Organization' | 'Product' | 'Article';
   missing: string[];
   fields: DisplayField[];
 }
@@ -140,6 +151,7 @@ export function evalNode(node: JsonLdNode): NodeEval {
   const types = nodeTypes(node);
   const fields = extractDisplayFields(node);
   if (types.some((t) => LOCAL_TYPES.includes(t))) return { types, label: 'LocalBusiness', missing: missingLocalBizFields(node), fields };
+  if (types.some((t) => ORG_TYPES.includes(t))) return { types, label: 'Organization', missing: missingOrganizationFields(node), fields };
   if (types.some((t) => PRODUCT_TYPES.includes(t))) return { types, label: 'Product', missing: missingProductFields(node), fields };
   if (types.some((t) => ARTICLE_TYPES.includes(t))) return { types, label: 'Article', missing: missingArticleFields(node), fields };
   return { types, label: '', missing: [], fields };

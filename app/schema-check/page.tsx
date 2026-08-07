@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formFieldsFor, buildFormDefaults, mergeFormIntoNode } from "@/lib/schema-templates";
 
 // 單一 JSON-LD 節點的檢查結果（對應後端 /api/schema-check 回傳的 evals）
 interface DisplayField {
@@ -10,7 +11,7 @@ interface DisplayField {
 interface NodeEval {
   node: Record<string, unknown>;
   types: string[];
-  label: "" | "LocalBusiness" | "Product" | "Article";
+  label: "" | "LocalBusiness" | "Organization" | "Product" | "Article";
   missing: string[];
   fields: DisplayField[];
 }
@@ -24,13 +25,89 @@ interface PageResult {
 
 const LABEL_TEXT: Record<NodeEval["label"], string> = {
   LocalBusiness: "在地商家",
+  Organization: "組織/品牌",
   Product: "商品",
   Article: "文章",
   "": "",
 };
 
-// 單一 JSON-LD 節點卡片：好讀欄位清單 + 收合的原始 JSON
+// 「補完 Schema」表單：左邊抓到的現有資料、右邊補缺欄位，即時組出可直接複製貼回網站的完整 JSON-LD
+function CompleteForm({ ev }: { ev: NodeEval }) {
+  const fields = formFieldsFor(ev.label);
+  const [values, setValues] = useState<Record<string, string>>(() => buildFormDefaults(ev.node, ev.label));
+  const [copied, setCopied] = useState(false);
+  if (!fields) return null;
+
+  const merged = mergeFormIntoNode(ev.node, ev.label, values);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(merged, null, 2));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* 複製失敗就略過 */
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pb-4">
+      <div>
+        <p className="text-xs font-medium text-gray-400 mb-2">抓到的現有資料</p>
+        {ev.fields.length > 0 ? (
+          <dl className="space-y-1.5">
+            {ev.fields.map((f, i) => (
+              <div key={i} className="text-xs">
+                <dt className="text-gray-400">{f.label}</dt>
+                <dd className="text-gray-700 break-all">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-xs text-gray-400">沒有抓到既有欄位</p>
+        )}
+      </div>
+      <div>
+        <p className="text-xs font-medium text-gray-400 mb-2">補完欄位（會自動併入既有資料，其餘欄位原樣保留）</p>
+        <div className="space-y-2">
+          {fields.map((f) => (
+            <div key={f.key}>
+              <label className="block text-xs text-gray-500 mb-0.5">{f.label}</label>
+              {f.multiline ? (
+                <textarea
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  rows={2}
+                  className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-orange-300"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={handleCopy} className="mt-3 text-xs text-orange-600 hover:text-orange-700 hover:underline">
+          {copied ? "已複製完整 JSON-LD ✓" : "複製補完後的 JSON-LD"}
+        </button>
+        <pre className="mt-2 bg-gray-900 text-gray-100 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-words leading-relaxed max-h-64 overflow-y-auto">
+          {JSON.stringify(merged, null, 2)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+// 單一 JSON-LD 節點卡片：好讀欄位清單 + 補完表單（可展開）+ 收合的原始 JSON
 function NodeCard({ ev, copied, onCopy }: { ev: NodeEval; copied: boolean; onCopy: () => void }) {
+  const [showForm, setShowForm] = useState(false);
+  const hasForm = !!formFieldsFor(ev.label);
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="flex items-center flex-wrap justify-between gap-2 px-4 py-3 border-b border-gray-100">
@@ -68,6 +145,19 @@ function NodeCard({ ev, copied, onCopy }: { ev: NodeEval; copied: boolean; onCop
         </dl>
       ) : (
         <p className="px-4 py-3 text-xs text-gray-400">這個節點沒有解析到可呈現的欄位（可能只有 @type，其餘欄位是巢狀物件或空的）。</p>
+      )}
+
+      {hasForm && (
+        <div className="border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => setShowForm((o) => !o)}
+            className="w-full text-left px-4 py-2 text-xs font-medium text-orange-600 hover:text-orange-700"
+          >
+            {showForm ? "收合補完表單 ▲" : "補完這個 Schema ▼"}
+          </button>
+          {showForm && <CompleteForm ev={ev} />}
+        </div>
       )}
 
       <details className="border-t border-gray-100">
@@ -132,6 +222,9 @@ export default function SchemaCheckPage() {
         <p className="text-xs text-gray-400 mt-1">
           會自動抓首頁，並從頁內連結找「聯絡我們／關於我們」之類看起來相關的頁面一併檢查——在地商家資料常只掛在這類頁面，不一定在首頁。
         </p>
+        <p className="text-xs text-gray-400 mt-1">
+          這裡抓的是伺服器端回傳的原始 HTML。如果網站用 JavaScript 動態插入 Schema（常見於 91APP 等平台），瀏覽器渲染後才出現的完整版本這裡可能看不到，建議搭配瀏覽器開發者工具的 Elements 分頁或 Google 的 Rich Results Test 交叉確認。
+        </p>
       </div>
 
       <form onSubmit={handleCheck}>
@@ -163,7 +256,7 @@ export default function SchemaCheckPage() {
 
       {noCandidatesFound && (
         <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3">
-          首頁靜態原始碼裡沒找到「聯絡我們」之類的連結（通常是選單用 JS 動態產生），只抓到首頁。若你知道聯絡我們頁的網址，直接貼那個網址再查一次。
+          沒有自動找到「聯絡我們」之類的相關頁面（可能是選單用 JS 動態產生，或這個網站本來就沒有另開頁面），只自動查了首頁——下面就是首頁的檢查結果。如果你知道其他頁面的網址，也可以貼上再查一次。
         </div>
       )}
 
