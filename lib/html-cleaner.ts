@@ -52,6 +52,9 @@ function generateTocHtml(items: { id: string; text: string }[], linkColor: strin
 export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: string): string {
   const root = parse(rawHtml);
 
+  // m2 客戶特化樣式（紅底 H2 banner／左框線 H3／紅底表格標題），寫死不開放調整，只認客戶名稱＝m2
+  const isM2 = client.name.trim().toLowerCase() === "m2";
+
   // ── 0. Remove <h1>
   root.querySelectorAll("h1").forEach((el) => el.remove());
 
@@ -70,8 +73,13 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         if (!text) { walkHeadings(el!); continue; }
         const id = `title-${h2Count++}`;
         el!.setAttribute("id", id);
-        el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
-        el!.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
+        if (isM2) {
+          el!.setAttribute("style", "background-color: #E00202; color: #ffffff; font-size: 22px; font-weight: 700; padding: 14px 18px; margin-top: 40px; margin-bottom: 16px; border-radius: 6px 6px 0 0; border-bottom: 4px solid #ff4444;");
+          el!.innerHTML = `<strong>${text}</strong>`;
+        } else {
+          el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
+          el!.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
+        }
         tocItems.push({ id, text });
         if (client.faqEnabled && /faq|常見問題/i.test(text)) {
           faqSectionActive = true;
@@ -80,19 +88,24 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
       } else if (tag === "h3") {
         const text = el!.innerText.trim();
         if (!text) { walkHeadings(el!); continue; }
-        const isFaq = client.faqEnabled && faqSectionActive;
-        const h3Color   = isFaq ? (client.faqH3Color   || client.h3Color)    : client.h3Color;
-        const h3Size    = isFaq ? (client.faqH3FontSize || client.h3FontSize) : client.h3FontSize;
-        const h3Bold    = isFaq ? client.faqH3Bold : client.h3Bold;
-        el!.setAttribute("style", `font-size: ${h3Size}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
-        let inner = text;
-        if (isFaq && client.faqLabelEnabled) {
-          const labelColor = client.faqLabelColor || h3Color;
-          const labelSize  = client.faqLabelFontSize || h3Size;
-          inner = `<span style="color: ${labelColor}; font-size: ${labelSize};">Q${h3Count}：</span>` + text;
-          h3Count++;
+        if (isM2) {
+          el!.setAttribute("style", "color: #E00202; font-weight: 800; font-size: 17px; border-left: 4px solid #E00202; padding-left: 10px; margin-top: 20px; margin-bottom: 8px;");
+          el!.innerHTML = `<strong>${text}</strong>`;
+        } else {
+          const isFaq = client.faqEnabled && faqSectionActive;
+          const h3Color   = isFaq ? (client.faqH3Color   || client.h3Color)    : client.h3Color;
+          const h3Size    = isFaq ? (client.faqH3FontSize || client.h3FontSize) : client.h3FontSize;
+          const h3Bold    = isFaq ? client.faqH3Bold : client.h3Bold;
+          el!.setAttribute("style", `font-size: ${h3Size}; line-height: ${client.h3LineHeight}; margin-top: 8.5px; margin-bottom: 8.5px;`);
+          let inner = text;
+          if (isFaq && client.faqLabelEnabled) {
+            const labelColor = client.faqLabelColor || h3Color;
+            const labelSize  = client.faqLabelFontSize || h3Size;
+            inner = `<span style="color: ${labelColor}; font-size: ${labelSize};">Q${h3Count}：</span>` + text;
+            h3Count++;
+          }
+          el!.innerHTML = `<span style="color: ${h3Color};">${h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
         }
-        el!.innerHTML = `<span style="color: ${h3Color};">${h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
       } else if (el?.childNodes?.length) {
         walkHeadings(el);
       }
@@ -218,6 +231,22 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     // Remove empty lists after dedup
     root.querySelectorAll("ul, ol").forEach((list) => {
       if (!list.querySelector("li")) list.remove();
+    });
+  }
+
+  // ── 8.5. m2 專屬：表格樣式（紅底標題列＋斑馬紋）
+  if (isM2) {
+    root.querySelectorAll("table").forEach((table) => {
+      table.setAttribute("style", "width: 100%; border-collapse: collapse; border: 1px dotted #cccccc; margin: 16px 0;");
+      table.querySelectorAll("th").forEach((th) => {
+        th.setAttribute("style", "background-color: #E00202; color: #ffffff; font-weight: 700; padding: 10px 12px; text-align: left; border: 1px dotted #cccccc;");
+      });
+      table.querySelectorAll("tbody tr").forEach((tr, i) => {
+        const bg = i % 2 === 1 ? "#fff5f5" : "transparent";
+        tr.querySelectorAll("td").forEach((td) => {
+          td.setAttribute("style", `background-color: ${bg}; color: #333333; padding: 10px 12px; border: 1px dotted #cccccc;`);
+        });
+      });
     });
   }
 
