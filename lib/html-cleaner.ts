@@ -398,6 +398,17 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     root.querySelectorAll("table, thead, tbody, tr, th, td").forEach((el) => {
       el.removeAttribute("style");
     });
+    // 儲存格內的 <p>/<span> 等子元素也可能帶灰底（Google Docs 貼上常見），一併清掉
+    root.querySelectorAll("table *").forEach((el) => {
+      const existing = el.getAttribute("style");
+      if (!existing) return;
+      const styleMap = parseStyleString(existing);
+      styleMap.delete("background-color");
+      styleMap.delete("background");
+      const cleaned = serializeStyleMap(styleMap);
+      if (cleaned) el.setAttribute("style", cleaned);
+      else el.removeAttribute("style");
+    });
   }
 
   // ── 8.6. m2 專屬：FAQ 區塊（H2 標題含 FAQ／常見問題）底下的 h3+段落，
