@@ -127,27 +127,22 @@ h3.sub-title {
 strong { color: #e00202; }
 h2.section-title strong { color: #fff !important; }
 
-/* 表格 */
+/* 表格：陽春但好讀，字級 18px、表頭加粗、儲存格留白足夠 */
 table {
   width: 100%;
   border-collapse: collapse;
   margin: 1.2em 0;
-  font-size: .95em;
 }
-th {
-  background-color: #e00202;
-  color: #fff;
-  padding: 10px 12px;
+th, td {
+  font-size: 18px !important;
+  padding: 12px 16px !important;
+  border: 1px solid #e5e5e5;
   text-align: left;
-  font-weight: bold;
-}
-td {
-  padding: 9px 12px;
-  border-bottom: 1px solid #f0d0d0;
   vertical-align: top;
 }
-tr:nth-child(even) td { background-color: #fff5f5; }
-tr:hover td { background-color: #ffe8e8; }
+th {
+  font-weight: 700 !important;
+}
 
 /* FAQ 手風琴 */
 details {
