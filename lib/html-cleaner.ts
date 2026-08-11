@@ -99,8 +99,8 @@ main {
 
 /* H2 章節標題 */
 h2.section-title {
-  background-color: #e00202;
-  color: #fff;
+  background-color: #e00202 !important;
+  color: #fff !important;
   border-bottom: 4px solid #ff4444;
   padding: 12px 15px;
   border-radius: 5px 5px 0 0;
@@ -115,7 +115,7 @@ h2.section-title *, h2.section-title strong { color: #fff !important; }
 
 /* H3 小標 */
 h3.sub-title {
-  color: #e00202;
+  color: #e00202 !important;
   font-size: 1.1em;
   font-weight: 800;
   margin: 1.5em 0 .5em 0;
