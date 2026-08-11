@@ -7,8 +7,10 @@ import { LEVEL, CATEGORY, type CheckResult } from './site-audit-rules';
 export const LOCAL_TYPES = ['LocalBusiness', 'Store', 'Restaurant', 'Dentist', 'MedicalClinic', 'HealthAndBeautyBusiness', 'ProfessionalService', 'HomeAndConstructionBusiness', 'JewelryStore'];
 const ARTICLE_TYPES = ['Article', 'NewsArticle', 'BlogPosting'];
 const PRODUCT_TYPES = ['Product'];
-// 純線上品牌/電商常見標法（如 91APP 站台），沒有實體門市所以不套 LocalBusiness 的地址/營業時間規則
-const ORG_TYPES = ['Organization', 'Corporation'];
+// 純線上品牌/電商常見標法（如 91APP 站台），沒有實體門市所以不套 LocalBusiness 的地址/營業時間規則。
+// OnlineStore 是 SHOPLINE 常用的標法（實測 chaosmedusa.com 用這個型別，telephone/sameAs 全塞在
+// 這個節點裡），欄位形狀跟 Organization 一樣，漏掉這個型別會直接被當成不追蹤的雜項忽略、整份不顯示
+const ORG_TYPES = ['Organization', 'Corporation', 'OnlineStore'];
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -132,9 +134,62 @@ export function extractDisplayFields(node: JsonLdNode): DisplayField[] {
   if (address) out.push({ label: '地址', value: address });
   const hours = formatOpeningHours(node.openingHours, node.openingHoursSpecification);
   if (hours) out.push({ label: '營業時間', value: hours });
+  // logo/image 常見包成 ImageObject（WordPress Yoast SEO 這類），不是純字串就直接被上面
+  // FIELD_LABELS 那段 typeof v === 'string' 的迴圈跳過，畫面上會誤以為沒抓到——明明
+  // missingOrganizationFields 判斷「有 logo」不算缺，卻沒有對應的欄位列出來給人看，兩邊邏輯對不起來
+  const logoUrl = imageUrlField(node.logo);
+  if (logoUrl) out.push({ label: '品牌 Logo', value: logoUrl });
+  else {
+    const imageUrl = imageUrlField(node.image);
+    if (imageUrl) out.push({ label: '圖片', value: imageUrl });
+  }
   if (Array.isArray(node.sameAs)) {
     const links = node.sameAs.filter((x): x is string => typeof x === 'string');
     if (links.length) out.push({ label: '社群/外部連結', value: links.join('、') });
+  }
+  return out;
+}
+
+// author/publisher 常見寫成字串，也常見包成 {"@type":"Person"/"Organization","name":"..."}
+function nameField(v: unknown): string | null {
+  if (typeof v === 'string' && v.trim()) return v;
+  if (v && typeof v === 'object') {
+    const o = v as JsonLdNode;
+    if (typeof o.name === 'string' && o.name.trim()) return o.name;
+  }
+  return null;
+}
+
+// image 常見是純字串網址，也常見包成 ImageObject（url/contentUrl）
+function imageUrlField(v: unknown): string | null {
+  if (typeof v === 'string' && v.trim()) return v;
+  if (v && typeof v === 'object') {
+    const o = v as JsonLdNode;
+    if (typeof o.url === 'string' && o.url.trim()) return o.url;
+    if (typeof o.contentUrl === 'string' && o.contentUrl.trim()) return o.contentUrl;
+  }
+  return null;
+}
+
+// Article 好讀欄位：標題、作者、發布/修改日期、發布單位、圖片、關鍵字——跟 LocalBusiness/Organization
+// 用的商家欄位表完全不同組欄位，用同一套 extractDisplayFields() 只看 name/telephone 這類商家欄位的話，
+// 文章節點會被判定「沒有可呈現欄位」，即使實際上資料很完整
+function extractArticleFields(node: JsonLdNode): DisplayField[] {
+  const out: DisplayField[] = [];
+  if (typeof node.headline === 'string' && node.headline.trim()) out.push({ label: '標題', value: node.headline });
+  const author = nameField(node.author);
+  if (author) out.push({ label: '作者', value: author });
+  if (typeof node.datePublished === 'string' && node.datePublished.trim()) out.push({ label: '發布日期', value: node.datePublished });
+  if (typeof node.dateModified === 'string' && node.dateModified.trim()) out.push({ label: '修改日期', value: node.dateModified });
+  const publisher = nameField(node.publisher);
+  if (publisher) out.push({ label: '發布單位', value: publisher });
+  const image = imageUrlField(node.image);
+  if (image) out.push({ label: '圖片', value: image });
+  if (Array.isArray(node.keywords)) {
+    const kws = node.keywords.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+    if (kws.length) out.push({ label: '關鍵字', value: kws.join('、') });
+  } else if (typeof node.keywords === 'string' && node.keywords.trim()) {
+    out.push({ label: '關鍵字', value: node.keywords });
   }
   return out;
 }
@@ -149,12 +204,11 @@ export interface NodeEval {
 
 export function evalNode(node: JsonLdNode): NodeEval {
   const types = nodeTypes(node);
-  const fields = extractDisplayFields(node);
-  if (types.some((t) => LOCAL_TYPES.includes(t))) return { types, label: 'LocalBusiness', missing: missingLocalBizFields(node), fields };
-  if (types.some((t) => ORG_TYPES.includes(t))) return { types, label: 'Organization', missing: missingOrganizationFields(node), fields };
-  if (types.some((t) => PRODUCT_TYPES.includes(t))) return { types, label: 'Product', missing: missingProductFields(node), fields };
-  if (types.some((t) => ARTICLE_TYPES.includes(t))) return { types, label: 'Article', missing: missingArticleFields(node), fields };
-  return { types, label: '', missing: [], fields };
+  if (types.some((t) => LOCAL_TYPES.includes(t))) return { types, label: 'LocalBusiness', missing: missingLocalBizFields(node), fields: extractDisplayFields(node) };
+  if (types.some((t) => ORG_TYPES.includes(t))) return { types, label: 'Organization', missing: missingOrganizationFields(node), fields: extractDisplayFields(node) };
+  if (types.some((t) => PRODUCT_TYPES.includes(t))) return { types, label: 'Product', missing: missingProductFields(node), fields: extractDisplayFields(node) };
+  if (types.some((t) => ARTICLE_TYPES.includes(t))) return { types, label: 'Article', missing: missingArticleFields(node), fields: extractArticleFields(node) };
+  return { types, label: '', missing: [], fields: [] };
 }
 
 export interface SchemaPage {

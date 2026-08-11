@@ -24,6 +24,20 @@ const ORG_FORM_FIELDS: FormFieldDef[] = [
   { key: 'sameAs', label: '社群/外部連結（每行一個網址）', multiline: true },
 ];
 
+const PRODUCT_FORM_FIELDS: FormFieldDef[] = [
+  { key: 'name', label: '名稱' },
+  { key: 'image', label: '圖片網址' },
+  { key: 'brand', label: '品牌' },
+  { key: 'sku', label: '商品編號 (SKU)' },
+  { key: 'price', label: '售價' },
+  { key: 'priceCurrency', label: '幣別', placeholder: 'TWD' },
+  { key: 'availability', label: '庫存狀態', placeholder: 'https://schema.org/InStock' },
+  { key: 'url', label: '商品網址' },
+  { key: 'description', label: '簡介', multiline: true },
+];
+
+const OFFER_KEYS = ['price', 'priceCurrency', 'availability'];
+
 const LOCAL_BIZ_FORM_FIELDS: FormFieldDef[] = [
   { key: 'name', label: '名稱' },
   { key: 'telephone', label: '電話' },
@@ -51,14 +65,32 @@ function stringField(v: unknown): string {
   return '';
 }
 
+// brand 常見寫成純字串，也常見包成 {"@type":"Brand","name":"..."}
+function stringOrName(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    if (typeof o.name === 'string') return o.name;
+  }
+  return '';
+}
+
+// offers 可能是單一物件，也可能是陣列（多種規格/通路），表單只對照第一筆
+function firstOffer(v: unknown): Record<string, unknown> {
+  if (Array.isArray(v)) return (v.find((x) => x && typeof x === 'object') as Record<string, unknown>) ?? {};
+  if (v && typeof v === 'object') return v as Record<string, unknown>;
+  return {};
+}
+
 export function formFieldsFor(label: NodeEval['label']): FormFieldDef[] | null {
   if (label === 'Organization') return ORG_FORM_FIELDS;
   if (label === 'LocalBusiness') return LOCAL_BIZ_FORM_FIELDS;
+  if (label === 'Product') return PRODUCT_FORM_FIELDS;
   return null;
 }
 
 // 生成工具從零開始時的空白節點（沒有匯入既有資料）
-export function emptyNode(label: 'LocalBusiness' | 'Organization'): Record<string, unknown> {
+export function emptyNode(label: 'LocalBusiness' | 'Organization' | 'Product'): Record<string, unknown> {
   return { '@context': 'https://schema.org', '@type': label };
 }
 
@@ -67,6 +99,7 @@ export function buildFormDefaults(node: Record<string, unknown>, label: NodeEval
   const fields = formFieldsFor(label);
   if (!fields) return {};
   const address = node.address && typeof node.address === 'object' ? (node.address as Record<string, unknown>) : {};
+  const offer = label === 'Product' ? firstOffer(node.offers) : {};
   const out: Record<string, string> = {};
   for (const f of fields) {
     if (label === 'LocalBusiness' && ADDRESS_KEYS.includes(f.key)) {
@@ -77,6 +110,15 @@ export function buildFormDefaults(node: Record<string, unknown>, label: NodeEval
     if (f.key === 'sameAs') {
       const v = node.sameAs;
       out[f.key] = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').join('\n') : '';
+      continue;
+    }
+    if (label === 'Product' && OFFER_KEYS.includes(f.key)) {
+      const v = offer[f.key];
+      out[f.key] = typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+      continue;
+    }
+    if (label === 'Product' && f.key === 'brand') {
+      out[f.key] = stringOrName(node.brand);
       continue;
     }
     out[f.key] = stringField(node[f.key]);
@@ -124,6 +166,31 @@ export function mergeFormIntoNode(node: Record<string, unknown>, label: NodeEval
       };
     } else {
       delete out.address;
+    }
+  } else if (label === 'Product') {
+    for (const key of ['name', 'image', 'sku', 'url', 'description']) {
+      const v = values[key]?.trim();
+      if (v) out[key] = v;
+      else delete out[key];
+    }
+    const brand = values.brand?.trim();
+    if (brand) out.brand = { '@type': 'Brand', name: brand };
+    else delete out.brand;
+
+    const price = values.price?.trim();
+    const priceCurrency = values.priceCurrency?.trim();
+    const availability = values.availability?.trim();
+    if (price || priceCurrency || availability) {
+      const baseOffer = firstOffer(node.offers);
+      out.offers = {
+        ...baseOffer,
+        '@type': typeof baseOffer['@type'] === 'string' ? baseOffer['@type'] : 'Offer',
+        ...(price && { price }),
+        ...(priceCurrency && { priceCurrency }),
+        ...(availability && { availability }),
+      };
+    } else {
+      delete out.offers;
     }
   }
   return out;

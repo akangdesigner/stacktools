@@ -57,10 +57,19 @@
 - 實測 stack.com.tw 驗證過：25 頁爬蟲抓到 10 篇文章的 Article schema，GSC 額外補到 15 個爬蟲沒碰到、但真的有曝光的文章網址
 
 待辦／可以繼續的方向：
-- [ ] Product 型別目前沒有像 LocalBusiness/Organization 一樣的「欄位對照表」跟生成表單，只有原本的 missing 檢查
-- [ ] `image` 欄位如果是 `{"@id":"..."}` 純參照（沒有實際 url，需要跨節點解析 `@graph`）目前還是顯示「未設定」，沒做這層解析
-- [ ] 25 頁上限是拿 stack.com.tw 實測的保守值（50 頁要 77 秒，怕撞 Cloudflare 反代 100 秒逾時），之後確認過部署環境的逾時設定可以再視情況調整
-- [ ] 還沒拿其他客戶網站（尤其是真的有實體門市的 LocalBusiness 案例、非 91APP 平台）實測過，多測幾個站再確認欄位規則夠不夠用
+- [x] （2026-08-11）Product 型別補上「欄位對照表」跟生成表單（名稱/圖片/品牌/SKU/售價/幣別/庫存狀態/網址/簡介），可跟 LocalBusiness/Organization 一樣匯入補完
+- [x] （2026-08-11）`image`/`logo` 欄位如果是 `{"@id":"..."}` 純參照（WordPress Yoast SEO 常見的 @graph 拆分節點寫法）已在 `lib/site-audit-crawler.ts` 的 `extractJsonLd` 解析回同一份 @graph 內對應的實際節點
+- [x] （2026-08-11，拿 stack.com.tw 官網真實文章驗證）Article 節點原本共用 LocalBusiness/Organization 那套 `extractDisplayFields()`（只認 name/telephone 這類商家欄位），文章的 headline/author/datePublished/publisher 完全對不上，畫面誤顯示「沒有解析到可呈現欄位」。新增 `extractArticleFields()` 讀標題/作者/發布日期/修改日期/發布單位/圖片/關鍵字
+- [x] （2026-08-11）檢索模式改成預設**只查首頁**（在地商家/組織品牌 schema 幾乎都是全站共用同一份，查首頁等於查全站），要深挖分散在各頁的 Product/Article 才勾「深度檢查」才跑原本的 25 頁爬蟲＋GSC 流程；`app/api/schema-check/route.ts` 加 `deep` 參數分流
+- [x] （2026-08-11）查首頁改成固定用 jsdom 真的執行一次頁面 JS 再讀 DOM，抓得到 SHOPLINE 這類把商家 schema 用前端 JS 動態插入 DOM、伺服器端原始碼裡完全沒有的資料（拿 chaosmedusa.com 實測驗證：多了一份 `OnlineStore` 節點，含 telephone/sameAs/areaServed，純 fetch 完全看不到）。**中間繞了一圈重要教訓**：一開始直接在 API route 的 process 裡跑 jsdom（in-process），同一個網址測兩次結果不一樣——一次 6 秒跑完，一次卡超過 2 分鐘，連加的逾時保險絲（`setTimeout` 強制關 window）都攔不住。原因是客戶站第三方腳本（客服外掛/recaptcha）常用同步等待寫法呼叫外部伺服器，JS 單一執行緒卡住時連我們自己的計時器都排不進事件迴圈。改成獨立子行程執行（新增 `scripts/render-jsonld.cjs`，`lib/site-audit-crawler.ts` 的 `fetchRenderedHtml` 改用 `child_process.spawn` 呼叫、逾時送 `SIGKILL`），作業系統層級砍行程不用等卡住的那條線讓步，才是真正管用的解法；另外子行程裡也補了 `process.on('uncaughtException')` 吞掉客戶站腳本的未接例外（實測踩過 Google Maps 的 `performance.getEntriesByType` 在 jsdom 沒實作，會直接讓整個子行程崩潰）。代價：查首頁從原本近乎秒回變成固定約 10~15 秒（固定等 10 秒讓非同步注入的 schema 有機會跑完，實測用「數量穩定就提早結束」的輪詢會太早誤判提早結束漏抓）
+- [x] （2026-08-11，拿 m2.com.tw 91APP 站實測）爬蟲＋sitemap 補頁對 91APP 這類純 CSR 平台原本幾乎抓不到東西（首頁原始 HTML 只有 7 個連結、3 個還連不上、sitemap.xml 標準路徑也不存在）。查證後發現 91APP 沒有 RSC 酬載可掃（不是 Next.js），真正關鍵是 sitemap 位置寫在 `robots.txt` 的 `Sitemap:` 這行（例：`/Sitemap/40644/Sitemap_Index.xml`）且是 gzip 壓縮，`lib/site-audit-crawler.ts` 的 `fetchSitemapUrls` 補上 robots.txt 探測＋gzip 解壓後，91APP 站從只抓到 1~2 頁變成能抓滿 25 頁；另外也加了 RSC 酬載掃描（給其他真的用 Next.js CSR 選單的平台，如 Shopline）與登入/購物車/會員等功能頁排除規則
+- [x] （2026-08-11）91APP 的 sitemap 內有多個子 sitemap（分類/商品/文章…），原本深度檢查是照 sitemap 原始順序抓，m2.com.tw 實測分類頁（`ShopCategory`，97 條）排最前面會吃光 25 頁預算，抓不到真正有 schema 的商品頁（`ShopSalePage`）跟文章頁（`ShopInfoModuleArticle`）。`lib/site-audit-crawler.ts` 的 `fetchSitemapUrls` 新增 `sitemapPriority()`，依子 sitemap 檔名關鍵字（跟 `lib/tkd-platform.ts` 的 `ruleForSitemap`／`TYPE_ORDER` 同一招，改用通用關鍵字比對非只認 91APP 專屬檔名）排序：商品／文章優先、分類/標籤晚點抓、搜尋結果排最後，25 頁預算優先分給真正有機會帶 schema 的頁面
+- [x] （2026-08-11）**深度檢查整個拿掉了**：小積木確認有意義的商家/組織 schema 幾乎都在首頁，25 頁全站爬蟲＋GSC 補抓那條路（`crawlSite`/`fetchPageSearchStats`）沒必要，`app/api/schema-check/route.ts` 整支重寫成只查首頁一頁，`app/schema-check/page.tsx` 拿掉「深度檢查」checkbox 跟 `onlyHomePage`/`gscChecked` 提示文字。（`crawlSite`/`sitemapPriority` 這些函式本身沒刪，`/site-audit` 全站健檢工具還在用）
+- [x] （2026-08-11）**修了兩個讓 chaosmedusa.com 一直「時有時無」的真 bug**（拿真實案例來回測十幾次才抓到）：① `scripts/render-jsonld.cjs` 寫完 stdout 立刻 `process.exit(0)`，Node 官方文件明講 `exit()` 不等未完成的 I/O——手動在終端機跑會重導向到「檔案」（同步寫入，沒事），但 API 用 `child_process.spawn` 走的是「管道」（非同步，渲染後 HTML 常超過 1MB 超過管道緩衝區），資料每次都被腰斬在同樣位置，晚注入的 schema 就這樣消失，改成等 `write()` 的 callback 確認真的寫完再 exit；② SHOPLINE 常用的型別叫 `OnlineStore`（不是 `Organization`），沒在 `lib/site-audit-schema.ts` 的 `ORG_TYPES` 清單裡，抓到了也會被當雜項濾掉不顯示，補進清單
+- [x] （2026-08-11）Organization/LocalBusiness 的 `logo` 欄位如果包成 ImageObject 物件（不是純字串網址），原本「列出有值欄位」那段只認純字串型別會整個跳過不顯示——明明缺欄位判斷邏輯知道「有 logo」，卻沒有對應欄位列給人看，兩邊邏輯對不起來，`extractDisplayFields()` 補上物件解析
+- [ ] 上面這輪修完在小積木本機重啟 dev server 後，還沒完整用 UI 走一次確認 3 個 bug 修正都生效（尤其 `OnlineStore` 卡片正確顯示、不再是空的）
+- [ ] 25 頁上限是拿 stack.com.tw 實測的保守值（50 頁要 77 秒，怕撞 Cloudflare 反代 100 秒逾時），之後確認過部署環境的逾時設定可以再視情況調整（現在只有 `/site-audit` 全站健檢會用到這個上限，schema-check 已經不爬多頁了）
+- [ ] 還沒拿其他客戶網站（尤其是真的有實體門市的 LocalBusiness 案例）實測過，多測幾個站再確認欄位規則夠不夠用
 
 ---
 

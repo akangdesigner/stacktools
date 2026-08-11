@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parse } from 'node-html-parser';
-import { crawlSite, extractJsonLd, fetchWithTimeout, normalizeUrl } from '@/lib/site-audit-crawler';
-import { fetchPageSearchStats } from '@/lib/site-audit-gsc';
+import { extractJsonLd, fetchRenderedHtml, fetchWithTimeout } from '@/lib/site-audit-crawler';
 import { evalNode } from '@/lib/site-audit-schema';
 
-// Schema 檢查 API：貼一個網址，用跟網站技術健檢同一套 BFS 爬蟲（首頁 2 層內連結 + sitemap 補爬）
-// 撈一批頁面，再疊上 GSC 有曝光的頁面（如果這個網域有連結使用者的 GSC 帳號），逐頁做真實 JSON-LD
-// 抽取＋欄位完整度檢查。比只挑「聯絡我們」候選頁廣很多，才撈得到 Product/Article 這類分散在
-// 各頁的 schema，不是只有全站共用的 Organization/LocalBusiness。
-
-// BFS + sitemap 補爬的頁數上限。實測 stack.com.tw：50 頁要價 77 秒，25 頁 35 秒——
-// 這支是同步等結果的 API（不是背景 job），怕撞 Cloudflare 反代的 100 秒逾時，抓保守一點
-const MAX_CRAWL_PAGES = 25;
-const MAX_GSC_EXTRA = 15; // GSC 有曝光、但爬蟲沒抓到的頁面，額外補抓上限（依曝光排序取前幾個）
+// Schema 檢查 API：貼一個網址，查首頁真實部署的 JSON-LD，逐節點做欄位完整度檢查。
+// 在地商家/組織品牌/商品/文章 schema 幾乎都是全站共用同一份，查首頁就等於查全站，不用整站爬取。
 
 function normalizeInput(u: string): string {
   const trimmed = u.trim();
@@ -29,76 +21,49 @@ async function fetchAndExtractExtra(pageUrl: string) {
   return extractJsonLd(root);
 }
 
+// 固定用 jsdom 真的執行一次頁面 JS 再讀 DOM——SHOPLINE 等平台常把商家 schema 用前端 JS 動態插入
+// DOM，伺服器端原始碼裡完全沒有；純 fetch 抓到的節點只是 JS 執行後結果的子集（原本就在原始碼裡
+// 的 script 不會因為執行 JS 而消失），改用渲染版不會漏掉伺服器端就有的 schema。
+//
+// 實測發現同一個網址、不同次執行，JS 注入完成的時間點會飄動（客戶站第三方腳本載入時間本來就受
+// 當下網路狀況影響），單跑一次渲染有機率剛好卡到還沒注入完成。渲染結果沒有比純 fetch 多抓到型別
+// 時，很可能就是踩到這種情況，值得再試一次，最多試 2 次——2 次都沒有比純 fetch 多，才視為這個網站
+// 真的沒有 JS 注入的 schema，不是我們沒抓到。
+async function fetchAndExtractHome(pageUrl: string) {
+  const plain = await fetchAndExtractExtra(pageUrl).catch(() => null);
+
+  let best: ReturnType<typeof extractJsonLd> | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const html = await fetchRenderedHtml(pageUrl);
+    if (!html) continue;
+    const extracted = extractJsonLd(parse(html));
+    if (!best || extracted.types.length > best.types.length) best = extracted;
+    if (best.types.length > (plain?.types.length ?? 0)) break; // 已經比純 fetch 多抓到東西，不用再試
+  }
+
+  if (best && best.types.length > 0) return { ...best, rendered: true };
+  if (plain) return { ...plain, rendered: false };
+  throw new Error('網站沒有回應或無法連線');
+}
+
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as { url?: string };
   const input = body.url?.trim();
   if (!input) return NextResponse.json({ error: '請輸入要檢查的網址' }, { status: 400 });
 
   let homeUrl: string;
-  let origin: string;
   try {
-    const u = new URL(normalizeInput(input));
-    homeUrl = u.href;
-    origin = u.origin;
+    homeUrl = new URL(normalizeInput(input)).href;
   } catch {
     return NextResponse.json({ error: '網址格式不正確' }, { status: 400 });
   }
 
-  type PageResult = { url: string; source: string; types: string[]; evals: ReturnType<typeof buildEvals> };
-  function buildEvals(nodes: Record<string, unknown>[]) {
-    return nodes.map((node) => ({ node, ...evalNode(node) }));
-  }
-
-  let crawl;
   try {
-    crawl = await crawlSite(homeUrl, { maxPages: MAX_CRAWL_PAGES, maxDepth: 2 });
+    const { types, nodes, rendered } = await fetchAndExtractHome(homeUrl);
+    const evals = nodes.map((node) => ({ node, ...evalNode(node) }));
+    const results = [{ url: homeUrl, source: rendered ? '首頁（JS 渲染後補抓）' : '首頁', types, evals }];
+    return NextResponse.json({ results });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? `抓取失敗：${err.message}` : '抓取失敗' }, { status: 400 });
   }
-  if (crawl.pages.length === 0 || !crawl.pages.some((p) => p.ok)) {
-    return NextResponse.json({ error: '抓取失敗：網站沒有回應或無法連線' }, { status: 400 });
-  }
-
-  const results: PageResult[] = crawl.pages
-    .filter((p) => p.ok)
-    .map((p) => ({
-      url: p.url,
-      source: p.isHome ? '首頁' : p.viaSitemap ? 'Sitemap 補爬頁面' : '爬蟲找到的頁面',
-      types: p.jsonLdTypes,
-      evals: buildEvals(p.jsonLdNodes),
-    }));
-
-  // GSC 有實際曝光、但爬蟲沒抓到的頁面（依曝光排序取前幾個）額外補抓一次；這個網域沒連結
-  // 使用者的 GSC 帳號時 property 會是 null，靜默略過不報錯，不影響爬蟲抓到的結果
-  let gscChecked = false;
-  try {
-    const { property, stats } = await fetchPageSearchStats(origin);
-    if (property) {
-      gscChecked = true;
-      const covered = new Set(crawl.pages.map((p) => normalizeUrl(p.url)));
-      const extraUrls = [...stats.entries()]
-        .filter(([url]) => !covered.has(url))
-        .sort((a, b) => b[1].impressions - a[1].impressions)
-        .slice(0, MAX_GSC_EXTRA)
-        .map(([url]) => url);
-      const extras = await Promise.all(
-        extraUrls.map(async (url) => {
-          try {
-            const { types, nodes } = await fetchAndExtractExtra(url);
-            return { url, source: 'GSC 有曝光的頁面', types, evals: buildEvals(nodes) } as PageResult;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      for (const e of extras) if (e) results.push(e);
-    }
-  } catch {
-    /* GSC 查詢失敗不擋主要結果，退回純爬蟲 */
-  }
-
-  // 只有首頁一頁：代表沒有其他站內連結、sitemap 也沒有補到，且沒有 GSC 資料可用
-  const onlyHomePage = results.length <= 1;
-
-  return NextResponse.json({ results, onlyHomePage, gscChecked, reachedCap: crawl.reachedCap });
 }

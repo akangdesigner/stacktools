@@ -1,4 +1,7 @@
 import { parse, HTMLElement as NHTMLElement } from 'node-html-parser';
+import { gunzipSync } from 'node:zlib';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
 
 // ── 網站技術健檢：全站爬蟲層 ────────────────────────────
 // 從首頁 BFS 爬「第一～第二層」＋補爬 sitemap、上限由呼叫端指定（route 目前 1000），逐頁擷取分析要用的原始事實（title/desc、h 標籤、
@@ -22,6 +25,52 @@ export async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<
   } finally {
     clearTimeout(timer);
   }
+}
+
+// 有些平台（SHOPLINE 等）的 JSON-LD 是前端 JS 執行後才動態插入 DOM，伺服器端原始碼裡完全沒有，
+// 純 fetch（上面的 fetchWithTimeout）抓不到，要真的執行一次頁面 JS 才看得到。只在 schema-check 查
+// 首頁時用（見 app/api/schema-check/route.ts），不要套用在整站爬取——執行客戶站不受控的第三方 JS
+// 一頁要跑好幾秒，範圍要收斂。
+//
+// 實測跑過 in-process 用 jsdom 執行（不開子行程），同一個網址兩次結果不一樣：一次 6 秒跑完，
+// 一次卡超過 2 分鐘、連加的逾時保險絲都沒攔住。原因是客戶站第三方腳本（客服外掛/recaptcha）常用
+// 「同步等待」寫法呼叫外部伺服器，JS 單一執行緒卡住時，連我們自己寫的計時器都排不進事件迴圈、
+// 攔不住。改成獨立子行程跑，逾時直接送 SIGKILL——作業系統層級砍行程，不用等卡住的那條線自己讓步。
+export async function fetchRenderedHtml(url: string, timeoutMs = 25000): Promise<string | null> {
+  const workerPath = path.join(process.cwd(), 'scripts', 'render-jsonld.cjs');
+  return new Promise((resolve) => {
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(process.execPath, [workerPath, url], { stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch {
+      resolve(null);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
+    const finish = (result: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL'); // 卡在客戶站哪個同步操作都殺得掉，不用等它自己結束
+      finish(null);
+    }, timeoutMs);
+    child.stdout?.on('data', (d: Buffer) => {
+      size += d.length;
+      if (size > 20 * 1024 * 1024) {
+        child.kill('SIGKILL'); // 保險上限：不正常頁面無限膨脹就直接放棄
+        finish(null);
+        return;
+      }
+      chunks.push(d);
+    });
+    child.on('error', () => finish(null));
+    child.on('close', (code) => finish(code === 0 && chunks.length ? Buffer.concat(chunks).toString('utf8') : null));
+  });
 }
 
 // 單頁擷取到的原始事實（數值，不含判斷）
@@ -99,7 +148,42 @@ function isCrawlableHref(raw: string): boolean {
   if (/\.(jpg|jpeg|png|gif|webp|avif|svg|ico|pdf|zip|rar|mp4|mp3|css|js|xml|json|doc|docx|xls|xlsx)(\?|$)/i.test(raw)) return false;
   // Cloudflare 信箱防爬連結（/cdn-cgi/l/email-protection）本來就會 404，不是真壞連結，排除避免假陽性
   if (/\/cdn-cgi\//i.test(raw)) return false;
+  // Next.js 自己的建置資源目錄——RSC 酬載掃描常混進這個路徑，不是真的頁面（跟 lib/tkd-crawler.ts 同款規則）
+  if (/\/_next\//i.test(raw)) return false;
+  // 登入/購物車/會員等功能頁不會有 Product/Article schema，常需要登入態才能開（會抓取失敗浪費爬蟲頁數），
+  // 各平台變體：sign_in（Shopline）、ShoppingCart/VipMember/TradesOrder/ECoupon/TraceSalePage（91APP）
+  if (/\/(login|logout|register|signup|signin|cart|checkout|account|member|members|wishlist|favorite|search|compare)(\/|\?|$)/i.test(raw)) return false;
+  if (/(sign[-_]?in|sign[-_]?up|shoppingcart|vipmember|tradesorder|ecoupon|tracesalepage)/i.test(raw)) return false;
   return true;
+}
+
+// 前端框架（多為 Next.js App Router，91APP 等平台常用）常把選單資料序列化進 RSC 串流酬載
+// （<script>self.__next_f.push(...)</script> 裡一段跳脫過的 JSON），要等瀏覽器執行 JS 才會真的
+// 組出 <a> 標籤——HTML 原始碼裡完全沒有 <a> 元素，純 DOM 選擇器抓不到。但酬載本身就是跳脫過的
+// JSON 字串，直接對整份 HTML 全文找 "href":"..." 這個鍵值對還是撈得到，不必真的執行 JS／裝
+// headless 瀏覽器。跟 lib/tkd-crawler.ts 的 scanRscHrefs 同一招，這裡重複一份小函式是刻意保持
+// 兩支 crawler 互不依賴。
+function scanRscHrefs(html: string): string[] {
+  const out: string[] = [];
+  const re = /\\?"href\\?"\s*:\s*\\?"([^"\\]+)\\?"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) out.push(m[1]);
+  return out;
+}
+
+// 把節點裡「純 @id 參照」的欄位換成同一份 @graph 裡對應的實際節點，例如 WordPress Yoast SEO
+// 常把 logo/image 拆成獨立的 ImageObject 節點，node.logo 只會是 {"@id": ".../#logo"}，
+// 不解析的話 stringField() 這類讀值邏輯會誤判成「未設定」。只做一層淺層替換，避免循環參照。
+function resolveIdRefs(value: unknown, byId: Map<string, Record<string, unknown>>): unknown {
+  if (Array.isArray(value)) return value.map((v) => resolveIdRefs(v, byId));
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 1 && keys[0] === '@id') {
+      const id = (value as { '@id': unknown })['@id'];
+      if (typeof id === 'string' && byId.has(id)) return byId.get(id);
+    }
+  }
+  return value;
 }
 
 // 從 root 抓所有 JSON-LD 節點（含巢狀 @graph），回傳型別清單與完整節點（給欄位完整度檢查用）
@@ -116,10 +200,16 @@ export function extractJsonLd(root: NHTMLElement): { types: string[]; nodes: Rec
         : Array.isArray((data as { '@graph'?: unknown[] })['@graph'])
           ? (data as { '@graph': unknown[] })['@graph']
           : [data];
-      for (const node of items) {
-        if (!node || typeof node !== 'object') continue;
-        nodes.push(node as Record<string, unknown>);
-        const t = (node as { '@type'?: unknown })['@type'];
+      const objItems = items.filter((n): n is Record<string, unknown> => !!n && typeof n === 'object');
+      const byId = new Map<string, Record<string, unknown>>();
+      for (const n of objItems) {
+        const id = n['@id'];
+        if (typeof id === 'string') byId.set(id, n);
+      }
+      for (const node of objItems) {
+        const resolved = byId.size > 0 ? (Object.fromEntries(Object.entries(node).map(([k, v]) => [k, resolveIdRefs(v, byId)])) as Record<string, unknown>) : node;
+        nodes.push(resolved);
+        const t = resolved['@type'];
         if (typeof t === 'string') types.add(t);
         else if (Array.isArray(t)) t.forEach((x) => typeof x === 'string' && types.add(x));
       }
@@ -185,6 +275,20 @@ function extractPageFacts(html: string, url: string, depth: number, status: numb
     else externalCount++;
   }
 
+  // 補掃 RSC 酬載：91APP 等平台的選單完全靠前端 JS 渲染，原始 HTML 裡沒有 <a> 標籤可讀，
+  // 上面那段選擇器會抓到 0 或極少連結（只剩會員/購物車這類固定殼連結）
+  for (const raw of scanRscHrefs(html)) {
+    if (!isCrawlableHref(raw)) continue;
+    let abs: URL;
+    try {
+      abs = new URL(raw, url);
+    } catch {
+      continue;
+    }
+    if (abs.protocol !== 'http:' && abs.protocol !== 'https:') continue;
+    if (abs.origin === origin) internal.add(normalizeUrl(abs.href));
+  }
+
   // 純文字摘要（去 script/style，截斷）
   const bodyClone = parse((root.querySelector('body') ?? root).outerHTML);
   bodyClone.querySelectorAll('script, style, noscript').forEach((el) => el.remove());
@@ -226,33 +330,85 @@ function extractPageFacts(html: string, url: string, depth: number, status: numb
 }
 
 // 抓 sitemap.xml，解析出所有頁面網址（支援 sitemapindex 巢狀，最多抓 30 份、2000 個網址）
+// 從 robots.txt 找網站宣告的 sitemap 位置：很多平台不放在 /sitemap.xml，例如 91APP 放在
+// /Sitemap/店家ID/Sitemap_Index.xml，只有 robots.txt 的 Sitemap: 這行有寫（跟 lib/tkd-crawler.ts 同款規則）
+async function sitemapsFromRobots(origin: string): Promise<string[]> {
+  try {
+    const res = await fetchWithTimeout(`${origin}/robots.txt`, 8000);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const out: string[] = [];
+    for (const m of text.matchAll(/^\s*sitemap:\s*(\S+)/gim)) out.push(m[1]);
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+// 讀取單份 sitemap 內容：支援 gzip 壓縮（.xml.gz 或內容以 gzip magic number 開頭，91APP 常見）
+async function fetchSitemapText(url: string): Promise<string | null> {
+  try {
+    const res = await fetchWithTimeout(url, 10000);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+      try {
+        return gunzipSync(buf).toString('utf8');
+      } catch {
+        return null;
+      }
+    }
+    return buf.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+// 子 sitemap 檔名關鍵字 → 優先權重，數字越小越先抓。深度檢查有 25 頁上限，91APP 這類
+// 平台常把分類頁（ShopCategory）排在 sitemap index 最前面又量體最大，會把預算吃光，導致真正
+// 有 Product/Article schema 的商品頁、文章頁反而抓不到（跟 lib/tkd-platform.ts 的
+// ruleForSitemap／TYPE_ORDER 同一招，這裡用關鍵字比對通用命名而非只認 91APP 專屬檔名）
+function sitemapPriority(sitemapName: string): number {
+  const n = sitemapName.toLowerCase();
+  if (/salepage|shopitem|[/_-]products?[/_.-]|[/_-]item[/_.-]/.test(n)) return 0; // 商品頁：schema 檢查最想要
+  if (/article|blog|post|news/.test(n)) return 1; // 文章頁：schema 檢查第二想要
+  if (/category|[/_-]tags?[/_.-]/.test(n)) return 5; // 分類/標籤頁：量體大又通常沒有 Product/Article schema，晚點抓
+  if (/searchresult|[/_-]search[/_.-]/.test(n)) return 9; // 搜尋結果頁：純噪音，排最後
+  return 3; // 其他未知子 sitemap：中間優先權
+}
+
 export async function fetchSitemapUrls(origin: string): Promise<string[]> {
   const seen = new Set<string>();
-  const queue = [`${origin}/sitemap.xml`];
-  const out = new Set<string>();
+  const fromRobots = await sitemapsFromRobots(origin);
+  const queue = [`${origin}/sitemap.xml`, ...fromRobots];
+  const outSeen = new Set<string>();
+  const collected: { url: string; priority: number }[] = [];
   let fetched = 0;
-  while (queue.length && out.size < 2000 && fetched < 30) {
+  while (queue.length && outSeen.size < 2000 && fetched < 30) {
     const sm = queue.shift()!;
     if (seen.has(sm)) continue;
     seen.add(sm);
     fetched++;
-    try {
-      const res = await fetchWithTimeout(sm, 10000);
-      if (!res.ok) continue;
-      const xml = await res.text();
-      const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
-      const isIndex = /<sitemapindex/i.test(xml);
-      for (const loc of locs) {
-        if (isIndex) queue.push(loc.trim());
+    const xml = await fetchSitemapText(sm);
+    if (!xml) continue;
+    const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+    const isIndex = /<sitemapindex/i.test(xml);
+    const priority = sitemapPriority(sm);
+    for (const loc of locs) {
+      if (isIndex) queue.push(loc.trim());
+      else {
         // 存「原始」網址（保留結尾斜線/查詢字串）：GSC URL 檢測要用 Google 實際收錄的原網址，
         // 正規化（去斜線）會讓 Google 回「無法辨識的網址」。孤島比對時才另外做正規化。
-        else out.add(loc.trim());
+        const url = loc.trim();
+        if (outSeen.has(url)) continue;
+        outSeen.add(url);
+        collected.push({ url, priority });
       }
-    } catch {
-      /* 單份 sitemap 抓失敗就跳過 */
     }
   }
-  return [...out];
+  // 穩定排序：同優先權內維持原本抓取順序，只把商品/文章子 sitemap 的網址往前挪
+  collected.sort((a, b) => a.priority - b.priority);
+  return collected.map((c) => c.url);
 }
 
 // 站台檔案是否存在

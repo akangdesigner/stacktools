@@ -8,11 +8,11 @@ interface DisplayField {
   label: string;
   value: string;
 }
-type TrackedLabel = "LocalBusiness" | "Organization";
+type TrackedLabel = "LocalBusiness" | "Organization" | "Product";
 interface NodeEval {
   node: Record<string, unknown>;
   types: string[];
-  label: "" | TrackedLabel | "Product" | "Article";
+  label: "" | TrackedLabel | "Article";
   missing: string[];
   fields: DisplayField[];
 }
@@ -46,7 +46,7 @@ function NodeCard({
   onCopy: () => void;
   onImport: (ev: NodeEval & { label: TrackedLabel }) => void;
 }) {
-  const canImport = ev.label === "LocalBusiness" || ev.label === "Organization";
+  const canImport = ev.label === "LocalBusiness" || ev.label === "Organization" || ev.label === "Product";
   const templateFields = canImport ? formFieldsFor(ev.label) : null;
   const templateValues = templateFields ? buildFormDefaults(ev.node, ev.label) : null;
   return (
@@ -127,8 +127,6 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<PageResult[] | null>(null);
-  const [onlyHomePage, setOnlyHomePage] = useState(false);
-  const [gscChecked, setGscChecked] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   async function handleCheck(e?: React.FormEvent) {
@@ -137,8 +135,6 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
     setLoading(true);
     setError("");
     setResults(null);
-    setOnlyHomePage(false);
-    setGscChecked(false);
     try {
       const res = await fetch("/api/schema-check", {
         method: "POST",
@@ -148,8 +144,6 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "抓取失敗");
       setResults(data.results as PageResult[]);
-      setOnlyHomePage(!!data.onlyHomePage);
-      setGscChecked(!!data.gscChecked);
     } catch (err) {
       setError(err instanceof Error ? err.message : "抓取失敗");
     } finally {
@@ -170,7 +164,7 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
-        貼網址，用網站健檢同一套爬蟲抓最多 25 頁（首頁 2 層內連結＋sitemap 補爬），有連結你的 GSC 帳號的話再疊上有曝光的頁面，逐頁核對在地商家/商品/文章的關鍵欄位。只讀伺服器端原始碼，JS 動態插入的 Schema（如 91APP）可能看不到，建議搭配 Rich Results Test 交叉確認。頁數比較多，可能要 30~50 秒。
+        貼網址，查首頁的 Schema——在地商家/組織品牌 schema 幾乎都是全站共用同一份，查首頁就等於查全站。會實際跑一次瀏覽器渲染再讀結果，連 SHOPLINE 這類用前端 JS 動態插入 schema 的平台也抓得到，大概要 10~15 秒。
       </p>
 
       <form onSubmit={handleCheck}>
@@ -199,12 +193,6 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
       </form>
 
       {error && <div className="mt-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">{error}</div>}
-
-      {onlyHomePage && (
-        <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-lg px-4 py-3">
-          只查得到首頁——爬蟲沒找到其他站內連結、sitemap 也沒有補到頁面{gscChecked ? "，GSC 也沒有其他頁面的曝光資料" : "（這個網域也還沒連結 GSC 帳號）"}。如果你知道其他頁面的網址，也可以貼上再查一次。
-        </div>
-      )}
 
       {results &&
         (() => {
@@ -304,7 +292,7 @@ function GenerateView({
       <p className="text-sm text-gray-500 mb-4">選型別、填欄位，右邊即時產生可直接複製貼回網站的 JSON-LD。也可以先去「檢索」查一個網址，找到現有節點後按「匯入到生成工具補完」，帶著既有資料回來這裡補。</p>
 
       <div className="flex gap-2 mb-4">
-        {(["LocalBusiness", "Organization"] as const).map((l) => (
+        {(["LocalBusiness", "Organization", "Product"] as const).map((l) => (
           <button
             key={l}
             type="button"
