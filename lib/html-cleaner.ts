@@ -49,6 +49,159 @@ function generateTocHtml(items: { id: string; text: string }[], linkColor: strin
   return `<div class="catalog-box" style="${bgStyle}padding: 20px; border-radius: 10px; margin-bottom: 30px;"><p style="font-size: ${fontSize}; font-weight: bold; color: #333333; margin-bottom: 15px;">${tocTitle}</p><ul style="list-style-type: decimal; padding-left: 20px; line-height: 1.8;">${links}</ul></div>`;
 }
 
+// m2 專屬：目錄樣式（紅框 .toc，對應 M2_STYLE_BLOCK 裡的 class）
+function generateM2TocHtml(items: { id: string; text: string }[]): string {
+  const links = items.map((item) => `<li><a href="#${item.id}">${item.text}</a></li>`).join("");
+  return `<div class="toc"><h3>📋 本文目錄</h3><ol>${links}</ol></div>`;
+}
+
+// m2 專屬：整段內嵌 <style>，複製自客戶網站實際文章頁的樣式表（91APP 平台），
+// 讓貼進後台的內容自帶樣式，不用逐一 inline
+const M2_STYLE_BLOCK = `<style>
+/* 91APP 文章頁外層容器修正：避免文章被外層寬度或留白推到右側 */
+#article_content,
+.article-content,
+.article-detail,
+.article-container,
+main {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* 目錄 */
+.toc {
+  background: #fff5f5;
+  border: 2px solid #e00202;
+  padding: 15px 20px;
+  border-radius: 5px;
+  margin: 20px 0;
+}
+.toc h3 {
+  margin: 0 0 .5em 0;
+  font-size: 1.15em;
+  color: #e00202;
+  font-weight: 900;
+}
+.toc ol { padding-left: 1.4em; margin: 0; }
+.toc li { margin: .3em 0; list-style-type: decimal; }
+.toc a {
+  color: #e00202;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+.toc a:hover { background-color: #e00202; color: #fff; }
+
+/* H2 章節標題 */
+h2.section-title {
+  background-color: #e00202;
+  color: #fff;
+  border-bottom: 4px solid #ff4444;
+  padding: 12px 15px;
+  border-radius: 5px 5px 0 0;
+  display: block;
+  font-size: 1.3em;
+  font-weight: bold;
+  margin-top: 2em;
+  margin-bottom: .8em;
+}
+h2.section-title::before { content: "✓ "; font-weight: bold; margin-right: 4px; }
+h2.section-title *, h2.section-title strong { color: #fff !important; }
+
+/* H3 小標 */
+h3.sub-title {
+  color: #e00202;
+  font-size: 1.1em;
+  font-weight: 800;
+  margin: 1.5em 0 .5em 0;
+  padding-left: 10px;
+  border-left: 4px solid #e00202;
+}
+
+/* 強調文字 */
+strong { color: #e00202; }
+h2.section-title strong { color: #fff !important; }
+
+/* 表格 */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  font-size: .95em;
+}
+th {
+  background-color: #e00202;
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: bold;
+}
+td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f0d0d0;
+  vertical-align: top;
+}
+tr:nth-child(even) td { background-color: #fff5f5; }
+tr:hover td { background-color: #ffe8e8; }
+
+/* FAQ 手風琴 */
+details {
+  border: 1px solid #f0d0d0;
+  border-radius: 5px;
+  margin-bottom: .8em;
+  overflow: hidden;
+}
+details summary {
+  background: #fff5f5;
+  color: #e00202;
+  padding: 12px 15px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1em;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+details summary::after { content: "▶"; font-size: .8em; transition: transform 0.25s; color: #e00202; }
+details[open] summary::after { transform: rotate(90deg); }
+details summary::-webkit-details-marker { display: none; }
+.answer { padding: 14px 16px; background: #fff; line-height: 1.8; }
+.answer p { margin-bottom: .6em; }
+
+/* CTA 按鈕 */
+.cta-wrap { text-align: center; margin: 1.5em 0; }
+.cta-button {
+  display: inline-block;
+  background: #e00202;
+  color: white !important;
+  text-decoration: none;
+  padding: 13px 28px;
+  border-radius: 30px;
+  font-size: 15px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(224, 2, 2, 0.3);
+}
+.cta-button:hover { background: #c00101; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(224, 2, 2, 0.4); }
+
+/* 提醒框 */
+.tip-box {
+  background: #fff5f5;
+  border-left: 4px solid #e00202;
+  padding: 12px 16px;
+  border-radius: 0 5px 5px 0;
+  margin: 1em 0;
+  font-size: .97em;
+}
+</style>
+`;
+
 export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: string): string {
   const root = parse(rawHtml);
 
@@ -74,8 +227,8 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         const id = `title-${h2Count++}`;
         el!.setAttribute("id", id);
         if (isM2) {
-          el!.setAttribute("style", "background-color: #E00202; color: #ffffff; font-size: 22px; font-weight: 700; padding: 14px 18px; margin-top: 40px; margin-bottom: 16px; border-radius: 6px 6px 0 0; border-bottom: 4px solid #ff4444;");
-          el!.innerHTML = `<strong>${text}</strong>`;
+          el!.setAttribute("class", "section-title");
+          el!.innerHTML = text;
         } else {
           el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
           el!.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
@@ -89,8 +242,8 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         const text = el!.innerText.trim();
         if (!text) { walkHeadings(el!); continue; }
         if (isM2) {
-          el!.setAttribute("style", "color: #E00202; font-weight: 800; font-size: 17px; border-left: 4px solid #E00202; padding-left: 10px; margin-top: 20px; margin-bottom: 8px;");
-          el!.innerHTML = `<strong>${text}</strong>`;
+          el!.setAttribute("class", "sub-title");
+          el!.innerHTML = text;
         } else {
           const isFaq = client.faqEnabled && faqSectionActive;
           const h3Color   = isFaq ? (client.faqH3Color   || client.h3Color)    : client.h3Color;
@@ -234,20 +387,41 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     });
   }
 
-  // ── 8.5. m2 專屬：表格樣式（紅底標題列＋斑馬紋）
+  // ── 8.5. m2 專屬：表格交給 M2_STYLE_BLOCK 的 tag selector 處理，
+  // 但要清掉草稿可能殘留的 inline style（如貼自 Google Docs），避免蓋掉樣式表
   if (isM2) {
-    root.querySelectorAll("table").forEach((table) => {
-      table.setAttribute("style", "width: 100%; border-collapse: collapse; border: 1px dotted #cccccc; margin: 16px 0;");
-      table.querySelectorAll("th").forEach((th) => {
-        th.setAttribute("style", "background-color: #E00202; color: #ffffff; font-weight: 700; padding: 10px 12px; text-align: left; border: 1px dotted #cccccc;");
-      });
-      table.querySelectorAll("tbody tr").forEach((tr, i) => {
-        const bg = i % 2 === 1 ? "#fff5f5" : "transparent";
-        tr.querySelectorAll("td").forEach((td) => {
-          td.setAttribute("style", `background-color: ${bg}; color: #333333; padding: 10px 12px; border: 1px dotted #cccccc;`);
-        });
-      });
+    root.querySelectorAll("table, thead, tbody, tr, th, td").forEach((el) => {
+      el.removeAttribute("style");
     });
+  }
+
+  // ── 8.6. m2 專屬：FAQ 區塊（H2 標題含 FAQ／常見問題）底下的 h3+段落，
+  // 轉成 <details><summary> 手風琴，取代原本的 h3 小標樣式
+  if (isM2) {
+    const faqH2 = root.querySelectorAll("h2").find((h) => /faq|常見問題/i.test(h.innerText));
+    if (faqH2) {
+      let qIndex = 1;
+      let node: NHTMLElement | null = faqH2.nextElementSibling;
+      while (node && node.tagName?.toLowerCase() !== "h2") {
+        if (node.tagName?.toLowerCase() === "h3") {
+          const questionText = node.innerText.trim();
+          const answerNodes: NHTMLElement[] = [];
+          let sibling = node.nextElementSibling;
+          while (sibling && !["h2", "h3"].includes(sibling.tagName?.toLowerCase() ?? "")) {
+            answerNodes.push(sibling);
+            sibling = sibling.nextElementSibling;
+          }
+          const answerHtml = answerNodes.map((n) => n.outerHTML).join("");
+          const detailsHtml = `<details><summary>Q${qIndex}：${questionText}</summary> <div class="answer">${answerHtml}</div></details>`;
+          node.replaceWith(detailsHtml);
+          answerNodes.forEach((n) => n.remove());
+          qIndex++;
+          node = sibling;
+          continue;
+        }
+        node = node.nextElementSibling;
+      }
+    }
   }
 
   // ── 9. Insert TOC before first H2 (via string replace to preserve onclick)
@@ -255,17 +429,23 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   if (client.generateToc && tocItems.length > 0) {
     const firstH2Match = result.match(/<h2[\s>]/i);
     if (firstH2Match && firstH2Match.index !== undefined) {
-      const toc = generateTocHtml(
-        tocItems,
-        client.linkColor,
-        client.tocTitle,
-        client.tocBgColor ?? "#f9f9f9",
-        client.tocBgOpacity ?? 100,
-        client.paragraphFontSize,
-        articleUrl
-      ) + "\n";
+      const toc = (isM2
+        ? generateM2TocHtml(tocItems)
+        : generateTocHtml(
+            tocItems,
+            client.linkColor,
+            client.tocTitle,
+            client.tocBgColor ?? "#f9f9f9",
+            client.tocBgOpacity ?? 100,
+            client.paragraphFontSize,
+            articleUrl
+          )) + "\n";
       result = result.slice(0, firstH2Match.index) + toc + result.slice(firstH2Match.index);
     }
+  }
+
+  if (isM2) {
+    result = M2_STYLE_BLOCK + result;
   }
 
   return result;
