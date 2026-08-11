@@ -365,6 +365,16 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     }));
   });
 
+  // ── 7.5. m2 專屬：移除內文第一張圖片（跟後台封面圖重複），順便清掉緊跟著的 <br>
+  if (isM2) {
+    const firstImg = root.querySelector("img");
+    if (firstImg) {
+      const next = firstImg.nextElementSibling;
+      if (next?.tagName?.toLowerCase() === "br") next.remove();
+      firstImg.remove();
+    }
+  }
+
   // ── 8. deduplicate <li> items
   if (client.deduplicateLi) {
     const seen = new Set<string>();
