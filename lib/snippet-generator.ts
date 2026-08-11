@@ -9,7 +9,7 @@ export function getConsoleSnippet(): string {
                  document.querySelector('article') ||
                  document.body;
 
-    var nodes = source.querySelectorAll('h1, h2, h3, p, img, ul, ol, blockquote, a.elementor-button-link, .elementor-button');
+    var nodes = source.querySelectorAll('h1, h2, h3, p, img, ul, ol, table, blockquote, a.elementor-button-link, .elementor-button');
     var resultHtml = "";
     var imageUrls = [];
 
@@ -81,8 +81,12 @@ export function getConsoleSnippet(): string {
             var wrapper = (tagName === 'p') ? \`<span style="font-size:18px; color:#454f5e; line-height:1.8;">\${cleanInner}</span>\` : cleanInner;
             resultHtml += \`<\${tagName} style="margin-bottom:15px;">\${wrapper}</\${tagName}>\\n\`;
         }
-        else if (tagName === 'img' && node.closest('ul, ol')) {
-            return; // 跳過 ul/ol 內的 <img>
+        else if (tagName === 'table') {
+            var cleanTable = node.outerHTML.replace(/\\s*class="[^"]*"/g, '').replace(/\\s*style="[^"]*"/g, '');
+            resultHtml += cleanTable + \`\\n\`;
+        }
+        else if (tagName === 'img' && (node.closest('ul, ol') || node.closest('table'))) {
+            return; // 跳過 ul/ol、table 內的 <img>，避免跟 table 整段擷取重複
         }
         else if (tagName === 'img') {
             if (node.naturalWidth > 0 && node.naturalWidth < 50) return;
