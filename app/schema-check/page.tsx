@@ -210,7 +210,27 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
               else map.set(dedupeKey, { ev, pages: [{ url: r.url, source: r.source }] });
             }
           }
-          const entries = [...map.values()];
+          const deduped = [...map.values()];
+
+          // LocalBusiness/Organization 代表「品牌本體只有一份」——同一首頁若出現好幾個這種節點，
+          // 通常是平台預設值跟商家自己填的資料疊在一起（如 SHOPLINE 站常見），Google 只會採信其中一個。
+          // 只挑欄位最完整的一份顯示；名稱不一致才提示衝突，名稱一致（純粹是同一份資料重複宣告）就不用講
+          type DisplayEntry = Entry & { conflictNames?: string[] };
+          const IDENTITY_LABELS = new Set(["LocalBusiness", "Organization"]);
+          const byLabel = new Map<string, Entry[]>();
+          const entries: DisplayEntry[] = [];
+          for (const e of deduped) {
+            if (!IDENTITY_LABELS.has(e.ev.label)) { entries.push(e); continue; }
+            const list = byLabel.get(e.ev.label) ?? [];
+            list.push(e);
+            byLabel.set(e.ev.label, list);
+          }
+          for (const group of byLabel.values()) {
+            if (group.length === 1) { entries.push(group[0]); continue; }
+            const primary = [...group].sort((a, b) => a.ev.missing.length - b.ev.missing.length || b.ev.fields.length - a.ev.fields.length)[0];
+            const names = [...new Set(group.map((g) => (typeof g.ev.node.name === "string" ? g.ev.node.name.trim() : "")).filter(Boolean))];
+            entries.push(names.length > 1 ? { ...primary, conflictNames: names } : primary);
+          }
 
           if (entries.length === 0) {
             return (
@@ -239,6 +259,11 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
                           ))}
                         </ul>
                       </details>
+                    )}
+                    {entry.conflictNames && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        偵測到 {entry.conflictNames.length} 個同型別節點名稱不一致：{entry.conflictNames.join("、")}，已顯示欄位最完整的一份，建議請客戶統一成單一權威名稱。
+                      </p>
                     )}
                     <NodeCard ev={entry.ev} copied={copiedKey === key} onCopy={() => handleCopy(key, entry.ev.node)} onImport={onImport} />
                   </div>
