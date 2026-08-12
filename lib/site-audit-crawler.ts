@@ -171,6 +171,22 @@ function scanRscHrefs(html: string): string[] {
   return out;
 }
 
+// 收集整份 @graph 裡「有 @id 且不只是純參照」的節點，遞迴進巢狀物件收集，不能只看頂層節點。
+// 實測 stack.com.tw（Yoast SEO）的 logo 是巢狀塞在 Organization.logo 裡的完整 ImageObject（帶自己的
+// @id），從沒被拉成頂層 @graph 節點；Organization.image 則是指向同一個 @id 的純參照 {"@id": "..."}。
+// 舊版 byId 只收頂層節點的 @id，收不到這種「定義藏在巢狀欄位裡」的情況，image 因此解析不出來、
+// 「補完 Schema」表單顯示成「未設定」，明明 logo 資料其實齊全。
+function collectIdDefs(value: unknown, byId: Map<string, Record<string, unknown>>): void {
+  if (Array.isArray(value)) { value.forEach((v) => collectIdDefs(v, byId)); return; }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const id = obj['@id'];
+    // 只收「有實際內容」的節點當定義來源，純參照（只有 @id 一個 key）不能拿來當定義，否則會互相蓋掉
+    if (typeof id === 'string' && Object.keys(obj).length > 1 && !byId.has(id)) byId.set(id, obj);
+    for (const v of Object.values(obj)) collectIdDefs(v, byId);
+  }
+}
+
 // 把節點裡「純 @id 參照」的欄位換成同一份 @graph 裡對應的實際節點，例如 WordPress Yoast SEO
 // 常把 logo/image 拆成獨立的 ImageObject 節點，node.logo 只會是 {"@id": ".../#logo"}，
 // 不解析的話 stringField() 這類讀值邏輯會誤判成「未設定」。只做一層淺層替換，避免循環參照。
@@ -202,10 +218,7 @@ export function extractJsonLd(root: NHTMLElement): { types: string[]; nodes: Rec
           : [data];
       const objItems = items.filter((n): n is Record<string, unknown> => !!n && typeof n === 'object');
       const byId = new Map<string, Record<string, unknown>>();
-      for (const n of objItems) {
-        const id = n['@id'];
-        if (typeof id === 'string') byId.set(id, n);
-      }
+      objItems.forEach((n) => collectIdDefs(n, byId));
       for (const node of objItems) {
         const resolved = byId.size > 0 ? (Object.fromEntries(Object.entries(node).map(([k, v]) => [k, resolveIdRefs(v, byId)])) as Record<string, unknown>) : node;
         nodes.push(resolved);
