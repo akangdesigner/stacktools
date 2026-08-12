@@ -261,21 +261,25 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   }
   walkHeadings(root);
 
-  // ── 3. p > span (font-size / color / line-height)
+  // ── 3. p 本身 + p > span (font-size / color / line-height)
+  // p 自己的 inline style 也要覆蓋，否則沒有 span 包住的純文字／CTA 段落（如 <p style="font-size:12px">）會保留草稿的小字級
   // Skip spans that are inside <a>，顏色統一交給第 5 步的 <a> 清理邏輯處理
   root.querySelectorAll("p").forEach((p) => {
-    const spans = p.querySelectorAll("span");
-    if (spans.length > 0) {
-      spans.forEach((span) => {
-        if (span.closest("a")) return;
-        const existing = span.getAttribute("style") || "";
-        span.setAttribute("style", mergeStyles(existing, {
-          "font-size": client.paragraphFontSize,
-          color: client.paragraphColor,
-          "line-height": client.paragraphLineHeight,
-        }));
-      });
-    }
+    const pExisting = p.getAttribute("style") || "";
+    p.setAttribute("style", mergeStyles(pExisting, {
+      "font-size": client.paragraphFontSize,
+      color: client.paragraphColor,
+      "line-height": client.paragraphLineHeight,
+    }));
+    p.querySelectorAll("span").forEach((span) => {
+      if (span.closest("a")) return;
+      const existing = span.getAttribute("style") || "";
+      span.setAttribute("style", mergeStyles(existing, {
+        "font-size": client.paragraphFontSize,
+        color: client.paragraphColor,
+        "line-height": client.paragraphLineHeight,
+      }));
+    });
   });
 
   // ── 4. li > span
@@ -289,6 +293,18 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         color: client.listItemColor,
       }));
     });
+  });
+
+  // ── 4.5. ul/ol/li 本身：清掉草稿殘留、會讓清單跑版的 inline style
+  // （Google Docs／Notion 貼上常見 list-style:none、margin/padding:0，會蓋掉客戶網站的清單樣式，導致項目符號消失、縮排跑掉）
+  root.querySelectorAll("ul, ol, li").forEach((el) => {
+    const existing = el.getAttribute("style");
+    if (!existing) return;
+    const styleMap = parseStyleString(existing);
+    ["list-style", "list-style-type", "list-style-position", "margin", "margin-left", "padding", "padding-left"].forEach((k) => styleMap.delete(k));
+    const cleaned = serializeStyleMap(styleMap);
+    if (cleaned) el.setAttribute("style", cleaned);
+    else el.removeAttribute("style");
   });
 
   // ── 5. anchors: button vs plain link
@@ -393,23 +409,23 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   }
 
   // ── 8.5. m2 專屬：表格交給 M2_STYLE_BLOCK 的 tag selector 處理，
-  // 但要清掉草稿可能殘留的 inline style（如貼自 Google Docs），避免蓋掉樣式表
+  // 要清空表格結構標籤上殘留的 inline style（如貼自 Google Docs），避免蓋掉樣式表
   if (isM2) {
     root.querySelectorAll("table, thead, tbody, tr, th, td").forEach((el) => {
       el.removeAttribute("style");
     });
-    // 儲存格內的 <p>/<span> 等子元素也可能帶灰底（Google Docs 貼上常見），一併清掉
-    root.querySelectorAll("table *").forEach((el) => {
-      const existing = el.getAttribute("style");
-      if (!existing) return;
-      const styleMap = parseStyleString(existing);
-      styleMap.delete("background-color");
-      styleMap.delete("background");
-      const cleaned = serializeStyleMap(styleMap);
-      if (cleaned) el.setAttribute("style", cleaned);
-      else el.removeAttribute("style");
-    });
   }
+  // ── 8.55. 所有客戶：表格與儲存格內的子元素（td/th/span/p...）可能帶灰底（Google Docs 貼上常見），一併清掉
+  root.querySelectorAll("table, table *").forEach((el) => {
+    const existing = el.getAttribute("style");
+    if (!existing) return;
+    const styleMap = parseStyleString(existing);
+    styleMap.delete("background-color");
+    styleMap.delete("background");
+    const cleaned = serializeStyleMap(styleMap);
+    if (cleaned) el.setAttribute("style", cleaned);
+    else el.removeAttribute("style");
+  });
 
   // ── 8.6. m2 專屬：FAQ 區塊（H2 標題含 FAQ／常見問題）底下的 h3+段落，
   // 轉成 <details><summary> 手風琴，取代原本的 h3 小標樣式
