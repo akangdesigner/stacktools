@@ -20,8 +20,8 @@ export async function POST(req: NextRequest) {
 
   createRecommendationJob(jobId, input);
 
-  const callbackBaseUrl = process.env.RECOMMENDATION_CALLBACK_BASE_URL || req.nextUrl.origin;
-  const callbackUrl = `${callbackBaseUrl}/api/recommendation/callback`;
+  // 固定用正式網域，req.nextUrl.origin 在 Zeabur 上會抓到已棄用的舊網域
+  const callbackUrl = 'https://tool.dg166.com/api/recommendation/callback';
 
   // 觸發 n8n「品牌查詢」與「大綱生成」兩支工作流，各自非同步回呼 callback
   const [brandsResult, outlineResult] = await Promise.all([
