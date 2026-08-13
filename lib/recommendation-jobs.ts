@@ -113,7 +113,8 @@ export function applyStageResult(
   } else if (
     mergedData.brands &&
     mergedData.outline !== undefined &&
-    mergedData.titleSuggestions !== undefined
+    mergedData.titleSuggestions !== undefined &&
+    mergedData.brandDetails !== undefined
   ) {
     status = "awaiting_confirm";
     nextMessage = message ?? "品牌與大綱已就緒，請確認後開始生成";

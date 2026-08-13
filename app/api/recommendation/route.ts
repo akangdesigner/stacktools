@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRecommendationJob, updateRecommendationJob } from '@/lib/recommendation-jobs';
-import { runRecommendationPhase1 } from '@/lib/recommendation-step1';
+import { postN8nWebhook, buildRecommendationWebhookTarget } from '@/lib/n8n-webhook';
 
 export async function POST(req: NextRequest) {
   const { title, keywords, searchTerm, requiredBrand, introLink } = await req.json();
@@ -20,10 +20,35 @@ export async function POST(req: NextRequest) {
 
   createRecommendationJob(jobId, input);
 
-  // 背景執行 Phase 1（Tavily 品牌查詢 + Claude 大綱生成），不等待
-  runRecommendationPhase1(jobId, input).catch((err) => {
-    updateRecommendationJob(jobId, 'failed', `第一階段失敗：${String(err)}`);
-  });
+  const callbackBaseUrl = process.env.RECOMMENDATION_CALLBACK_BASE_URL || req.nextUrl.origin;
+  const callbackUrl = `${callbackBaseUrl}/api/recommendation/callback`;
+
+  // 觸發 n8n「品牌查詢」與「大綱生成」兩支工作流，各自非同步回呼 callback
+  const [brandsResult, outlineResult] = await Promise.all([
+    postN8nWebhook(buildRecommendationWebhookTarget('品牌查詢', 'rec-step1-brands'), {
+      jobId,
+      callbackUrl,
+      title: input.title,
+      searchTerm: input.searchTerm,
+      requiredBrand: input.requiredBrand,
+    }),
+    postN8nWebhook(buildRecommendationWebhookTarget('大綱生成', 'rec-step2-outline'), {
+      jobId,
+      callbackUrl,
+      title: input.title,
+      keywords: input.keywords,
+      searchTerm: input.searchTerm,
+    }),
+  ]);
+
+  const errors = [brandsResult, outlineResult]
+    .filter((r): r is { ok: false; error: string } => !r.ok)
+    .map((r) => r.error);
+
+  if (errors.length > 0) {
+    updateRecommendationJob(jobId, 'failed', errors.join('；'));
+    return NextResponse.json({ error: errors.join('；') }, { status: 502 });
+  }
 
   return NextResponse.json({
     jobId,

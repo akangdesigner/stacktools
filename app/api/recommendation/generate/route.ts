@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
       brands: cleanedBrands,
       outline: outline.trim(),
       references: job.data.references ?? '',
+      brandDetails: job.data.brandDetails ?? [],
     }
   );
 

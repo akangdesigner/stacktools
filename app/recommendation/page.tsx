@@ -368,7 +368,7 @@ export default function RecommendationPage() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 {statusMessage || "正在查詢品牌與生成大綱"}{dots}
               </p>
-              <p className="text-xs text-gray-400">預估完成時間：1～2 分鐘</p>
+              <p className="text-xs text-gray-400">預估完成時間：2～5 分鐘（含品牌媒體/口碑深度研究）</p>
             </div>
           ) : phase === "awaiting_confirm" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">

@@ -5,6 +5,7 @@ import {
   RecommendationStage,
   RecommendationJobData,
 } from '@/lib/recommendation-jobs';
+import { generateTitleSuggestions } from '@/lib/recommendation-step1';
 
 // n8n 各階段回傳：{ jobId, stage: "brands" | "outline" | "final", status: "completed" | "failed", message?, data? }
 export async function POST(req: NextRequest) {
@@ -40,6 +41,13 @@ export async function POST(req: NextRequest) {
   const updated = applyStageResult(jobId, stage, data, message || undefined);
   if (!updated) {
     return NextResponse.json({ error: '找不到任務' }, { status: 404 });
+  }
+
+  // 品牌清單一到，順便本地補生成標題建議（n8n 品牌查詢工作流沒有這個環節）
+  if (stage === 'brands' && updated.data.brands) {
+    generateTitleSuggestions(jobId, updated.input, updated.data.brands).catch(() => {
+      // 已在函式內自行 fallback 成空陣列，這裡不需要再處理
+    });
   }
 
   return NextResponse.json({ ok: true });

@@ -31,11 +31,22 @@
 - `推薦文-3-完整生成` 內部又重跑一次「品牌媒體研究員」＋「真實用戶體驗研究員」，跟本地 `lib/brand-info-fetcher.ts`（`fetch-brand-info` API）的官方資料抓取邏輯重複，多花一次 OpenRouter 額度與時間。
 - 另有一支舊工作流 `推薦文資料查詢claude版`（An04JuI0KBKFbskv）是被取代的單一整合草稿版，貼文/回傳狀態節點都是 disabled，待確認是否要停用/封存避免混淆。
 
-執行結果（2026-08-13）：
-- [x] 「定標題」：表單標題欄位保留，`awaiting_confirm` 確認畫面加標題建議區塊，AI 依調查到的品牌資料生成 2～3 個標題建議可點選套用／手動編輯，確認後才送出真正要用的標題
-- [x] 第一階段維持本地執行（`lib/recommendation-step1.ts`），不改回接 n8n「品牌查詢」工作流
-- [x] ~~拿掉工作流3內部重複研究~~ 查證後發現原判斷有誤：「官方資訊」節點會用 AI 從爬到的網頁內容解析出核心成分/劑量/劑型/產地等保健品規格欄位，`fetch-brand-info` 完全沒有等效輸出，不是重複；且 `fetch-brand-info` 本來就沒被 App 任何頁面呼叫（孤兒程式碼）。結論：**n8n 工作流3維持原樣不動**，改把沒人用的 `app/api/recommendation/fetch-brand-info/route.ts`、`lib/brand-info-fetcher.ts` 刪除
+執行結果（2026-08-13，第一輪，方向後來被推翻）：
+- [x] 「定標題」：`awaiting_confirm` 確認畫面加標題建議區塊，AI 生成 2～3 個標題建議可點選套用／手動編輯
+- ~~[x] 第一階段維持本地執行~~ **後來推翻，見下方第二輪**
+- ~~[x] 工作流3維持原樣不動~~ **後來推翻，見下方第二輪**
 - [x] 舊工作流 `推薦文資料查詢claude版`（An04JuI0KBKFbskv）已停用（原本有個孤立節點擋住存檔，已補上工具建議的連接線後停用成功）
+
+**第二輪修正（2026-08-13 當天稍晚）**：小積木指出方向錯了——目標輸出格式（參考 sunvita 膠原蛋白推薦文：每個品牌卡片含規格表＋媒體報導＋用戶評價）其實正好對應 `推薦文-3-完整生成` 現有的「轉化html卡片」產出。真正的問題是：
+- App 第一階段土砲用 Tavily+Haiku 找品牌，完全沒接 `推薦文-1-品牌查詢`／`推薦文-2-大綱生成` 這兩支正式工作流
+- `推薦文-1-品牌查詢` 內部其實已經內建「品牌媒體研究員」「真實用戶體驗研究員」深度研究，跟 `推薦文-3-完整生成` 裡同名節點是**真正的重複**（不是先前誤判的 fetch-brand-info）
+
+修正後架構＋已執行：
+- [x] `app/api/recommendation/route.ts` 改成打 n8n `rec-step1-brands`、`rec-step2-outline` 兩支 webhook（非同步，callback 機制原本就有接）
+- [x] `lib/recommendation-jobs.ts` 確認畫面就緒條件加上等 `brandDetails`（品牌深度研究）到齊
+- [x] `app/api/recommendation/generate/route.ts` 送出完整生成時把 `job.data.brandDetails` 一起帶給工作流3
+- [x] `lib/recommendation-step1.ts` 精簡成只剩標題建議生成（`generateTitleSuggestions`），由 `app/api/recommendation/callback/route.ts` 收到 `stage:'brands'` 時觸發（n8n 工作流沒有定標題環節，維持本地做，失敗不擋流程）
+- [x] `推薦文-3-完整生成`（wHUHCGjX2iyiY7wA）拿掉重複的「品牌媒體研究員」「真實用戶體驗研究員」＋對應 tavily 工具節點，改吃 App 傳進來的 `brandDetails`（新增「帶入品牌細節」節點依 brand_name 對應）；`定義輸入欄位1` 補收 `brandDetails` 欄位；Merge2 從 3 input 改 2 input；「官方資訊」規格那條分支不動；n8n_validate_workflow 確認 0 error
 
 ### 精選知識文章 `/knowledge`
 瀏覽 AI 趨勢與 SEO 新知，資料存於 SQLite。
