@@ -38,6 +38,7 @@ export interface RecommendationJobInput {
 export interface RecommendationJobData {
   brands?: RecommendationBrand[];
   outline?: string;
+  titleSuggestions?: string[];
   references?: string;
   brandDetails?: RecommendationBrandDetail[];
   wpLink?: string;
@@ -109,7 +110,11 @@ export function applyStageResult(
   if (stage === "final") {
     status = "completed";
     nextMessage = message ?? "文章已生成完成";
-  } else if (mergedData.brands && mergedData.outline !== undefined) {
+  } else if (
+    mergedData.brands &&
+    mergedData.outline !== undefined &&
+    mergedData.titleSuggestions !== undefined
+  ) {
     status = "awaiting_confirm";
     nextMessage = message ?? "品牌與大綱已就緒，請確認後開始生成";
   }

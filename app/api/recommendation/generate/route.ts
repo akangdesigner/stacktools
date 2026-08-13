@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
   const jobId = body?.jobId as string | undefined;
   const brands = body?.brands as RecommendationBrand[] | undefined;
   const outline = body?.outline as string | undefined;
+  const title = body?.title as string | undefined;
 
   if (!jobId) {
     return NextResponse.json({ error: '缺少 jobId' }, { status: 400 });
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
     {
       jobId,
       callbackUrl,
-      title: job.input.title,
+      title: title?.trim() || job.input.title,
       keywords: job.input.keywords,
       searchTerm: job.input.searchTerm,
       brand: job.input.requiredBrand,

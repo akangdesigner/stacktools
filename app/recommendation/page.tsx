@@ -67,6 +67,8 @@ export default function RecommendationPage() {
   // 確認面板的可編輯資料
   const [brands, setBrands] = useState<Brand[]>([]);
   const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [confirming, setConfirming] = useState(false);
 
   // 完成後的 WordPress 連結
@@ -87,6 +89,8 @@ export default function RecommendationPage() {
     setStatusMessage("");
     setBrands([]);
     setOutlineSections([]);
+    setConfirmTitle("");
+    setTitleSuggestions([]);
     setWpEditLink("");
     setWpLink("");
   }
@@ -100,6 +104,8 @@ export default function RecommendationPage() {
     setStatusMessage("");
     setBrands([]);
     setOutlineSections([]);
+    setConfirmTitle("");
+    setTitleSuggestions([]);
     setWpEditLink("");
     setWpLink("");
 
@@ -129,7 +135,12 @@ export default function RecommendationPage() {
       const res = await fetch("/api/recommendation/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, brands, outline: serializeOutline(outlineSections) }),
+        body: JSON.stringify({
+          jobId,
+          brands,
+          outline: serializeOutline(outlineSections),
+          title: confirmTitle,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
@@ -215,6 +226,10 @@ export default function RecommendationPage() {
           setOutlineSections(
             parseOutlineText(typeof data?.data?.outline === "string" ? data.data.outline : "")
           );
+          setTitleSuggestions(
+            Array.isArray(data?.data?.titleSuggestions) ? data.data.titleSuggestions : []
+          );
+          setConfirmTitle(form.title);
           setPhase("awaiting_confirm");
         } else if (data?.status === "completed") {
           setWpEditLink(data?.data?.wpEditLink ?? "");
@@ -230,6 +245,7 @@ export default function RecommendationPage() {
     }, 3000);
 
     return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.title 只在轉入 awaiting_confirm 當下讀取一次，不用追蹤變化
   }, [jobId, isWaiting]);
 
   return (
@@ -357,6 +373,32 @@ export default function RecommendationPage() {
           ) : phase === "awaiting_confirm" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <h2 className="text-sm font-semibold text-gray-700">第二階段：確認品牌與大綱</h2>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600">
+                  標題（可編輯，或點下方 AI 建議套用）
+                </label>
+                <input
+                  type="text"
+                  value={confirmTitle}
+                  onChange={(e) => setConfirmTitle(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+                {titleSuggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {titleSuggestions.map((t, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setConfirmTitle(t)}
+                        className="text-xs px-2 py-1 rounded-full border border-orange-200 text-orange-600 hover:bg-orange-50 text-left"
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

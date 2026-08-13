@@ -2,6 +2,7 @@ import {
   applyStageResult,
   updateRecommendationJob,
   RecommendationJobInput,
+  RecommendationBrand,
 } from './recommendation-jobs';
 
 const MODEL = 'anthropic/claude-haiku-4.5';
@@ -50,7 +51,7 @@ async function searchBrands(
   input: RecommendationJobInput,
   tavilyKey: string,
   openrouterKey: string
-): Promise<void> {
+): Promise<RecommendationBrand[]> {
   const results = await tavilySearch(
     `台灣 ${input.searchTerm} 推薦 品牌 官方網站`,
     tavilyKey
@@ -79,6 +80,32 @@ ${snippets}
   const brands = JSON.parse(match[0]) as { brand_name: string; official_url: string }[];
 
   applyStageResult(jobId, 'brands', { brands });
+  return brands;
+}
+
+async function generateTitleSuggestions(
+  jobId: string,
+  input: RecommendationJobInput,
+  brands: RecommendationBrand[],
+  openrouterKey: string
+): Promise<void> {
+  const brandNames = brands.map((b) => b.brand_name).filter(Boolean).slice(0, 8).join('、');
+
+  const prompt = `這是一篇推薦型文章，搜尋主題：「${input.searchTerm}」，主要關鍵字：「${input.keywords}」。
+使用者原本輸入的標題參考：「${input.title}」
+調查到的相關品牌：${brandNames || '（無）'}
+
+請依據以上資訊，提出 3 個更有吸引力、符合推薦型文章慣例（例如「精選/推薦 N 家」「怎麼選」「完整比較」等）的標題建議，主題要與原標題一致。
+
+只回傳 JSON 陣列，不要有其他文字：
+["標題1", "標題2", "標題3"]`;
+
+  const raw = await askOpenRouter(prompt, openrouterKey);
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error(`標題建議 AI 回傳格式錯誤：${raw.slice(0, 200)}`);
+  const titleSuggestions = JSON.parse(match[0]) as string[];
+
+  applyStageResult(jobId, 'brands', { titleSuggestions });
 }
 
 async function generateOutline(
@@ -116,14 +143,22 @@ export async function runRecommendationPhase1(
   const tavilyKey = process.env.TAVILY_API_KEY ?? '';
   const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
 
-  const [brandsRes, outlineRes] = await Promise.allSettled([
-    searchBrands(jobId, input, tavilyKey, openrouterKey),
+  let brands: RecommendationBrand[];
+  try {
+    brands = await searchBrands(jobId, input, tavilyKey, openrouterKey);
+  } catch (err) {
+    updateRecommendationJob(jobId, 'failed', `品牌查詢：${String(err)}`);
+    return;
+  }
+
+  const [outlineRes, titleRes] = await Promise.allSettled([
     generateOutline(jobId, input, openrouterKey),
+    generateTitleSuggestions(jobId, input, brands, openrouterKey),
   ]);
 
   const errors: string[] = [];
-  if (brandsRes.status === 'rejected') errors.push(`品牌查詢：${String(brandsRes.reason)}`);
   if (outlineRes.status === 'rejected') errors.push(`大綱生成：${String(outlineRes.reason)}`);
+  if (titleRes.status === 'rejected') errors.push(`標題建議：${String(titleRes.reason)}`);
 
   if (errors.length > 0) {
     updateRecommendationJob(jobId, 'failed', errors.join('；'));
