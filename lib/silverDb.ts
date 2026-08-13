@@ -7,6 +7,18 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(path.join(DATA_DIR, 'silver.db'));
 
+// build 階段多個 worker process 會平行 import 這支檔案，全新資料庫時彼此會搶著
+// 補欄位，晚到的 ALTER TABLE 撞到已經被別的 worker 補過的欄位會噴
+// SQLITE_ERROR duplicate column name，這裡吃掉這種情況、其他錯誤照樣丟出去
+function safeAlter(sql: string): void {
+  try {
+    db.exec(sql);
+  } catch (err) {
+    if (err instanceof Error && /duplicate column name/i.test(err.message)) return;
+    throw err;
+  }
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS news_preferences (
     userId TEXT PRIMARY KEY,
@@ -139,33 +151,33 @@ db.exec(`
 // user_notes 舊資料庫可能還沒有 importance 欄位，補上去
 const userNotesColumns = db.prepare("PRAGMA table_info(user_notes)").all() as { name: string }[];
 if (!userNotesColumns.some((c) => c.name === 'importance')) {
-  db.exec("ALTER TABLE user_notes ADD COLUMN importance TEXT NOT NULL DEFAULT 'short_term'");
+  safeAlter("ALTER TABLE user_notes ADD COLUMN importance TEXT NOT NULL DEFAULT 'short_term'");
 }
 
 // silver_users 舊資料庫可能還沒有 botName / persona 欄位（客戶資料設定新增的），補上去
 const silverUserColumns = db.prepare("PRAGMA table_info(silver_users)").all() as { name: string }[];
 if (!silverUserColumns.some((c) => c.name === 'botName')) {
-  db.exec('ALTER TABLE silver_users ADD COLUMN botName TEXT');
+  safeAlter('ALTER TABLE silver_users ADD COLUMN botName TEXT');
 }
 if (!silverUserColumns.some((c) => c.name === 'persona')) {
-  db.exec('ALTER TABLE silver_users ADD COLUMN persona TEXT');
+  safeAlter('ALTER TABLE silver_users ADD COLUMN persona TEXT');
 }
 // 慢性病／避免食物（飲食拍照分析要用來提醒），舊資料庫可能還沒有這三個欄位，補上去
 if (!silverUserColumns.some((c) => c.name === 'chronicDiseases')) {
-  db.exec('ALTER TABLE silver_users ADD COLUMN chronicDiseases TEXT');
+  safeAlter('ALTER TABLE silver_users ADD COLUMN chronicDiseases TEXT');
 }
 if (!silverUserColumns.some((c) => c.name === 'chronicOther')) {
-  db.exec('ALTER TABLE silver_users ADD COLUMN chronicOther TEXT');
+  safeAlter('ALTER TABLE silver_users ADD COLUMN chronicOther TEXT');
 }
 if (!silverUserColumns.some((c) => c.name === 'avoidFoods')) {
-  db.exec('ALTER TABLE silver_users ADD COLUMN avoidFoods TEXT');
+  safeAlter('ALTER TABLE silver_users ADD COLUMN avoidFoods TEXT');
 }
 
 // recurring_reminders 舊資料庫可能還沒有 remindTime 欄位（原本固定每天 8:30 推播、
 // 沒有讓長輩自己選時間），補上去；預設 '08:00' 讓舊資料的行為跟以前最接近
 const reminderColumns = db.prepare("PRAGMA table_info(recurring_reminders)").all() as { name: string }[];
 if (!reminderColumns.some((c) => c.name === 'remindTime')) {
-  db.exec("ALTER TABLE recurring_reminders ADD COLUMN remindTime TEXT NOT NULL DEFAULT '08:00'");
+  safeAlter("ALTER TABLE recurring_reminders ADD COLUMN remindTime TEXT NOT NULL DEFAULT '08:00'");
 }
 
 // bless_preferences 第一版存的是語意類別（morning/night/festival/wisdom），
