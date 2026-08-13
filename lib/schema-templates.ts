@@ -16,8 +16,8 @@ const ORG_FORM_FIELDS: FormFieldDef[] = [
   { key: 'legalName', label: '公司登記名稱' },
   { key: 'vatID', label: '統一編號' },
   { key: 'url', label: '網址' },
-  { key: 'logo', label: 'Logo 圖片網址' },
-  { key: 'image', label: '圖片網址' },
+  { key: 'logo', label: 'Logo 圖片網址（每行一個）', multiline: true },
+  { key: 'image', label: '圖片網址（每行一個）', multiline: true },
   { key: 'telephone', label: '電話' },
   { key: 'email', label: 'Email' },
   { key: 'description', label: '簡介', multiline: true },
@@ -26,7 +26,7 @@ const ORG_FORM_FIELDS: FormFieldDef[] = [
 
 const PRODUCT_FORM_FIELDS: FormFieldDef[] = [
   { key: 'name', label: '名稱' },
-  { key: 'image', label: '圖片網址' },
+  { key: 'image', label: '圖片網址（每行一個，Google 建議提供多張不同比例）', multiline: true },
   { key: 'brand', label: '品牌' },
   { key: 'sku', label: '商品編號 (SKU)' },
   { key: 'price', label: '售價' },
@@ -48,7 +48,7 @@ const LOCAL_BIZ_FORM_FIELDS: FormFieldDef[] = [
   { key: 'openingHours', label: '營業時間', placeholder: 'Mo-Fr 09:00-18:00' },
   { key: 'priceRange', label: '價格區間', placeholder: '$$' },
   { key: 'url', label: '網址' },
-  { key: 'image', label: '圖片網址' },
+  { key: 'image', label: '圖片網址（每行一個）', multiline: true },
 ];
 
 const ADDRESS_KEYS = ['streetAddress', 'addressLocality', 'postalCode', 'addressCountry'];
@@ -63,6 +63,40 @@ function stringField(v: unknown): string {
     if (typeof o.contentUrl === 'string') return o.contentUrl;
   }
   return '';
+}
+
+// image/logo 也常見寫成陣列（多張圖／不同比例），攤平成每行一個網址方便編輯
+function imageUrlList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.flatMap(imageUrlList);
+  const s = stringField(v);
+  return s ? [s] : [];
+}
+
+// Google 要求 image/logo 一定要是絕對網址，相對路徑（如 /img/logo.png）爬蟲抓不到，會直接被判定沒有圖
+function isAbsoluteUrl(u: string): boolean {
+  return /^https?:\/\//i.test(u);
+}
+
+// 把 textarea 每行輸入拆成陣列；輸出時單一網址存字串、多筆存陣列，跟 schema.org 慣例一致
+function parseImageLines(raw: string | undefined): string[] {
+  return (raw ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+function setImageField(out: Record<string, unknown>, key: string, raw: string | undefined) {
+  const list = parseImageLines(raw);
+  if (list.length === 0) delete out[key];
+  else if (list.length === 1) out[key] = list[0];
+  else out[key] = list;
+}
+
+// 表單裡填的網址不是 http(s):// 開頭時提醒使用者，避免產出 Google 爬不到的相對路徑
+export function validateImageUrls(values: Record<string, string>): string[] {
+  const warnings: string[] = [];
+  for (const [key, label] of [['logo', 'Logo'], ['image', '圖片']] as const) {
+    const bad = parseImageLines(values[key]).filter((u) => !isAbsoluteUrl(u));
+    if (bad.length) warnings.push(`${label} 網址不是完整網址（缺 http:// 或 https://）：${bad.join('、')}`);
+  }
+  return warnings;
 }
 
 // brand 常見寫成純字串，也常見包成 {"@type":"Brand","name":"..."}
@@ -121,6 +155,10 @@ export function buildFormDefaults(node: Record<string, unknown>, label: NodeEval
       out[f.key] = stringOrName(node.brand);
       continue;
     }
+    if (f.key === 'logo' || f.key === 'image') {
+      out[f.key] = imageUrlList(node[f.key]).join('\n');
+      continue;
+    }
     out[f.key] = stringField(node[f.key]);
   }
   return out;
@@ -130,11 +168,13 @@ export function buildFormDefaults(node: Record<string, unknown>, label: NodeEval
 export function mergeFormIntoNode(node: Record<string, unknown>, label: NodeEval['label'], values: Record<string, string>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...node };
   if (label === 'Organization') {
-    for (const key of ['name', 'legalName', 'url', 'logo', 'image', 'telephone', 'email', 'description']) {
+    for (const key of ['name', 'legalName', 'url', 'telephone', 'email', 'description']) {
       const v = values[key]?.trim();
       if (v) out[key] = v;
       else delete out[key];
     }
+    setImageField(out, 'logo', values.logo);
+    setImageField(out, 'image', values.image);
     const vatID = values.vatID?.trim();
     if (vatID) {
       out.vatID = vatID;
@@ -147,11 +187,12 @@ export function mergeFormIntoNode(node: Record<string, unknown>, label: NodeEval
     if (sameAsLines.length) out.sameAs = sameAsLines;
     else delete out.sameAs;
   } else if (label === 'LocalBusiness') {
-    for (const key of ['name', 'telephone', 'openingHours', 'priceRange', 'url', 'image']) {
+    for (const key of ['name', 'telephone', 'openingHours', 'priceRange', 'url']) {
       const v = values[key]?.trim();
       if (v) out[key] = v;
       else delete out[key];
     }
+    setImageField(out, 'image', values.image);
     const street = values.streetAddress?.trim();
     const locality = values.addressLocality?.trim();
     const postal = values.postalCode?.trim();
@@ -168,11 +209,12 @@ export function mergeFormIntoNode(node: Record<string, unknown>, label: NodeEval
       delete out.address;
     }
   } else if (label === 'Product') {
-    for (const key of ['name', 'image', 'sku', 'url', 'description']) {
+    for (const key of ['name', 'sku', 'url', 'description']) {
       const v = values[key]?.trim();
       if (v) out[key] = v;
       else delete out[key];
     }
+    setImageField(out, 'image', values.image);
     const brand = values.brand?.trim();
     if (brand) out.brand = { '@type': 'Brand', name: brand };
     else delete out.brand;

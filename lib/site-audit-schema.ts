@@ -35,6 +35,8 @@ function missingLocalBizFields(node: JsonLdNode): string[] {
   if (!truthy(node.address)) missing.push('地址');
   if (!truthy(node.telephone)) missing.push('電話');
   if (!truthy(node.openingHours) && !truthy(node.openingHoursSpecification)) missing.push('營業時間');
+  const images = imageCandidates(node.image);
+  if (images.length && !images.some(isAbsoluteUrl)) missing.push('圖片網址格式（需為完整網址 http(s)://，相對路徑爬蟲抓不到）');
   return missing;
 }
 
@@ -42,7 +44,9 @@ function missingLocalBizFields(node: JsonLdNode): string[] {
 function missingProductFields(node: JsonLdNode): string[] {
   const missing: string[] = [];
   if (!truthy(node.offers)) missing.push('售價/庫存 (offers)');
-  if (!truthy(node.image)) missing.push('圖片');
+  const images = imageCandidates(node.image);
+  if (images.length === 0) missing.push('圖片');
+  else if (!images.some(isAbsoluteUrl)) missing.push('圖片網址格式（需為完整網址 http(s)://，相對路徑爬蟲抓不到）');
   return missing;
 }
 
@@ -57,7 +61,9 @@ function missingArticleFields(node: JsonLdNode): string[] {
 // Organization 關鍵欄位：品牌識別（Logo）、聯絡方式、社群連結——不檢查地址/營業時間（純線上品牌常沒有）
 function missingOrganizationFields(node: JsonLdNode): string[] {
   const missing: string[] = [];
-  if (!truthy(node.logo) && !truthy(node.image)) missing.push('品牌 Logo');
+  const images = [...imageCandidates(node.logo), ...imageCandidates(node.image)];
+  if (images.length === 0) missing.push('品牌 Logo');
+  else if (!images.some(isAbsoluteUrl)) missing.push('品牌 Logo 網址格式（需為完整網址 http(s)://，相對路徑爬蟲抓不到）');
   if (!truthy(node.telephone) && !truthy(node.email)) missing.push('聯絡方式（電話或 Email）');
   if (!truthy(node.sameAs)) missing.push('社群連結 (sameAs)');
   return missing;
@@ -137,11 +143,11 @@ export function extractDisplayFields(node: JsonLdNode): DisplayField[] {
   // logo/image 常見包成 ImageObject（WordPress Yoast SEO 這類），不是純字串就直接被上面
   // FIELD_LABELS 那段 typeof v === 'string' 的迴圈跳過，畫面上會誤以為沒抓到——明明
   // missingOrganizationFields 判斷「有 logo」不算缺，卻沒有對應的欄位列出來給人看，兩邊邏輯對不起來
-  const logoUrl = imageUrlField(node.logo);
-  if (logoUrl) out.push({ label: '品牌 Logo', value: logoUrl });
+  const logoUrls = imageCandidates(node.logo);
+  if (logoUrls.length) out.push({ label: '品牌 Logo', value: logoUrls.join('、') });
   else {
-    const imageUrl = imageUrlField(node.image);
-    if (imageUrl) out.push({ label: '圖片', value: imageUrl });
+    const imageUrls = imageCandidates(node.image);
+    if (imageUrls.length) out.push({ label: '圖片', value: imageUrls.join('、') });
   }
   if (Array.isArray(node.sameAs)) {
     const links = node.sameAs.filter((x): x is string => typeof x === 'string');
@@ -160,15 +166,22 @@ function nameField(v: unknown): string | null {
   return null;
 }
 
-// image 常見是純字串網址，也常見包成 ImageObject（url/contentUrl）
-function imageUrlField(v: unknown): string | null {
-  if (typeof v === 'string' && v.trim()) return v;
+// image/logo 常見是純字串網址，也常見包成 ImageObject（url/contentUrl），也常見是陣列（多張圖／不同比例）；
+// 統一攤平成候選網址陣列，方便判斷「有沒有填」和「網址格式對不對」
+function imageCandidates(v: unknown): string[] {
+  if (Array.isArray(v)) return v.flatMap(imageCandidates);
+  if (typeof v === 'string') return v.trim() ? [v.trim()] : [];
   if (v && typeof v === 'object') {
     const o = v as JsonLdNode;
-    if (typeof o.url === 'string' && o.url.trim()) return o.url;
-    if (typeof o.contentUrl === 'string' && o.contentUrl.trim()) return o.contentUrl;
+    const u = typeof o.url === 'string' ? o.url : typeof o.contentUrl === 'string' ? o.contentUrl : '';
+    return u.trim() ? [u.trim()] : [];
   }
-  return null;
+  return [];
+}
+
+// Google 要求 image/logo 一定要是絕對網址，相對路徑（如 /img/logo.png）爬蟲抓不到
+function isAbsoluteUrl(u: string): boolean {
+  return /^https?:\/\//i.test(u);
 }
 
 // Article 好讀欄位：標題、作者、發布/修改日期、發布單位、圖片、關鍵字——跟 LocalBusiness/Organization
@@ -183,8 +196,8 @@ function extractArticleFields(node: JsonLdNode): DisplayField[] {
   if (typeof node.dateModified === 'string' && node.dateModified.trim()) out.push({ label: '修改日期', value: node.dateModified });
   const publisher = nameField(node.publisher);
   if (publisher) out.push({ label: '發布單位', value: publisher });
-  const image = imageUrlField(node.image);
-  if (image) out.push({ label: '圖片', value: image });
+  const images = imageCandidates(node.image);
+  if (images.length) out.push({ label: '圖片', value: images.join('、') });
   if (Array.isArray(node.keywords)) {
     const kws = node.keywords.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
     if (kws.length) out.push({ label: '關鍵字', value: kws.join('、') });
