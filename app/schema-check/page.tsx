@@ -34,6 +34,25 @@ const LABEL_TEXT: Record<NodeEval["label"], string> = {
 
 type Mode = "pick" | "check" | "generate";
 
+// Yoast SEO 只會自動輸出 name/logo/url/sameAs 這些，description/legalName 沒有後台欄位可填，
+// 只能用 wpseo_schema_organization filter 接在 Yoast 自己產生的資料後面補值——不能另外貼一段
+// JSON-LD，那樣會產生第二個 Organization 節點，跟 Yoast 自動輸出的那份衝突
+function buildYoastOrgSnippet(values: Record<string, string>): string {
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const desc = values.description?.trim();
+  const legalName = values.legalName?.trim();
+  const lines = [
+    "add_filter( 'wpseo_schema_organization', 'customize_org_schema', 11, 2 );",
+    "",
+    "function customize_org_schema( $data, $context ) {",
+    desc ? `    $data['description'] = '${esc(desc)}';` : "    // $data['description'] = '先在左邊表單填簡介';",
+    legalName ? `    $data['legalName'] = '${esc(legalName)}';` : "    // $data['legalName'] = '先在左邊表單填公司登記全名';",
+    "    return $data;",
+    "}",
+  ];
+  return lines.join("\n");
+}
+
 // 單一 JSON-LD 節點卡片：好讀欄位清單 + 匯入生成工具的捷徑 + 收合的原始 JSON
 function NodeCard({
   ev,
@@ -295,6 +314,9 @@ function GenerateView({
   const fields = formFieldsFor(label)!;
   const merged = mergeFormIntoNode(baseNode, label, values);
   const [copied, setCopied] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [platform, setPlatform] = useState<"selfbuilt" | "yoast">("selfbuilt");
+  const yoastSnippet = buildYoastOrgSnippet(values);
 
   function switchLabel(l: TrackedLabel) {
     setLabel(l);
@@ -307,6 +329,16 @@ function GenerateView({
       await navigator.clipboard.writeText(JSON.stringify(merged, null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* 複製失敗就略過 */
+    }
+  }
+
+  async function handleCopySnippet() {
+    try {
+      await navigator.clipboard.writeText(yoastSnippet);
+      setCopiedSnippet(true);
+      setTimeout(() => setCopiedSnippet(false), 2000);
     } catch {
       /* 複製失敗就略過 */
     }
@@ -370,6 +402,65 @@ function GenerateView({
           </pre>
         </div>
       </div>
+
+      {label === "Organization" && (
+        <div className="mt-6 bg-sky-50 border border-sky-200 rounded-xl p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">帶去給工程師：怎麼把這些欄位補上網站</h3>
+          <div className="flex gap-2 mb-4">
+            {(
+              [
+                ["selfbuilt", "自架網站／其他 CMS"],
+                ["yoast", "WordPress + Yoast SEO"],
+              ] as const
+            ).map(([key, text]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setPlatform(key)}
+                className={`text-sm font-medium rounded-lg px-4 py-2 border ${
+                  platform === key ? "bg-sky-500 border-sky-500 text-white" : "bg-white border-gray-200 text-gray-600 hover:border-sky-300"
+                }`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+
+          {platform === "selfbuilt" ? (
+            <ul className="text-sm text-gray-600 leading-relaxed space-y-2 list-disc pl-5">
+              <li>把上面「複製 JSON-LD」那顆按鈕產生的整段，貼進網站頁面的 <code>&lt;head&gt;</code> 就好，不用寫 code。</li>
+              <li className="text-gray-500">前提：頁面原本沒有別的 Organization JSON-LD。如果已經有一份，兩份會互相衝突，要先確認是取代還是合併。</li>
+            </ul>
+          ) : (
+            <div className="space-y-4">
+              <ul className="text-sm text-gray-600 leading-relaxed space-y-2 list-disc pl-5">
+                <li>Yoast 已經會自動輸出一份 Organization schema，不能再貼第二份，會變成重複節點互相衝突。</li>
+                <li>正確做法是用官方的 <code>wpseo_schema_organization</code> filter 補值，接在 Yoast 產生的資料後面加欄位，Logo、麵包屑這些原本自動維護的東西不受影響。</li>
+              </ul>
+              <ol className="text-sm text-gray-600 list-decimal pl-5 space-y-2 leading-relaxed">
+                <li>後台「外掛」→「安裝外掛」→ 搜尋 WPCode → 安裝並啟用</li>
+                <li>左側選單「Code Snippets」→「Add Snippet」→「Add Your Custom Code (New Snippet)」</li>
+                <li>Code Type 選 PHP Snippet，貼下面這段程式碼</li>
+                <li>Insertion 位置維持預設（Auto Insert / Run Everywhere）</li>
+                <li>右上角 Active 打開 → 存檔</li>
+                <li>回這個工具的「檢索」模式重查一次網址，確認 Organization 節點多了對應欄位</li>
+              </ol>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={handleCopySnippet}
+                  className="absolute top-2 right-2 text-xs text-orange-600 hover:text-orange-700 hover:underline bg-white/80 px-2 py-0.5 rounded"
+                >
+                  {copiedSnippet ? "已複製 ✓" : "複製程式碼"}
+                </button>
+                <pre className="bg-gray-900 text-gray-100 text-sm p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-words leading-relaxed">
+                  {yoastSnippet}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
