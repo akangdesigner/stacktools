@@ -16,6 +16,7 @@ const N8N_BASE_URL = process.env.N8N_BASE_URL || 'https://stack.zeabur.app';
 
 export type RecommendationWebhookPath =
   | 'rec-step1-brands'
+  | 'rec-step1b-branddetails'
   | 'rec-step2-outline'
   | 'rec-step3-generate';
 

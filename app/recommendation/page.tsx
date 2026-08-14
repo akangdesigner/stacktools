@@ -46,7 +46,13 @@ function serializeOutline(sections: OutlineSection[]): string {
     .join("\n\n");
 }
 
-type Phase = "idle" | "researching" | "awaiting_confirm" | "generating" | "completed";
+type Phase =
+  | "idle"
+  | "researching"
+  | "awaiting_confirm"
+  | "researching_details"
+  | "generating"
+  | "completed";
 
 export default function RecommendationPage() {
   const emptyForm: FormData = {
@@ -76,7 +82,8 @@ export default function RecommendationPage() {
   const [wpEditLink, setWpEditLink] = useState("");
   const [wpLink, setWpLink] = useState("");
 
-  const isWaiting = phase === "researching" || phase === "generating";
+  const isWaiting =
+    phase === "researching" || phase === "researching_details" || phase === "generating";
 
   function handleChange(field: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -145,8 +152,8 @@ export default function RecommendationPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
-      setStatusMessage("文章生成中（約 3～5 分鐘）");
-      setPhase("generating");
+      setStatusMessage("正在研究品牌細節（約 1～3 分鐘）");
+      setPhase("researching_details");
     } catch (err) {
       setError(String(err));
     } finally {
@@ -232,6 +239,10 @@ export default function RecommendationPage() {
           );
           setConfirmTitle(form.title);
           setPhase("awaiting_confirm");
+        } else if (data?.status === "researching_details") {
+          setPhase("researching_details");
+        } else if (data?.status === "generating") {
+          setPhase("generating");
         } else if (data?.status === "completed") {
           setWpEditLink(data?.data?.wpEditLink ?? "");
           setWpLink(data?.data?.wpLink ?? "");
@@ -534,9 +545,19 @@ export default function RecommendationPage() {
                 {confirming ? "送出中…" : "確認，開始生成文章"}
               </button>
             </div>
+          ) : phase === "researching_details" ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+              <h2 className="text-sm font-semibold text-gray-700">第三階段：品牌深度研究中</h2>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {statusMessage || "正在研究品牌細節"}{dots}
+              </p>
+              <p className="text-xs text-gray-400">
+                預估完成時間：1～3 分鐘，跑完會自動接著生成文章
+              </p>
+            </div>
           ) : phase === "generating" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-700">第三階段：生成文章中</h2>
+              <h2 className="text-sm font-semibold text-gray-700">第四階段：生成文章中</h2>
               <p className="text-sm text-gray-600 leading-relaxed">
                 {statusMessage || "文章生成中"}{dots}
               </p>
