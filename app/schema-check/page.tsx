@@ -315,7 +315,7 @@ function GenerateView({
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">選型別、填欄位，右邊即時產生可直接複製貼回網站的 JSON-LD。也可以先去「檢索」查一個網址，找到現有節點後按「匯入到生成工具補完」，帶著既有資料回來這裡補。</p>
+      <p className="text-sm text-gray-500 mb-4">選型別、填欄位，右邊即時產生可直接複製貼回網站的 JSON-LD。也可以先去「檢索」查一個網址，找到現有節點後按「匯入到生成工具補完」，帶著既有資料回來這裡補。有實體店面選「在地商家」就好，欄位已經含品牌識別資料，不用另外選「組織/品牌」貼第二份。</p>
 
       <div className="flex gap-2 mb-4">
         {(["LocalBusiness", "Organization", "Product"] as const).map((l) => (

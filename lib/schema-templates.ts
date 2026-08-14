@@ -38,9 +38,14 @@ const PRODUCT_FORM_FIELDS: FormFieldDef[] = [
 
 const OFFER_KEYS = ['price', 'priceCurrency', 'availability'];
 
+// LocalBusiness 在 schema.org 裡是 Organization 的子類型，本來就該含品牌識別欄位（統編/Logo/簡介/
+// 社群連結），不是只有地址/營業時間——不然填「在地商家」會漏掉這些，讓人誤以為還要另外填「組織/品牌」貼第二份
 const LOCAL_BIZ_FORM_FIELDS: FormFieldDef[] = [
   { key: 'name', label: '名稱' },
+  { key: 'legalName', label: '公司登記名稱' },
+  { key: 'vatID', label: '統一編號' },
   { key: 'telephone', label: '電話' },
+  { key: 'email', label: 'Email' },
   { key: 'streetAddress', label: '街道地址' },
   { key: 'addressLocality', label: '縣市/區' },
   { key: 'postalCode', label: '郵遞區號' },
@@ -49,6 +54,8 @@ const LOCAL_BIZ_FORM_FIELDS: FormFieldDef[] = [
   { key: 'priceRange', label: '價格區間', placeholder: '$$' },
   { key: 'url', label: '網址' },
   { key: 'image', label: '圖片網址（每行一個）', multiline: true },
+  { key: 'description', label: '簡介', multiline: true },
+  { key: 'sameAs', label: '社群/外部連結（每行一個網址）', multiline: true },
 ];
 
 const ADDRESS_KEYS = ['streetAddress', 'addressLocality', 'postalCode', 'addressCountry'];
@@ -187,12 +194,23 @@ export function mergeFormIntoNode(node: Record<string, unknown>, label: NodeEval
     if (sameAsLines.length) out.sameAs = sameAsLines;
     else delete out.sameAs;
   } else if (label === 'LocalBusiness') {
-    for (const key of ['name', 'telephone', 'openingHours', 'priceRange', 'url']) {
+    for (const key of ['name', 'legalName', 'telephone', 'email', 'description', 'openingHours', 'priceRange', 'url']) {
       const v = values[key]?.trim();
       if (v) out[key] = v;
       else delete out[key];
     }
     setImageField(out, 'image', values.image);
+    const vatID = values.vatID?.trim();
+    if (vatID) {
+      out.vatID = vatID;
+      out.taxID = vatID;
+    } else {
+      delete out.vatID;
+      delete out.taxID;
+    }
+    const sameAsLines = (values.sameAs ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
+    if (sameAsLines.length) out.sameAs = sameAsLines;
+    else delete out.sameAs;
     const street = values.streetAddress?.trim();
     const locality = values.addressLocality?.trim();
     const postal = values.postalCode?.trim();
