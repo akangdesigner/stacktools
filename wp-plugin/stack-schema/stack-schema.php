@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Stack Schema
  * Description: 自主輸出品牌/商家結構化資料（JSON-LD），不依賴 Yoast SEO。後台直接貼 JSON-LD 存檔即可全站輸出；商品頁自動抓 WooCommerce 資料。
- * Version: 1.2.1
+ * Version: 1.2.2
  * Author: 積木媒體行銷
  * Text Domain: stack-schema
  */
@@ -52,9 +52,8 @@ function stack_schema_render_settings_page() {
 	<div class="wrap">
 		<h1>Schema 設定</h1>
 		<?php if ( is_plugin_active( 'wordpress-seo/wp-seo.php' ) ) : ?>
-			<div class="notice notice-info"><p>偵測到 Yoast SEO 已啟用。Yoast 原本會自動輸出自己的一份 Organization/Person Schema，下面貼好 JSON 存檔後，已自動把 Yoast 那份拿掉、只保留這裡輸出的版本，Yoast 的其他功能（meta 標題描述、sitemap、麵包屑等）不受影響，不用手動去 Yoast 設定調整。</p></div>
+			<div class="notice notice-info"><p>已自動停用 Yoast SEO 的品牌 Schema 輸出，避免與下方設定重複。</p></div>
 		<?php endif; ?>
-		<p>去 stacktools 的「Schema 檢查工具」→「生成/補完」，選型別（純線上選組織/品牌，有實體店面選在地商家含在地商家）、填好欄位，按「複製 JSON-LD」，整段貼到下面存檔即可，不用逐欄位在這裡重填一次。</p>
 		<form method="post" action="options.php">
 			<?php settings_fields( 'stack_schema_group' ); ?>
 			<table class="form-table">
@@ -66,13 +65,13 @@ function stack_schema_render_settings_page() {
   "@type": "Organization",
   "name": "..."
 }'><?php echo esc_textarea( $settings['org_json'] ); ?></textarea>
-						<p class="description">貼整段 JSON（含 <code>@type</code>），不用另外包 <code>&lt;script&gt;</code> 標籤。</p>
+						<p class="description">貼上完整 JSON-LD（需含 <code>@context</code> 與 <code>@type</code>）。</p>
 					</td>
 				</tr>
 			</table>
 			<?php if ( class_exists( 'WooCommerce' ) ) : ?>
 				<h2>Product（商品）</h2>
-				<p class="description">已偵測到 WooCommerce，商品頁的 Product Schema 會自動抓商品名稱/價格/庫存/圖片輸出，不用另外填。</p>
+				<p class="description">已偵測到 WooCommerce，商品頁會自動輸出 Product Schema。</p>
 			<?php endif; ?>
 			<?php submit_button(); ?>
 		</form>
