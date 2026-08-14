@@ -21,27 +21,28 @@ interface OutlineSection {
   h3s: string[];
 }
 
-// 把 n8n 回傳的 "## H2\n### H3" markdown 大綱拆成可逐項編輯的結構
+// 把 n8n 大綱生成器輸出的「前言 / 1. .../ 1.1. .../ 總結」編號格式拆成可逐項編輯的結構
+// 保留原始編號前綴（不轉成 markdown），因為工作流3的 Switch 節點是靠編號規則分流
 function parseOutlineText(text: string): OutlineSection[] {
   const sections: OutlineSection[] = [];
   let current: OutlineSection | null = null;
-  for (const line of text.split("\n")) {
-    const h2Match = line.match(/^##\s+(.*)/);
-    const h3Match = line.match(/^###\s+(.*)/);
-    if (h2Match) {
-      current = { id: crypto.randomUUID(), h2: h2Match[1].trim(), h3s: [] };
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^\d+\.\d+\./.test(line)) {
+      if (current) current.h3s.push(line);
+    } else {
+      current = { id: crypto.randomUUID(), h2: line, h3s: [] };
       sections.push(current);
-    } else if (h3Match && current) {
-      current.h3s.push(h3Match[1].trim());
     }
   }
   return sections;
 }
 
-// 送回後端前轉回 n8n 期待的 markdown 大綱格式
+// 送回後端前照原編號格式重新組成（每行保留自己的編號前綴）
 function serializeOutline(sections: OutlineSection[]): string {
   return sections
-    .map((s) => `## ${s.h2}` + (s.h3s.length ? "\n" + s.h3s.map((h) => `### ${h}`).join("\n") : ""))
+    .map((s) => s.h2 + (s.h3s.length ? "\n" + s.h3s.join("\n") : ""))
     .join("\n\n");
 }
 
@@ -451,14 +452,14 @@ export default function RecommendationPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">
-                    文章大綱（H2/H3，可新增、刪除、編輯）
+                    文章大綱（可新增、刪除、編輯，請保留編號格式）
                   </label>
                   <button
                     type="button"
                     onClick={addH2Section}
                     className="text-xs font-semibold text-orange-500 hover:text-orange-600"
                   >
-                    ＋ 新增 H2
+                    ＋ 新增大章
                   </button>
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
@@ -468,19 +469,19 @@ export default function RecommendationPage() {
                       className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50"
                     >
                       <div className="flex gap-2 items-center">
-                        <span className="text-xs font-semibold text-gray-400 shrink-0">H2</span>
+                        <span className="text-xs font-semibold text-gray-400 shrink-0">大章</span>
                         <input
                           type="text"
                           value={section.h2}
                           onChange={(e) => updateH2(sIdx, e.target.value)}
-                          placeholder="大段標題"
+                          placeholder="例：1. XXX的判斷依據（或「前言」「總結」）"
                           className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-300"
                         />
                         <button
                           type="button"
                           onClick={() => removeH2Section(sIdx)}
                           className="text-gray-300 hover:text-red-400 text-lg leading-none px-1"
-                          title="刪除此 H2"
+                          title="刪除此大章"
                         >
                           ×
                         </button>
@@ -488,19 +489,19 @@ export default function RecommendationPage() {
                       <div className="pl-6 space-y-1.5">
                         {section.h3s.map((h3, hIdx) => (
                           <div key={hIdx} className="flex gap-2 items-center">
-                            <span className="text-xs text-gray-400 shrink-0">H3</span>
+                            <span className="text-xs text-gray-400 shrink-0">子項</span>
                             <input
                               type="text"
                               value={h3}
                               onChange={(e) => updateH3(sIdx, hIdx, e.target.value)}
-                              placeholder="小節標題"
+                              placeholder="例：1.1. 子項標題"
                               className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-orange-300"
                             />
                             <button
                               type="button"
                               onClick={() => removeH3(sIdx, hIdx)}
                               className="text-gray-300 hover:text-red-400 text-base leading-none px-1"
-                              title="刪除此 H3"
+                              title="刪除此子項"
                             >
                               ×
                             </button>
@@ -511,7 +512,7 @@ export default function RecommendationPage() {
                           onClick={() => addH3(sIdx)}
                           className="text-xs text-orange-500 hover:text-orange-600 font-medium"
                         >
-                          ＋ 新增 H3
+                          ＋ 新增子項
                         </button>
                       </div>
                     </div>
