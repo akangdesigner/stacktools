@@ -1,6 +1,6 @@
 # Stacktools 開發進度
 
-> 最後更新：2026-08-07
+> 最後更新：2026-08-14
 
 ---
 
@@ -47,6 +47,45 @@
 - [x] `app/api/recommendation/generate/route.ts` 送出完整生成時把 `job.data.brandDetails` 一起帶給工作流3
 - [x] `lib/recommendation-step1.ts` 精簡成只剩標題建議生成（`generateTitleSuggestions`），由 `app/api/recommendation/callback/route.ts` 收到 `stage:'brands'` 時觸發（n8n 工作流沒有定標題環節，維持本地做，失敗不擋流程）
 - [x] `推薦文-3-完整生成`（wHUHCGjX2iyiY7wA）拿掉重複的「品牌媒體研究員」「真實用戶體驗研究員」＋對應 tavily 工具節點，改吃 App 傳進來的 `brandDetails`（新增「帶入品牌細節」節點依 brand_name 對應）；`定義輸入欄位1` 補收 `brandDetails` 欄位；Merge2 從 3 input 改 2 input；「官方資訊」規格那條分支不動；n8n_validate_workflow 確認 0 error
+
+**2026-08-14：實測踩出一整批舊 bug＋成本優化＋架構拆兩段**（過程燒了不少錢跟時間，小積木不滿，逐項記錄避免重踩）
+
+前端 bug：
+- [x] `app/recommendation/page.tsx` 的 `parseOutlineText`/`serializeOutline` 原本用 markdown `## H2`/`### H3` 解析大綱，但 n8n `推薦文-2-大綱生成` 實際吐出來的是「前言/1./1.1./總結」編號純文字——完全解析不到，確認畫面大綱區塊永遠是空的，送出後工作流3 Switch 節點也吃不到內容。改成保留原始編號前綴直接編輯/送回，UI 標籤也從「H2/H3」改「大章/子項」
+
+n8n `推薦文-1-品牌查詢`（vTmYbkLW6Vuge3UR）bug 修正：
+- [x] 「帶入品牌細節」比對 brand_name 原本用完全字串比對，確認畫面手動編輯品牌名稱（哪怕只改一個字）就會讓深度研究資料整包對不到、靜默變空——改成正規化＋包含比對
+- [x] 新增的 5 個 `Execute Workflow` 節點（媒體/UX搜尋A/B、網址搜尋）預設 `mode` 是「合併所有 item 只跑一次」，會導致多品牌時只有第一個品牌真的被搜尋到——全部明確設成 `mode: "each"`
+- [x] 「找尋公司名稱」agent 沒有搜尋次數上限，曾經真的卡到 `Max iterations (10) reached`（不是理論風險，實測發生兩次）——`maxIterations` 從預設 10 降到 4，prompt 加「最多搜尋2次」；**曾經多加一句「不確定的寧可不輸出」結果矯枉過正，讓 AI 對明明存在的真實品牌也直接放棄輸出，已移除該句只留次數上限**
+- [x] 「解析品牌清單」原本 0 品牌時會靜默回傳 0 items，下游「彙整品牌」收到 0 items 就完全不執行，callback 也不會發——job 卡在 researching 永遠不會變 failed，使用者只會看到一直轉圈。改成 0 筆時明確 throw，走現有失敗回報分支
+
+n8n `推薦文-2-大綱生成`（xMK8p2scEcnEmkBa）bug 修正：
+- [x] 「搜尋參考資料」agent 一樣沒有搜尋次數上限，同樣踩過 `Max iterations (10) reached`——`maxIterations` 設 6，prompt 加「最多搜尋4次，不足5筆就用現有結果」
+- [x] 「回傳失敗狀態」節點在組錯誤訊息時自己也會噴錯（`Cannot read properties of undefined (reading 'message')`，實測發生過），等於錯誤回報機制本身有 bug——jsonBody 表達式改用 `?.` optional chaining，不會再炸
+
+外部依賴問題（不是程式碼 bug，但今天測試失敗有一半是這個）：
+- [x] Tavily API key 額度用完（`This request exceeds your plan's set usage limit`），造成所有 agent 的搜尋工具全部失敗、進而觸發上面那些 Max iterations——小積木換新 key，已更新到 n8n credential `Tavily account`（fxq8odhwbgS36kmi）
+
+成本優化（推薦文-1 品牌查詢，用 agent+搜尋工具迴圈砍成固定搜尋+單次整理）：
+- [x] 「品牌媒體研究員」「真實用戶體驗研究員」原本各自是 agent+2個搜尋工具（可能疊到6~7次模型呼叫/品牌），改成「2次固定搜尋（Execute Workflow 直接呼叫 tavily-進階搜尋）→ Merge → 1次一般 chainLlm 整理」，兩角色合計從最多12~14次模型呼叫砍到2次
+- [x] 「找尋公司網址」同樣手法優化（原本1次搜尋的agent → 固定搜尋+chainLlm）
+
+架構拆分（小積木提出：品牌研究跟大綱生成不該一次做完）：
+- [x] 新建 n8n workflow `推薦文-1b-品牌深度研究`（id: 3DI3i7xxu0WNZkI1，webhook path `rec-step1b-branddetails`），把原本 `推薦文-1-品牌查詢` 裡「拆分品牌2」之後的深度研究整段搬過去獨立成一支
+- [x] `推薦文-1-品牌查詢` 現在只做「找名稱/網址」，跑完就能給確認畫面，不用等深度研究
+- [x] App 狀態機（`lib/recommendation-jobs.ts`）新增 `researching_details` 狀態；`applyStageResult` 就緒判斷拿掉 `brandDetails`（只要 brands+outline+titleSuggestions 到齊就進 `awaiting_confirm`，加了 guard 只在 `researching` 狀態才會轉換避免被後面階段的 callback 誤觸發）；新增 `confirmBrandsAndStartDetailResearch`
+- [x] `app/api/recommendation/generate/route.ts` 改成先觸發 `rec-step1b-branddetails`（使用者確認/編輯後的品牌清單），不是直接生成
+- [x] `app/api/recommendation/callback/route.ts` 收到 `stage:'brand_details'` 且狀態是 `researching_details` 時自動接著觸發 `rec-step3-generate`，使用者不用再按第二次
+- [x] `app/recommendation/page.tsx` 加對應的「第三階段：品牌深度研究中」畫面
+- 好處：確認畫面出現更快（不用等深度研究）；就算跑到一半撞到部署（見下方已知限制），最多只損失還沒跑完的那一階段
+
+已知限制／殘留風險（沒完全解決，先記錄）：
+- [ ] **job 狀態存在記憶體，任何一次部署（不管是誰、推什麼上去）都會把進行中的任務直接砍掉**，n8n callback 回來時變成「找不到任務」404，永久卡住。今天至少撞到 3 次。徹底解法要把 job 存到 SQLite（比照 silver.db），今天沒做，只是拆成兩段降低單次曝險時間
+- [ ] 新建的 `推薦文-1b-品牌深度研究` 沒有明確的失敗回報分支（靠各節點 onError 優雅降級，但如果真的整個崩潰不會通知 App，job 會卡在 `researching_details`）
+- [ ] 確認畫面上方說明文字「填入主題與條件 → 確認品牌與大綱 → AI 生成推薦型文章」還是舊三步驟講法，沒更新成新的四步驟
+- [ ] 「找尋公司名稱」偶爾還是會抓到不太相關的品牌（今天有一次抓到戰國策集團——後來確認他們真的有做短影音代操，不算真的抓錯，但提醒這塊資料品質本來就會有雜訊）
+- [ ] **到收工為止，完整跑過一次「送出→確認→生成→WordPress草稿」全流程還沒有成功案例**，只驗證到「確認畫面能正常顯示品牌+大綱」這步；工作流3（完整生成）今天完全沒被測到
+- 今天 OpenRouter 花費：$5.05（8/14 當日）
 
 ### 精選知識文章 `/knowledge`
 瀏覽 AI 趨勢與 SEO 新知，資料存於 SQLite。
