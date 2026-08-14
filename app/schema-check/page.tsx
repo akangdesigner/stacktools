@@ -315,21 +315,27 @@ function GenerateView({
 
   return (
     <div>
-      <p className="text-sm text-gray-500 mb-4">選型別、填欄位，右邊即時產生可直接複製貼回網站的 JSON-LD。也可以先去「檢索」查一個網址，找到現有節點後按「匯入到生成工具補完」，帶著既有資料回來這裡補。有實體店面選「在地商家」就好，欄位已經含品牌識別資料，不用另外選「組織/品牌」貼第二份。</p>
+      <p className="text-sm text-gray-500 mb-4">選型別、填欄位，右邊即時產生可直接複製貼回網站的 JSON-LD。也可以先去「檢索」查一個網址，找到現有節點後按「匯入到生成工具補完」，帶著既有資料回來這裡補。</p>
 
-      <div className="flex gap-2 mb-4">
-        {(["LocalBusiness", "Organization", "Product"] as const).map((l) => (
-          <button
-            key={l}
-            type="button"
-            onClick={() => switchLabel(l)}
-            className={`text-sm font-medium rounded-lg px-4 py-2 border ${
-              label === l ? "bg-orange-500 border-orange-500 text-white" : "bg-white border-gray-200 text-gray-600 hover:border-orange-300"
-            }`}
-          >
-            {LABEL_TEXT[l]}
-          </button>
-        ))}
+      <div className="mb-4 max-w-xs">
+        <label className="block text-xs font-medium text-gray-600 mb-1">型別</label>
+        <select
+          value={label}
+          onChange={(e) => switchLabel(e.target.value as TrackedLabel)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+        >
+          {(
+            [
+              ["Organization", "組織/品牌（純線上，無實體店面）"],
+              ["LocalBusiness", "組織/品牌（含在地商家，有地址/營業時間）"],
+              ["Product", "商品"],
+            ] as const
+          ).map(([l, text]) => (
+            <option key={l} value={l}>
+              {text}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
