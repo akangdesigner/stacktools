@@ -11,6 +11,71 @@ export interface FormFieldDef {
   multiline?: boolean; // sameAs／description 用 textarea
 }
 
+// ── 營業時間：schema.org 的 openingHours 是 "Mo-Fr 09:00-18:00" 這種英文縮寫格式，
+// 使用者不會自己打，改用「每天開關＋時間下拉」的表單，內部轉成正確格式的字串存進同一個 openingHours 欄位 ──
+
+export const OPENING_HOURS_DAY_KEYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
+export type OpeningHoursDayKey = (typeof OPENING_HOURS_DAY_KEYS)[number];
+export const OPENING_HOURS_DAY_LABELS: Record<OpeningHoursDayKey, string> = {
+  Mo: '一', Tu: '二', We: '三', Th: '四', Fr: '五', Sa: '六', Su: '日',
+};
+
+export interface DayHours {
+  open: boolean;
+  opens: string;
+  closes: string;
+}
+export type OpeningHoursByDay = Record<OpeningHoursDayKey, DayHours>;
+
+// 下拉選單的時間選項：00:00 ~ 23:30，每 30 分鐘一格
+export const OPENING_HOURS_TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, i) => {
+  const h = String(Math.floor(i / 2)).padStart(2, '0');
+  const m = i % 2 === 0 ? '00' : '30';
+  return `${h}:${m}`;
+});
+
+function defaultDayHours(): DayHours {
+  return { open: false, opens: '09:00', closes: '18:00' };
+}
+
+// 把既有的 openingHours 字串（可能是空的、或客戶網站抓回來的既有格式）拆成每天的開關/時段，讓表單能編輯
+export function parseOpeningHoursString(raw: string | undefined): OpeningHoursByDay {
+  const result = {} as OpeningHoursByDay;
+  for (const d of OPENING_HOURS_DAY_KEYS) result[d] = defaultDayHours();
+  if (!raw) return result;
+
+  for (const group of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
+    const m = group.match(/^(Mo|Tu|We|Th|Fr|Sa|Su)(?:-(Mo|Tu|We|Th|Fr|Sa|Su))?\s+(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+    if (!m) continue;
+    const [, start, end, opens, closes] = m;
+    const startIdx = OPENING_HOURS_DAY_KEYS.indexOf(start as OpeningHoursDayKey);
+    const endIdx = end ? OPENING_HOURS_DAY_KEYS.indexOf(end as OpeningHoursDayKey) : startIdx;
+    for (let i = startIdx; i <= endIdx; i++) result[OPENING_HOURS_DAY_KEYS[i]] = { open: true, opens, closes };
+  }
+  return result;
+}
+
+// 把每天的開關/時段組回 schema.org 認得的字串，連續好幾天時段一樣就合併成一個範圍（如 Mo-Fr 09:00-18:00）
+export function buildOpeningHoursString(days: OpeningHoursByDay): string {
+  const groups: string[] = [];
+  let i = 0;
+  while (i < OPENING_HOURS_DAY_KEYS.length) {
+    const d = days[OPENING_HOURS_DAY_KEYS[i]];
+    if (!d.open) { i++; continue; }
+    let j = i;
+    while (
+      j + 1 < OPENING_HOURS_DAY_KEYS.length &&
+      days[OPENING_HOURS_DAY_KEYS[j + 1]].open &&
+      days[OPENING_HOURS_DAY_KEYS[j + 1]].opens === d.opens &&
+      days[OPENING_HOURS_DAY_KEYS[j + 1]].closes === d.closes
+    ) j++;
+    const dayPart = j > i ? `${OPENING_HOURS_DAY_KEYS[i]}-${OPENING_HOURS_DAY_KEYS[j]}` : OPENING_HOURS_DAY_KEYS[i];
+    groups.push(`${dayPart} ${d.opens}-${d.closes}`);
+    i = j + 1;
+  }
+  return groups.join(',');
+}
+
 const ORG_FORM_FIELDS: FormFieldDef[] = [
   { key: 'name', label: '名稱' },
   { key: 'legalName', label: '公司登記名稱' },

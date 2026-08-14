@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { formFieldsFor, buildFormDefaults, mergeFormIntoNode, emptyNode } from "@/lib/schema-templates";
+import {
+  formFieldsFor,
+  buildFormDefaults,
+  mergeFormIntoNode,
+  emptyNode,
+  OPENING_HOURS_DAY_KEYS,
+  OPENING_HOURS_DAY_LABELS,
+  OPENING_HOURS_TIME_OPTIONS,
+  parseOpeningHoursString,
+  buildOpeningHoursString,
+} from "@/lib/schema-templates";
 
 // 單一 JSON-LD 節點的檢查結果（對應後端 /api/schema-check 回傳的 evals）
 interface DisplayField {
@@ -276,6 +286,57 @@ function CheckView({ onImport }: { onImport: (ev: NodeEval & { label: TrackedLab
   );
 }
 
+// 營業時間欄位：每天一個開關＋開店/打烊時間下拉選單，選好自動組成 schema.org 認得的字串
+// （如 "Mo-Fr 09:00-18:00"），不用自己打英文縮寫格式
+function OpeningHoursPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const days = parseOpeningHoursString(value);
+
+  function updateDay(day: (typeof OPENING_HOURS_DAY_KEYS)[number], patch: Partial<(typeof days)[typeof day]>) {
+    onChange(buildOpeningHoursString({ ...days, [day]: { ...days[day], ...patch } }));
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {OPENING_HOURS_DAY_KEYS.map((day) => {
+        const d = days[day];
+        return (
+          <div key={day} className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-1.5 w-14 shrink-0 text-gray-600">
+              <input type="checkbox" checked={d.open} onChange={(e) => updateDay(day, { open: e.target.checked })} />
+              週{OPENING_HOURS_DAY_LABELS[day]}
+            </label>
+            {d.open ? (
+              <>
+                <select
+                  value={d.opens}
+                  onChange={(e) => updateDay(day, { opens: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                >
+                  {OPENING_HOURS_TIME_OPTIONS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <span className="text-gray-400">–</span>
+                <select
+                  value={d.closes}
+                  onChange={(e) => updateDay(day, { closes: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                >
+                  {OPENING_HOURS_TIME_OPTIONS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <span className="text-xs text-gray-400">休息</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // 生成/補完模式：選型別、填表單，即時組出 JSON-LD；可從檢索結果匯入既有資料當起點
 function GenerateView({
   label,
@@ -343,7 +404,9 @@ function GenerateView({
           {fields.map((f) => (
             <div key={f.key}>
               <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}</label>
-              {f.multiline ? (
+              {f.key === "openingHours" ? (
+                <OpeningHoursPicker value={values[f.key] ?? ""} onChange={(v) => setValues({ ...values, [f.key]: v })} />
+              ) : f.multiline ? (
                 <textarea
                   value={values[f.key] ?? ""}
                   onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}
