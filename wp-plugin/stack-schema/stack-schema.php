@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Stack Schema
  * Description: 自主輸出品牌/商家結構化資料（JSON-LD），不依賴 Yoast SEO。後台直接貼 JSON-LD 存檔即可全站輸出；商品頁自動抓 WooCommerce 資料。
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: 積木媒體行銷
  * Text Domain: stack-schema
  */
@@ -101,6 +101,12 @@ function stack_schema_output_business_entity() {
 	if ( empty( $s['org_json'] ) ) return;
 	$decoded = json_decode( $s['org_json'], true );
 	if ( ! is_array( $decoded ) ) return; // 資料庫裡的值已經是存檔時驗證過的合法 JSON，這裡只是防禦性檢查
+
+	// 補上 @id，沿用 Yoast 原本幫 Organization 節點取的同一個 id（網址 + #organization）。
+	// Yoast 的 WebPage/WebSite 節點裡還留著指向這個 id 的 about/publisher 參照（Organization 本體
+	// 已被上面的 filter 拿掉），補這個 id 讓那些參照接回我們自己輸出的節點，不會變成斷掉的連結。
+	if ( empty( $decoded['@id'] ) ) $decoded['@id'] = home_url( '/' ) . '#organization';
+
 	stack_schema_print_jsonld( $decoded );
 }
 
