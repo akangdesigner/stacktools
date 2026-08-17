@@ -51,8 +51,23 @@ type Phase =
   | "researching"
   | "awaiting_confirm"
   | "researching_details"
+  | "awaiting_final_confirm"
   | "generating"
   | "completed";
+
+interface BrandDetail {
+  brand_name: string;
+  brand_background: string;
+  brand_positioning: string;
+  media_coverage: string;
+  awards_certifications: string;
+  market_features: string;
+  pros: string;
+  cons: string;
+  user_experience: string;
+  discussion_points: string;
+  repurchase_intent: string;
+}
 
 // 品牌卡片欄位模板：客觀基礎資訊區塊要列哪些欄位，交給 n8n 工作流3 動態產生對應 schema
 const CARD_TEMPLATES: { value: string; label: string; hint: string }[] = [
@@ -85,6 +100,10 @@ export default function RecommendationPage() {
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [cardTemplate, setCardTemplate] = useState("general");
   const [confirming, setConfirming] = useState(false);
+
+  // 品牌深度研究結果（第三階段確認用）
+  const [brandDetailsList, setBrandDetailsList] = useState<BrandDetail[]>([]);
+  const [finalConfirming, setFinalConfirming] = useState(false);
 
   // 完成後的 WordPress 連結
   const [wpEditLink, setWpEditLink] = useState("");
@@ -170,6 +189,27 @@ export default function RecommendationPage() {
     }
   }
 
+  async function handleConfirmFinalGenerate() {
+    if (!jobId) return;
+    setFinalConfirming(true);
+    setError("");
+    try {
+      const res = await fetch("/api/recommendation/generate-final", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "發生錯誤");
+      setStatusMessage("文章生成中（約 3～5 分鐘）");
+      setPhase("generating");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setFinalConfirming(false);
+    }
+  }
+
   function updateBrand(index: number, field: keyof Brand, value: string) {
     setBrands((prev) => prev.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
   }
@@ -250,6 +290,11 @@ export default function RecommendationPage() {
           setPhase("awaiting_confirm");
         } else if (data?.status === "researching_details") {
           setPhase("researching_details");
+        } else if (data?.status === "awaiting_final_confirm") {
+          setBrandDetailsList(
+            Array.isArray(data?.data?.brandDetails) ? data.data.brandDetails : []
+          );
+          setPhase("awaiting_final_confirm");
         } else if (data?.status === "generating") {
           setPhase("generating");
         } else if (data?.status === "completed") {
@@ -581,12 +626,49 @@ export default function RecommendationPage() {
                 {statusMessage || "正在研究品牌細節"}{dots}
               </p>
               <p className="text-xs text-gray-400">
-                預估完成時間：1～3 分鐘，跑完會自動接著生成文章
+                預估完成時間：1～3 分鐘，跑完會請你確認研究結果再生成文章
               </p>
+            </div>
+          ) : phase === "awaiting_final_confirm" ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <h2 className="text-sm font-semibold text-gray-700">第四階段：確認品牌深度研究結果</h2>
+              <p className="text-xs text-gray-400">
+                看過沒問題再按確認，下一步是最花時間、最花錢的完整生成
+              </p>
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                {brandDetailsList.map((b, i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg p-3 space-y-1.5 bg-gray-50">
+                    <p className="text-sm font-semibold text-gray-800">{b.brand_name}</p>
+                    <p className="text-xs text-gray-600"><span className="font-medium">品牌背景：</span>{b.brand_background}</p>
+                    <p className="text-xs text-gray-600"><span className="font-medium">品牌定位：</span>{b.brand_positioning}</p>
+                    <p className="text-xs text-gray-600"><span className="font-medium">媒體報導：</span>{b.media_coverage}</p>
+                    <p className="text-xs text-gray-600"><span className="font-medium">獎項認證：</span>{b.awards_certifications}</p>
+                    <p className="text-xs text-gray-600"><span className="font-medium">市場亮點：</span>{b.market_features}</p>
+                    {(b.pros || b.cons || b.user_experience) && (
+                      <>
+                        <p className="text-xs text-gray-600"><span className="font-medium">網友優點：</span>{b.pros || "（無資料）"}</p>
+                        <p className="text-xs text-gray-600"><span className="font-medium">網友缺點：</span>{b.cons || "（無資料）"}</p>
+                        <p className="text-xs text-gray-600"><span className="font-medium">使用感受：</span>{b.user_experience || "（無資料）"}</p>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {brandDetailsList.length === 0 && (
+                  <p className="text-xs text-gray-400 py-2">沒有品牌深度研究資料</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleConfirmFinalGenerate}
+                disabled={finalConfirming}
+                className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {finalConfirming ? "送出中…" : "確認，開始生成文章"}
+              </button>
             </div>
           ) : phase === "generating" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-700">第四階段：生成文章中</h2>
+              <h2 className="text-sm font-semibold text-gray-700">第五階段：生成文章中</h2>
               <p className="text-sm text-gray-600 leading-relaxed">
                 {statusMessage || "文章生成中"}{dots}
               </p>

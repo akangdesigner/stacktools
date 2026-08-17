@@ -6,6 +6,7 @@ export type RecommendationJobStatus =
   | "researching"
   | "awaiting_confirm"
   | "researching_details"
+  | "awaiting_final_confirm"
   | "generating"
   | "completed"
   | "failed";
@@ -163,6 +164,9 @@ export function applyStageResult(
   ) {
     status = "awaiting_confirm";
     nextMessage = message ?? "品牌與大綱已就緒，請確認後開始生成";
+  } else if (stage === "brand_details" && prev.status === "researching_details") {
+    status = "awaiting_final_confirm";
+    nextMessage = message ?? "品牌深度研究已完成，請確認後開始生成文章";
   }
 
   const now = Date.now();

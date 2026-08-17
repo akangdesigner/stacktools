@@ -6,7 +6,6 @@ import {
   RecommendationJobData,
 } from '@/lib/recommendation-jobs';
 import { generateTitleSuggestions } from '@/lib/recommendation-step1';
-import { postN8nWebhook, buildRecommendationWebhookTarget } from '@/lib/n8n-webhook';
 
 // n8n 各階段回傳：{ jobId, stage: "brands" | "outline" | "brand_details" | "final", status: "completed" | "failed", message?, data? }
 export async function POST(req: NextRequest) {
@@ -53,34 +52,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 品牌深度研究跑完，且使用者已經確認過品牌/大綱（狀態是 researching_details）
-  // 才自動接著觸發「完整生成」，不是每次收到 brand_details 都觸發
-  if (stage === 'brand_details' && updated.status === 'researching_details') {
-    const callbackUrl = 'https://tool.dg166.com/api/recommendation/callback';
-    const result = await postN8nWebhook(
-      buildRecommendationWebhookTarget('完整生成', 'rec-step3-generate'),
-      {
-        jobId,
-        callbackUrl,
-        title: updated.data.confirmedTitle || updated.input.title,
-        keywords: updated.input.keywords,
-        searchTerm: updated.input.searchTerm,
-        brand: updated.input.requiredBrand,
-        introLink: updated.input.introLink,
-        brands: updated.data.brands ?? [],
-        outline: updated.data.outline ?? '',
-        references: updated.data.references ?? '',
-        brandDetails: updated.data.brandDetails ?? [],
-        cardTemplate: updated.data.cardTemplate || 'general',
-      }
-    );
-
-    if (!result.ok) {
-      updateRecommendationJob(jobId, 'failed', result.error);
-    } else {
-      updateRecommendationJob(jobId, 'generating', '文章生成中（約 3～5 分鐘）');
-    }
-  }
+  // 品牌深度研究跑完後不再自動接著生成文章，停在 awaiting_final_confirm
+  // 讓使用者看過深度研究結果再按確認（見 /api/recommendation/generate-final）
 
   return NextResponse.json({ ok: true });
 }

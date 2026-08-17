@@ -7,8 +7,8 @@ import {
 } from '@/lib/recommendation-jobs';
 import { postN8nWebhook, buildRecommendationWebhookTarget } from '@/lib/n8n-webhook';
 
-// 第二段：使用者確認品牌與大綱後，先觸發「品牌深度研究」workflow（不是直接生成文章）
-// 深度研究跑完的 callback 收到後，才會自動接著觸發「完整生成」workflow（見 callback/route.ts）
+// 第二段：使用者確認品牌與大綱後，觸發「品牌深度研究」workflow（不是直接生成文章）
+// 深度研究跑完後停在 awaiting_final_confirm，使用者看過結果再按確認才觸發「完整生成」（見 generate-final/route.ts）
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const jobId = body?.jobId as string | undefined;
