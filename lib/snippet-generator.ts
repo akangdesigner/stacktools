@@ -13,6 +13,33 @@ export function getConsoleSnippet(): string {
     var resultHtml = "";
     var imageUrls = [];
 
+    // 遞迴組裝 ul/ol，把「本層文字」跟「巢狀清單」分開處理，
+    // 避免用 regex 配對 <li>...</li> 時被巢狀 li 的結尾提前截斷（結構會整個歪掉）
+    function flattenListItem(li) {
+        var nestedList = li.querySelector(':scope > ul, :scope > ol');
+        var liCopy = li.cloneNode(true);
+        var nestedInCopy = liCopy.querySelector(':scope > ul, :scope > ol');
+        if (nestedInCopy) nestedInCopy.remove();
+        var flat = liCopy.innerHTML
+            .replace(/<\\/?p[^>]*>/g, '')
+            .replace(/&nbsp;/g, '')
+            .replace(/\\s*(class|style|data-[\\w-]+)="[^"]*"/g, '')
+            .trim();
+        var nestedHtml = nestedList ? buildListHtml(nestedList, false) : '';
+        return '<li style="margin-bottom:10px;"><span style="font-size:18px; color:#454f5e; line-height:1.8;">' + flat + '</span>' + nestedHtml + '</li>';
+    }
+
+    function buildListHtml(listEl, isTopLevel) {
+        var tag = listEl.tagName.toLowerCase();
+        var itemsHtml = '';
+        Array.prototype.forEach.call(listEl.children, function(li) {
+            if (li.tagName.toLowerCase() !== 'li') return;
+            itemsHtml += flattenListItem(li);
+        });
+        var styleAttr = isTopLevel ? ' style="margin-bottom:15px;"' : '';
+        return '<' + tag + styleAttr + '>' + itemsHtml + '</' + tag + '>';
+    }
+
     async function downloadImage(url, filename) {
         try {
             const decodedFilename = decodeURIComponent(filename.split(/\\#|\\?/)[0]);
@@ -69,17 +96,16 @@ export function getConsoleSnippet(): string {
         else if (tagName === 'p' && node.closest('ul, ol')) {
             return; // 跳過 ul/ol 內的 <p>，避免重複輸出
         }
-        else if (tagName === 'p' || tagName === 'ul' || tagName === 'ol') {
+        else if ((tagName === 'ul' || tagName === 'ol') && node.parentElement && node.parentElement.closest('ul, ol')) {
+            return; // 跳過巢狀清單本身，內容會在外層清單遞迴處理時一併帶出，避免重複輸出
+        }
+        else if (tagName === 'ul' || tagName === 'ol') {
+            resultHtml += buildListHtml(node, true) + \`\\n\`;
+        }
+        else if (tagName === 'p') {
             var cleanInner = node.innerHTML.replace(/class=".*?"/g, '').replace(/style=".*?"/g, '');
-            if (tagName === 'ul' || tagName === 'ol') {
-                cleanInner = cleanInner.replace(/\\s*data-[\\w-]+="[^"]*"/g, '');
-                cleanInner = cleanInner.replace(/<li[^>]*>([\\s\\S]*?)<\\/li>/g, function(_, inner) {
-                    var flat = inner.replace(/<\\/?p[^>]*>/g, '').replace(/&nbsp;/g, '').trim();
-                    return '<li style="margin-bottom:10px;"><span style="font-size:18px; color:#454f5e; line-height:1.8;">' + flat + '</span></li>';
-                });
-            }
-            var wrapper = (tagName === 'p') ? \`<span style="font-size:18px; color:#454f5e; line-height:1.8;">\${cleanInner}</span>\` : cleanInner;
-            resultHtml += \`<\${tagName} style="margin-bottom:15px;">\${wrapper}</\${tagName}>\\n\`;
+            var wrapper = \`<span style="font-size:18px; color:#454f5e; line-height:1.8;">\${cleanInner}</span>\`;
+            resultHtml += \`<p style="margin-bottom:15px;">\${wrapper}</p>\\n\`;
         }
         else if (tagName === 'table') {
             var cleanTable = node.outerHTML.replace(/\\s*class="[^"]*"/g, '').replace(/\\s*style="[^"]*"/g, '');
