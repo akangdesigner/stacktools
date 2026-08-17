@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { WizardShell } from "@/components/wizard/WizardShell";
 import { CopyButton } from "@/components/ui/CopyButton";
 
@@ -542,8 +543,19 @@ function FormatSelector({ onSelect }: { onSelect: (mode: "classic" | "elementor"
 
 // ── 主元件 ────────────────────────────────────────────────────────────────────
 
+function isMode(value: string | null): value is Exclude<Mode, null> {
+  return value === "classic" || value === "elementor" || value === "elementor-guide";
+}
+
 export default function ArticlePage() {
-  const [mode, setMode] = useState<Mode>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const modeParam = searchParams.get("mode");
+  const mode: Mode = isMode(modeParam) ? modeParam : null;
+
+  const setMode = (m: Mode) => {
+    router.push(m ? `/article?mode=${m}` : "/article");
+  };
 
   if (mode === "classic") return <WizardShell />;
   if (mode === "elementor")

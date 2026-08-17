@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 const PATH_LABELS: Record<string, string> = {
   '/writer':                '寫手流程工具',
@@ -44,8 +44,16 @@ function getLabel(fullPath: string, seg: string): string {
   return seg;
 }
 
+// 文章上架工具用網址參數 ?mode= 記錄選擇的匯入格式（非路由層級），補上這一層麵包屑
+const ARTICLE_MODE_LABELS: Record<string, string> = {
+  classic: '傳統編輯器',
+  elementor: 'Elementor 編輯器',
+  'elementor-guide': '匯入教學',
+};
+
 export default function Breadcrumb() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   if (pathname === '/') return null;
 
   const segments = pathname.split('/').filter(Boolean);
@@ -58,6 +66,13 @@ export default function Breadcrumb() {
   const parent = crumbs.length > 0 ? PATH_PARENTS[crumbs[0].href] : undefined;
   if (parent) {
     crumbs.unshift({ href: parent, label: getLabel(parent, parent.slice(1)) });
+  }
+
+  if (pathname === '/article') {
+    const mode = searchParams.get('mode');
+    if (mode && ARTICLE_MODE_LABELS[mode]) {
+      crumbs.push({ href: `${pathname}?mode=${mode}`, label: ARTICLE_MODE_LABELS[mode] });
+    }
   }
 
   return (
