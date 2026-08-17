@@ -426,17 +426,15 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     if (cleaned) el.setAttribute("style", cleaned);
     else el.removeAttribute("style");
   });
-  // ── 8.56. 非 m2 客戶：表格本身常常乾乾淨淨、沒有殘留 style 可清（如 Elementor 表格外掛），
+  // ── 8.56. 所有客戶：表格本身常常乾乾淨淨、沒有殘留 style 可清（如 Elementor 表格外掛），
   // 灰底其實是貼上去之後目標站後台編輯器對 <table><th> 的預設樣式蓋上來的，
-  // 用 inline !important 主動蓋白底，蓋掉對方看不到的預設 CSS
-  if (!isM2) {
-    root.querySelectorAll("table, thead, tbody, tr, th, td").forEach((el) => {
-      const existing = el.getAttribute("style") || "";
-      const styleMap = parseStyleString(existing);
-      styleMap.set("background-color", "#ffffff !important");
-      el.setAttribute("style", serializeStyleMap(styleMap));
-    });
-  }
+  // 用 inline !important 主動蓋透明底，蓋掉對方看不到的預設 CSS
+  root.querySelectorAll("table, thead, tbody, tr, th, td").forEach((el) => {
+    const existing = el.getAttribute("style") || "";
+    const styleMap = parseStyleString(existing);
+    styleMap.set("background-color", "transparent !important");
+    el.setAttribute("style", serializeStyleMap(styleMap));
+  });
 
   // ── 8.6. m2 專屬：FAQ 區塊（H2 標題含 FAQ／常見問題）底下的 h3+段落，
   // 轉成 <details><summary> 手風琴，取代原本的 h3 小標樣式
