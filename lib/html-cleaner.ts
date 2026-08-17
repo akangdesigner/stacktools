@@ -395,8 +395,13 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   if (client.deduplicateLi) {
     const seen = new Set<string>();
     root.querySelectorAll("li").forEach((li) => {
-      const txt = li.innerText.trim();
-      if (seen.has(txt)) {
+      // 正規化：去除多餘空白、零寬字元，避免草稿裡巢狀清單跟攤平清單只差在
+      // 排版空白／span 包裹，導致逐字比對抓不到重複
+      const txt = li.innerText
+        .replace(/[​-‍﻿]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (txt && seen.has(txt)) {
         li.remove();
       } else {
         seen.add(txt);
