@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         outline: updated.data.outline ?? '',
         references: updated.data.references ?? '',
         brandDetails: updated.data.brandDetails ?? [],
+        cardTemplate: updated.data.cardTemplate || 'general',
       }
     );
 

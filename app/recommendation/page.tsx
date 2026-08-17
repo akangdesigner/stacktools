@@ -54,6 +54,13 @@ type Phase =
   | "generating"
   | "completed";
 
+// 品牌卡片欄位模板：客觀基礎資訊區塊要列哪些欄位，交給 n8n 工作流3 動態產生對應 schema
+const CARD_TEMPLATES: { value: string; label: string; hint: string }[] = [
+  { value: "general", label: "通用", hint: "產品定位／主要特色／適用場景／官方特色，適合大多數品類" },
+  { value: "supplement", label: "保健食品／美妝", hint: "核心成分／劑量／劑型／複方成分／包裝份量／產地" },
+  { value: "electronics", label: "3C／家電", hint: "主要規格／核心功能／保固期限／隨附配件" },
+];
+
 export default function RecommendationPage() {
   const emptyForm: FormData = {
     title: "",
@@ -76,6 +83,7 @@ export default function RecommendationPage() {
   const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
+  const [cardTemplate, setCardTemplate] = useState("general");
   const [confirming, setConfirming] = useState(false);
 
   // 完成後的 WordPress 連結
@@ -148,6 +156,7 @@ export default function RecommendationPage() {
           brands,
           outline: serializeOutline(outlineSections),
           title: confirmTitle,
+          cardTemplate,
         }),
       });
       const data = await res.json();
@@ -458,6 +467,26 @@ export default function RecommendationPage() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600">
+                  品牌卡片欄位（決定「客觀基礎資訊」要列哪些欄位）
+                </label>
+                <select
+                  value={cardTemplate}
+                  onChange={(e) => setCardTemplate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                >
+                  {CARD_TEMPLATES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400">
+                  {CARD_TEMPLATES.find((t) => t.value === cardTemplate)?.hint}
+                </p>
               </div>
 
               <div className="space-y-2">

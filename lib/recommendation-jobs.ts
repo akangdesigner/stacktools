@@ -46,6 +46,7 @@ export interface RecommendationJobData {
   titleSuggestions?: string[];
   references?: string;
   brandDetails?: RecommendationBrandDetail[];
+  cardTemplate?: string;
   confirmedTitle?: string;
   wpLink?: string;
   wpEditLink?: string;
@@ -176,12 +177,19 @@ export function confirmBrandsAndStartDetailResearch(
   id: string,
   brands: RecommendationBrand[],
   outline: string,
-  confirmedTitle: string
+  confirmedTitle: string,
+  cardTemplate?: string
 ): RecommendationJob | null {
   const prev = readJob(id);
   if (!prev) return null;
 
-  const mergedData: RecommendationJobData = { ...prev.data, brands, outline, confirmedTitle };
+  const mergedData: RecommendationJobData = {
+    ...prev.data,
+    brands,
+    outline,
+    confirmedTitle,
+    cardTemplate: cardTemplate || prev.data.cardTemplate || "general",
+  };
   const now = Date.now();
   db.prepare(
     `UPDATE recommendation_jobs SET status = ?, message = ?, data = ?, updated_at = ? WHERE id = ?`
