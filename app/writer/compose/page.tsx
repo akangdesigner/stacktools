@@ -160,6 +160,24 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 ・H3 小節之間不可重複說明相同概念`,
 
   violation: `你是一位專業的廣告合規審稿員，專門檢查繁體中文內容行銷文章是否使用客戶禁用詞。只挑出明確違規的地方，不要對文字品質、語氣、風格、結構、SEO 等非違規問題提供建議。`,
+
+  antiai: `你是一位專門抓「AI 腔調」的繁體中文編輯，判準完全依據以下黑名單，不判斷其他文字品質、SEO、結構問題。
+
+【用字黑名單 — 命中就是問題】
+・灌水開頭／教科書過渡詞：深入探討、值得注意的是、首先/其次/最後、然而、總而言之；宣告式開場如「先誠實講」「我會說清楚」「舉個例子來說」「先交代一下」「一句話講完」；換段報幕句如「X 講完了，來看 Y」「好戲在後頭」
+・浮誇強調詞：至關重要、關鍵的、不可磨滅、顯著的、凸顯了／強調了；給抽象事物套虛無的感官形容詞（發現「觸目驚心」、結果「血淋淋」、「發人深省」）
+・社群情緒假詞：穩、撐、懂的都懂、接住、很現實（裝熟裝感性）
+・經典 AI 句型：「這不是……而是……」「不僅是……更是……」「從……到……」假範圍、破折號（——）句尾補充、三段式排比、僵化結尾（綜上所述／In conclusion）、殘句標語式標題（問句＋聳動斷句沒講完）、懸念式標題（「…長什麼樣」不講內容）、標題用「先搞懂／先了解」對讀者下指令、憑空宣告「是真的／不是假的」、「閃得掉／躲得掉」裝順口語動詞、冒號＋聳動斷言式標題、縮略口號式標題（沒主詞動詞的斷句）
+・空洞模糊：空洞讚美（燈塔、見證）、模糊歸因（「批評者認為」不指名）、Markdown 符號殘留在正文
+・抽象化缺錨點：概念名詞化（自我的探索、效率的提升）、缺乏具體時間地點人名數字（某個午後、許多企業）
+
+【EEAT 具體化 — 正面檢查】
+・是否有具體時間、地點、數字、真實情境，而不是空泛宏觀敘述
+・句子是否靠動詞推動，而非堆砌名詞
+・段落節奏是否有長有短，不是每段都對稱工整
+・唸出聲音會不會像真人在講話，而不是像作文範本
+
+不要報告與上述黑名單無關的文字品質、SEO、結構問題。`,
 };
 
 // 架構底線：硬性結構限制，寫死、不會被個人化提示詞覆蓋。
@@ -381,6 +399,38 @@ NEW: （建議替換的安全用詞或調整後的銜接文字，確保替換或
 3. 只挑出真正違規的地方，不要報告文字品質、語氣、風格、結構等非違規問題
 4. 局部刪除違規詞時，務必確認刪除/替換後語句通順，不留下多餘或斷裂的標點符號
 5. 繁體中文輸出`;
+}
+
+// 去AI味檢查不依賴客戶設定，判準固定就是黑名單本身，只允許用個人化覆蓋整份取代
+function buildAntiAiReviewSystemMessage(opts: { antiaiOverride?: string }): string {
+  return (opts.antiaiOverride ?? '').trim() || PROMPT_DEFAULTS.antiai;
+}
+
+function buildAntiAiReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
+  return `文章標題：${opts.title}
+目標關鍵字：${opts.keyword}
+
+待審稿文章：
+
+${article}
+
+---
+
+請逐句檢查文章，找出命中「去 AI 味黑名單」的用字、句型或段落過渡方式，不可遺漏。若完全沒有命中，請只輸出「整體評分：10/10 — 未發現 AI 腔調痕跡」，不要輸出任何建議區塊。否則請先輸出「整體評分：X/10 — 說明」（依命中數量與嚴重程度評分），再逐條列出，每條格式如下：
+
+---SUGGESTION---
+SECTION: （問題所在的 H2 段落名稱）
+ISSUE: （命中黑名單的哪一類、具體是什麼問題）
+OLD: （從文章中精確複製需要改動的最短文字：若只改一個詞或片語，就只複製那個詞或片語；若需要改整句，就複製到句號/問號/驚嘆號為止，不得超過一個句子；絕對不可引用多句或整段；不可含 ## / ### 標題行；必須與文章一字不差）
+NEW: （建議改寫後的文字，語意不變但去除 AI 腔；若整句需要刪除則此欄完全空白）
+---END---
+
+重要規定（違反則建議無效）：
+1. OLD 最多一句話，若一段有多個問題請拆成多條建議各改一句
+2. OLD 禁止引用整段落或跨句引用
+3. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
+4. 只挑出真正命中黑名單的地方，不要報告與 AI 腔調無關的文字品質、SEO、結構問題
+5. 若刪除整句則 NEW 欄留空；繁體中文輸出`;
 }
 
 function buildReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
@@ -2960,7 +3010,7 @@ ${article}
 
 // ── Stage 4 ───────────────────────────────────────────────────────────
 
-type ReviewMode = 'quality' | 'violation';
+type ReviewMode = 'quality' | 'violation' | 'antiai';
 
 // 送去給 AI 校稿前，把 base64 圖片抽成佔位符，避免超長 data URI 灌爆 prompt、
 // 干擾判讀；圖片本身仍完整留在編輯器與發布用的 articleText 裡，不受影響
@@ -2968,14 +3018,15 @@ function stripImagesForAI(md: string): string {
   return md.replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, '![$1][圖片]');
 }
 
-function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, reviewOverride, violationOverride, onSaveReviewOverride, onSaveViolationOverride, onBack }: {
+function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, reviewOverride, violationOverride, antiaiOverride, onSaveReviewOverride, onSaveViolationOverride, onSaveAntiaiOverride, onBack }: {
   title: string; keyword: string;
   sections: Section[];
   writingGuide: string; clientWritingRules: string;
   brandDescription: string; bannedWords: string; sectionOverride: string;
-  reviewOverride: string; violationOverride: string;
+  reviewOverride: string; violationOverride: string; antiaiOverride: string;
   onSaveReviewOverride: (text: string | null) => void;
   onSaveViolationOverride: (text: string | null) => void;
+  onSaveAntiaiOverride: (text: string | null) => void;
   onBack: () => void;
 }) {
   // 預設違規詞校驗（必要檢查）；AI 內容校稿屬選用功能，有需要的人再手動切換開啟
@@ -3019,10 +3070,14 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     try {
       const sys = reviewMode === 'violation'
         ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
+        : reviewMode === 'antiai'
+        ? buildAntiAiReviewSystemMessage({ antiaiOverride })
         : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
       const forAI = stripImagesForAI(articleText);
       const prompt = reviewMode === 'violation'
         ? buildViolationReviewPrompt(forAI, { title, keyword })
+        : reviewMode === 'antiai'
+        ? buildAntiAiReviewPrompt(forAI, { title, keyword })
         : buildReviewPrompt(forAI, { title, keyword });
       await streamAPI([
         { role: 'system', content: sys },
@@ -3048,6 +3103,8 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
     try {
       const sys = reviewMode === 'violation'
         ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
+        : reviewMode === 'antiai'
+        ? buildAntiAiReviewSystemMessage({ antiaiOverride })
         : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
       const prompt = buildFinalScorePrompt(stripImagesForAI(articleText), { title, keyword, initialEval: overallEval });
       await streamAPI([
@@ -3175,7 +3232,7 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
-          <p className="text-xs text-gray-400">{reviewMode === 'violation' ? '違規詞校驗 · 檢查禁詞與品牌宣稱範圍' : 'AI 校稿 · 先看總評，再逐條處理'}</p>
+          <p className="text-xs text-gray-400">{reviewMode === 'violation' ? '違規詞校驗 · 檢查禁詞與品牌宣稱範圍' : reviewMode === 'antiai' ? '去AI味檢查 · 抓黑名單用字與句型' : 'AI 校稿 · 先看總評，再逐條處理'}</p>
         </div>
         <button onClick={() => setShowPromptModal(true)}
           className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors shrink-0">
@@ -3190,6 +3247,10 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
             className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'quality' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
             AI 內容校稿（選用）
           </button>
+          <button onClick={() => switchReviewMode('antiai')} disabled={reviewing || finalScoring}
+            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'antiai' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
+            去AI味檢查（選用）
+          </button>
         </div>
         {suggestions.length > 0 && !reviewing && (
           <span className="text-xs text-violet-500 font-medium shrink-0">
@@ -3198,7 +3259,9 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
         )}
         <button onClick={runReview} disabled={reviewing || finalScoring || !articleText.trim() || (reviewMode === 'violation' && !bannedWords.trim())}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 shrink-0">
-          {reviewing && <Spinner />}{reviewing ? (reviewMode === 'violation' ? '檢查中…' : '校稿中…') : (reviewMode === 'violation' ? '開始檢查' : (overallEval ? '重新校稿' : '開始校稿'))}
+          {reviewing && <Spinner />}{reviewing
+            ? (reviewMode === 'violation' || reviewMode === 'antiai' ? '檢查中…' : '校稿中…')
+            : (reviewMode === 'violation' || reviewMode === 'antiai' ? '開始檢查' : (overallEval ? '重新校稿' : '開始校稿'))}
         </button>
         <button onClick={() => setShowPublishModal(true)} disabled={!articleText.trim()}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 shrink-0">
@@ -3315,11 +3378,12 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
                     </>
                   )}
                   {!reviewing && suggestions.length === 0 && overallEval && (
-                    <p className="text-xs text-gray-400 text-center py-4">{reviewMode === 'violation' ? '未發現違規' : '無具體修改建議'}</p>
+                    <p className="text-xs text-gray-400 text-center py-4">{reviewMode === 'violation' ? '未發現違規' : reviewMode === 'antiai' ? '未發現 AI 腔調痕跡' : '無具體修改建議'}</p>
                   )}
                   {!reviewing && !overallEval && !error && (
                     <p className="text-sm text-gray-400 py-8 text-center">{reviewMode === 'violation'
                       ? (bannedWords.trim() ? '點擊「開始檢查」開始' : '未設定禁詞，無需檢查，文章可直接使用')
+                      : reviewMode === 'antiai' ? '去AI味檢查為選用功能，需要時點擊「開始檢查」執行'
                       : 'AI 內容校稿為選用功能，需要時點擊「開始校稿」執行'}</p>
                   )}
                 </div>
@@ -3332,9 +3396,9 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
 
       {showPromptModal && (
         <PromptEditModal
-          defaultText={reviewMode === 'violation' ? PROMPT_DEFAULTS.violation : PROMPT_DEFAULTS.review}
-          currentOverride={reviewMode === 'violation' ? violationOverride : reviewOverride}
-          onSave={reviewMode === 'violation' ? onSaveViolationOverride : onSaveReviewOverride}
+          defaultText={reviewMode === 'violation' ? PROMPT_DEFAULTS.violation : reviewMode === 'antiai' ? PROMPT_DEFAULTS.antiai : PROMPT_DEFAULTS.review}
+          currentOverride={reviewMode === 'violation' ? violationOverride : reviewMode === 'antiai' ? antiaiOverride : reviewOverride}
+          onSave={reviewMode === 'violation' ? onSaveViolationOverride : reviewMode === 'antiai' ? onSaveAntiaiOverride : onSaveReviewOverride}
           onClose={() => setShowPromptModal(false)}
         />
       )}
@@ -3559,8 +3623,10 @@ function ComposeInner() {
             sectionOverride={promptOverrides.section ?? ''}
             reviewOverride={promptOverrides.review ?? ''}
             violationOverride={promptOverrides.violation ?? ''}
+            antiaiOverride={promptOverrides.antiai ?? ''}
             onSaveReviewOverride={text => savePromptOverride('review', text)}
             onSaveViolationOverride={text => savePromptOverride('violation', text)}
+            onSaveAntiaiOverride={text => savePromptOverride('antiai', text)}
             onBack={() => setStage('write')}
           />
         )}
