@@ -203,6 +203,9 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   // m2 客戶特化樣式（紅底 H2 banner／左框線 H3／紅底表格標題），寫死不開放調整，只認客戶名稱＝m2
   const isM2 = client.name.trim().toLowerCase() === "m2";
 
+  // 1g 客戶特化樣式（紫底白字 H2 色塊＋陰影＋✓前綴／FAQ 紫框陰影卡片），寫死不開放調整，只認客戶名稱＝1g
+  const is1g = client.name.trim().toLowerCase() === "1g";
+
   // ── 0. Remove <h1>
   root.querySelectorAll("h1").forEach((el) => el.remove());
 
@@ -224,11 +227,14 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         if (isM2) {
           el!.setAttribute("class", "section-title");
           el!.innerHTML = text;
+        } else if (is1g) {
+          el!.setAttribute("style", "padding: 10px 20px; background: #8d6bcb; color: #fff; font-size: 24px; font-weight: 700; box-shadow: 5px 5px 0px 0px #d1b5ff; border-radius: 3px; margin: 1rem 0; line-height: 26px; letter-spacing: 2px;");
+          el!.innerHTML = `<span style="padding-right: 0.4rem;">✓</span>${text.replace(/^✓\s*/, "")}`;
         } else {
           el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
           el!.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
         }
-        tocItems.push({ id, text });
+        tocItems.push({ id, text: is1g ? text.replace(/^✓\s*/, "") : text });
         if (client.faqEnabled && /faq|常見問題/i.test(text)) {
           faqSectionActive = true;
           h3Count = 1;
@@ -462,6 +468,33 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
           node.replaceWith(detailsHtml);
           answerNodes.forEach((n) => n.remove());
           qIndex++;
+          node = sibling;
+          continue;
+        }
+        node = node.nextElementSibling;
+      }
+    }
+  }
+
+  // ── 8.7. 1g 專屬：FAQ 區塊（H2 標題含 FAQ／常見問題）底下的 h3+內容，
+  // 包成紫框陰影卡片（h3 本身的顏色／字級已由前面 FAQ 欄位處理，這裡只加外層卡片）
+  if (is1g) {
+    const faqH2 = root.querySelectorAll("h2").find((h) => /faq|常見問題/i.test(h.innerText));
+    if (faqH2) {
+      let node: NHTMLElement | null = faqH2.nextElementSibling;
+      while (node && node.tagName?.toLowerCase() !== "h2") {
+        if (node.tagName?.toLowerCase() === "h3") {
+          const questionHtml = node.outerHTML;
+          const answerNodes: NHTMLElement[] = [];
+          let sibling = node.nextElementSibling;
+          while (sibling && !["h2", "h3"].includes(sibling.tagName?.toLowerCase() ?? "")) {
+            answerNodes.push(sibling);
+            sibling = sibling.nextElementSibling;
+          }
+          const answerHtml = answerNodes.map((n) => n.outerHTML).join("");
+          const boxHtml = `<div style="border-radius: 0; overflow: hidden; margin-bottom: 16px; box-shadow: 4px 4px 0 0 #d1b5ff; border: 1px solid #8d6bcb;">${questionHtml}${answerHtml}</div>`;
+          node.replaceWith(boxHtml);
+          answerNodes.forEach((n) => n.remove());
           node = sibling;
           continue;
         }
