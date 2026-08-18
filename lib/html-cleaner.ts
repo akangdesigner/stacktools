@@ -447,6 +447,28 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     el.setAttribute("style", serializeStyleMap(styleMap));
   });
 
+  // ── 8.57. 1g 專屬：表格加淺紫框線＋表頭淺底，草稿表格常常沒有邊界看不出欄位
+  if (is1g) {
+    root.querySelectorAll("table").forEach((t) => {
+      const styleMap = parseStyleString(t.getAttribute("style") || "");
+      styleMap.set("border-collapse", "collapse");
+      styleMap.set("width", "100%");
+      styleMap.set("margin", "1.2em 0");
+      t.setAttribute("style", serializeStyleMap(styleMap));
+    });
+    root.querySelectorAll("th, td").forEach((cell) => {
+      const styleMap = parseStyleString(cell.getAttribute("style") || "");
+      styleMap.set("border", "1px solid #e5ddf2");
+      styleMap.set("padding", "10px 14px");
+      styleMap.set("text-align", "left");
+      if (cell.tagName.toLowerCase() === "th") {
+        styleMap.set("background-color", "#faf7ff");
+        styleMap.set("font-weight", "700");
+      }
+      cell.setAttribute("style", serializeStyleMap(styleMap));
+    });
+  }
+
   // ── 8.6. m2 專屬：FAQ 區塊（H2 標題含 FAQ／常見問題）底下的 h3+段落，
   // 轉成 <details><summary> 手風琴，取代原本的 h3 小標樣式
   if (isM2) {
