@@ -181,7 +181,7 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 };
 
 // 架構底線：硬性結構限制，寫死、不會被個人化提示詞覆蓋。
-// Gemini 出稿/修改架構與 GPT 審稿都會收到，避免建議把架構帶歪（例如一個 H2 塞 7 個 H3）
+// GPT 出稿/修改架構與 Gemini 審稿都會收到，避免建議把架構帶歪（例如一個 H2 塞 7 個 H3）
 const STRUCTURE_HARD_RULES = `【架構底線 — 硬性限制，任何需求或建議都不可越線】
 ・第一個 H2 固定為「前言」（無 H3）、倒數第二個 H2 固定為常見問題 FAQ（固定 5 個 H3）、最後一個 H2 固定為總結（無 H3）
 ・中間核心內容 H2 共 3–5 個
@@ -459,11 +459,11 @@ NEW: （修改後的替換文字，長度與 OLD 對應；若整句要刪除則�
 4. 若刪除整句則 NEW 欄留空；繁體中文輸出`;
 }
 
-// GPT 審「目錄架構」：審稿角度模板可個人化（outline_review）。GPT 只列出調整想法，
-// 不重新產生架構——使用者參考想法後自行貼回 Gemini 的需求欄重新出稿。輸出格式尾段固定，不開放編輯
+// Gemini 審「目錄架構」：審稿角度模板可個人化（outline_review）。Gemini 只列出調整想法，
+// 不重新產生架構——使用者參考想法後自行貼回 GPT 的需求欄重新出稿。輸出格式尾段固定，不開放編輯
 function buildOutlineReviewPrompt(outline: string, opts: { title: string; instruction: string; structureRules: string; writingGuide: string; reviewOverride?: string }): string {
   const reviewBody = (opts.reviewOverride ?? '').trim() || PROMPT_DEFAULTS.outline_review;
-  return `你是一位資深 SEO 內容主編，正在審核另一個 AI（Gemini）排的「文章目錄架構」。
+  return `你是一位資深 SEO 內容主編，正在審核另一個 AI（GPT）排的「文章目錄架構」。
 
 文章標題：${opts.title}
 
@@ -570,9 +570,9 @@ function parseOutline(text: string): Section[] {
 
 // ── Stream ────────────────────────────────────────────────────────────
 
-// 文章架構環節：Gemini 主筆出稿、GPT 審稿顧問（共用同一把 OpenRouter key，只換 model）
-const OUTLINE_MODEL = 'google/gemini-2.5-flash';
-const REVIEW_MODEL = 'openai/gpt-4o';
+// 文章架構環節：GPT 主筆出稿、Gemini 審稿顧問（共用同一把 OpenRouter key，只換 model）
+const OUTLINE_MODEL = 'openai/gpt-4o';
+const REVIEW_MODEL = 'google/gemini-2.5-flash';
 // 玩偶下方可切換的模型清單（共用同一把 OpenRouter key）
 const GEMINI_MODELS = [
   { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
@@ -586,8 +586,8 @@ const GPT_MODELS = [
   { id: 'openai/gpt-4.1-mini', label: 'GPT-4.1 mini' },
 ];
 // 玩偶台詞
-const GEMINI_OUTLINE_LINE = '架構初稿排好了！我照 SEO 結構安排，幫你看看順不順～';
-const GPT_IDLE_LINE = '要我審稿嗎？在下面打需求或直接按按鈕，我幫你抓架構問題 👀';
+const OUTLINE_DEFAULT_LINE = '架構初稿排好了！我照 SEO 結構安排，幫你看看順不順～';
+const REVIEW_IDLE_LINE = '要我審稿嗎？在下面打需求或直接按按鈕，我幫你抓架構問題 👀';
 
 async function streamAPI(messages: Message[], onChunk: (t: string) => void, model?: string) {
   const res = await fetch('/api/writer/compose', {
@@ -1606,7 +1606,7 @@ function OutlineQuoteInput({ outline, quotes, setQuotes, value, onChange, placeh
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const items = getOutlineItems(outline);
-  // 貼回大段內容（例如 GPT 的審稿想法）時輸入框自動長高，最高 360px 後改框內捲動
+  // 貼回大段內容（例如 Gemini 的審稿想法）時輸入框自動長高，最高 360px 後改框內捲動
   const taRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = taRef.current;
@@ -1725,7 +1725,7 @@ function OutlineEditor({ value, onChange }: { value: string; onChange: (v: strin
   );
 }
 
-// Gemini 修改架構的對照：以 H2/H3 標題行為單位做 LCS diff，
+// GPT 修改架構的對照：以 H2/H3 標題行為單位做 LCS diff，
 // 用跟 OutlineEditor 相同的徽章視覺呈現（寫手看的是標題列表，不是原始 Markdown）
 function OutlineDiffView({ oldText, newText, onAdopt, onDiscard }: {
   oldText: string; newText: string;
@@ -1867,7 +1867,7 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
   const [outlining, setOutlining] = useState(false);
   const [outline, setOutline] = useState('');
   const [error, setError] = useState('');
-  // 出稿（Gemini）與審稿（GPT）的提示詞分開編輯，各自一個視窗
+  // 出稿（GPT）與審稿（Gemini）的提示詞分開編輯，各自一個視窗
   const [showGeminiPrompt, setShowGeminiPrompt] = useState(false);
   const [showGptPrompt, setShowGptPrompt] = useState(false);
   const outlineMsg = useRef('');
@@ -1876,19 +1876,19 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
   // 玩偶下方可切換的模型
   const [outlineModel, setOutlineModel] = useState(OUTLINE_MODEL);
   const [reviewModel, setReviewModel] = useState(REVIEW_MODEL);
-  // Gemini 出稿時的寫手需求（對應 GPT 的 reviewInstruction）
+  // GPT 出稿時的寫手需求（對應 Gemini 的 reviewInstruction）
   const [outlineInstruction, setOutlineInstruction] = useState('');
-  // @ 引用的段落（局部更改）：Gemini 與 GPT 各一份
+  // @ 引用的段落（局部更改）：GPT 與 Gemini 各一份
   const [outlineQuotes, setOutlineQuotes] = useState<string[]>([]);
   const [reviewQuotes, setReviewQuotes] = useState<string[]>([]);
 
-  // GPT 架構審稿：只列出調整想法，使用者參考後自行貼回 Gemini 需求欄重新出稿
+  // Gemini 架構審稿：只列出調整想法，使用者參考後自行貼回 GPT 需求欄重新出稿
   const [reviewInstruction, setReviewInstruction] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [outlineEval, setOutlineEval] = useState('');
   const [evalCopied, setEvalCopied] = useState(false);
 
-  // Gemini 修改架構：先說明決定怎麼調整（顯示在泡泡），再回傳完整新架構，前端做綠增紅刪對照供採用
+  // GPT 修改架構：先說明決定怎麼調整（顯示在泡泡），再回傳完整新架構，前端做綠增紅刪對照供採用
   const [suggestedOutline, setSuggestedOutline] = useState<string | null>(null);
   const [geminiNote, setGeminiNote] = useState('');
   // OutlineEditor 內部 state 只在掛載時初始化，採用新架構後用這個 key 強制重新掛載以反映新值
@@ -1900,8 +1900,8 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
   async function run() {
     const id = ++runId.current;
     let msg = buildOutlinePrompt(title, writingGuide, outlineOverride, selectedInsights);
-    // 已有架構且有需求（例如貼回 GPT 的審稿建議）→ 走「修改」：原本的出稿提示詞＋現有架構＋需求，
-    // Gemini 先說明決定怎麼調整，再輸出完整新架構，前端做綠增紅刪對照
+    // 已有架構且有需求（例如貼回 Gemini 的審稿建議）→ 走「修改」：原本的出稿提示詞＋現有架構＋需求，
+    // GPT 先說明決定怎麼調整，再輸出完整新架構，前端做綠增紅刪對照
     const isModify = outline.trim() !== '' && (outlineQuotes.length > 0 || outlineInstruction.trim() !== '');
     isModifyRun.current = isModify;
     if (isModify) {
@@ -1914,7 +1914,7 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
       }
     }
     if (outlineInstruction.trim()) {
-      // 修改模式：貼回的內容多半是 GPT 的審稿建議，要求 Gemini 逐條評估取捨，不可照單全收；
+      // 修改模式：貼回的內容多半是 Gemini 的審稿建議，要求 GPT 逐條評估取捨，不可照單全收；
       // 全新出稿：需求欄是寫手自己的要求，維持務必落實
       if (isModify) {
         msg += `\n\n【修改需求（寫手貼回的內容，可能包含另一位審稿 AI 的建議）— 逐條獨立評估，不可照單全收】
@@ -1937,7 +1937,7 @@ ${outlineInstruction.trim()}
     setError(''); setOutlining(true);
     setSuggestedOutline(null); setGeminiNote('');
     if (!isModify) setOutline('');
-    // 修改模式用第一個行首 ## 當分界：之前是 Gemini 的調整說明、之後是新架構
+    // 修改模式用第一個行首 ## 當分界：之前是 GPT 的調整說明、之後是新架構
     const splitNote = (t: string) => { const i = t.search(/^##\s/m); return i >= 0 ? t.slice(0, i).trim() : t.trim(); };
     let buf = '';
     try {
@@ -1955,13 +1955,13 @@ ${outlineInstruction.trim()}
         const newOutline = idx >= 0 ? buf.slice(idx).trim() : '';
         setGeminiNote(cleanNoteText(splitNote(buf)) || '我調整好了，看中間的對照 👇');
         if (newOutline) setSuggestedOutline(newOutline);
-        else setError('Gemini 沒有回傳新的架構，請再按一次「修改架構」。');
+        else setError('GPT 沒有回傳新的架構，請再按一次「修改架構」。');
       }
     } catch (e) { if (runId.current === id) setError(e instanceof Error ? e.message : '產生架構失敗'); }
     finally { if (runId.current === id) setOutlining(false); }
   }
 
-  // 採用 Gemini 調整後的新架構（依勾選結果組出最終架構，覆蓋目錄編輯框，並強制編輯器重新掛載以顯示新值）
+  // 採用 GPT 調整後的新架構（依勾選結果組出最終架構，覆蓋目錄編輯框，並強制編輯器重新掛載以顯示新值）
   function handleAdoptOutline(finalOutline: string) {
     setOutline(finalOutline);
     setEditorKey(k => k + 1);
@@ -1975,7 +1975,7 @@ ${outlineInstruction.trim()}
     onDone(outlineMsg.current, outline, sections);
   }
 
-  // 請 GPT 審稿：只列出調整想法（不重新產生架構），使用者參考後貼回 Gemini 需求欄
+  // 請 Gemini 審稿：只列出調整想法（不重新產生架構），使用者參考後貼回 GPT 需求欄
   async function handleReview() {
     if (!outline.trim()) return;
     setReviewing(true); setError(''); setOutlineEval(''); setEvalCopied(false);
@@ -2016,27 +2016,27 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
 
   return (
     <div className="flex justify-center items-start gap-6">
-      {/* 左玩偶欄：Gemini（架構主筆）＋ 選模型 */}
+      {/* 左玩偶欄：GPT（架構主筆）＋ 選模型 */}
       <aside className="hidden lg:flex flex-col items-center gap-2 w-52 shrink-0 sticky top-6">
         <div className="relative w-full bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-800 leading-relaxed shadow-sm">
           {outlining
-            ? (isModifyRun.current ? (geminiNote || '收到 GPT 兄的建議，讓我決定怎麼調整…') : '讓我想想架構怎麼排…')
+            ? (isModifyRun.current ? (geminiNote || '收到 Gemini 的建議，讓我決定怎麼調整…') : '讓我想想架構怎麼排…')
             : geminiNote
               ? geminiNote
               : (outlineEval && outlineInstruction.trim())
-                ? '好的，已收到 GPT 兄的建議！按下方「修改架構」我來調整 💪'
-                : GEMINI_OUTLINE_LINE}
+                ? '好的，已收到 Gemini 的建議！按下方「修改架構」我來調整 💪'
+                : OUTLINE_DEFAULT_LINE}
           <div className="absolute -bottom-2 left-8 w-3 h-3 bg-blue-50 border-b border-r border-blue-200 rotate-45" />
         </div>
-        <div className={outlining ? 'animate-bounce' : ''}><GeminiLogo className="w-12 h-12" /></div>
-        <span className="text-xs font-semibold text-blue-600">Gemini</span>
+        <div className={`text-[#10A37F] ${outlining ? 'animate-bounce' : ''}`}><OpenAILogo className="w-11 h-11" /></div>
+        <span className="text-xs font-semibold text-blue-600">GPT</span>
         <span className="text-[10px] text-gray-400">架構主筆</span>
         <select
           value={outlineModel}
           onChange={e => setOutlineModel(e.target.value)}
           className="w-full mt-1 border border-blue-200 rounded-lg px-2 py-1.5 text-xs bg-white text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          {GEMINI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          {GPT_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
         <OutlineQuoteInput
           outline={outline}
@@ -2056,7 +2056,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         </button>
         <button
           onClick={() => setShowGeminiPrompt(true)}
-          title="查看／修改 Gemini 出稿提示詞"
+          title="查看／修改 GPT 出稿提示詞"
           className={`w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-blue-200 text-blue-500 bg-white hover:bg-blue-50'}`}
         >
           <EditIcon />出稿提示詞
@@ -2108,7 +2108,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
       {outline && !outlining && (
         <div className="space-y-1.5">
           {suggestedOutline ? (
-            /* Gemini 修改後：綠增紅刪對照直接顯示在架構本身的位置，可逐條勾選要採用哪些，採用後才回到可編輯狀態 */
+            /* GPT 修改後：綠增紅刪對照直接顯示在架構本身的位置，可逐條勾選要採用哪些，採用後才回到可編輯狀態 */
             <>
               <label className="text-xs font-medium text-gray-600">
                 文章架構（<span className="text-green-700">綠＝新增</span>、<span className="text-red-600">紅＝刪除</span>，取消勾選＝該條維持原樣，採用後可編輯）
@@ -2136,25 +2136,25 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
       )}
       </div>
 
-      {/* 右玩偶欄：GPT（審稿顧問）＋ 選模型 ＋ 需求輸入 ＋ 審稿 */}
+      {/* 右玩偶欄：Gemini（審稿顧問）＋ 選模型 ＋ 需求輸入 ＋ 審稿 */}
       <aside className="hidden lg:flex flex-col items-center gap-2 w-56 shrink-0 sticky top-6">
         <div className="relative w-full bg-green-50 border border-green-200 rounded-2xl p-3 text-xs text-green-800 leading-relaxed shadow-sm min-h-[3rem]">
           {reviewing
             ? '讓我從架構看看…🤔'
             : outlineEval
-              ? '想法列在下面了，參考後可以貼回給 Gemini 調整 👇'
-              : GPT_IDLE_LINE}
+              ? '想法列在下面了，參考後可以貼回給 GPT 調整 👇'
+              : REVIEW_IDLE_LINE}
           <div className="absolute -bottom-2 right-8 w-3 h-3 bg-green-50 border-b border-r border-green-200 rotate-45" />
         </div>
-        <div className={`text-[#10A37F] ${reviewing ? 'animate-bounce' : ''}`}><OpenAILogo className="w-11 h-11" /></div>
-        <span className="text-xs font-semibold text-green-600">GPT</span>
+        <div className={reviewing ? 'animate-bounce' : ''}><GeminiLogo className="w-11 h-11" /></div>
+        <span className="text-xs font-semibold text-green-600">Gemini</span>
         <span className="text-[10px] text-gray-400">審稿顧問</span>
         <select
           value={reviewModel}
           onChange={e => setReviewModel(e.target.value)}
           className="w-full mt-1 border border-green-200 rounded-lg px-2 py-1.5 text-xs bg-white text-green-800 focus:outline-none focus:ring-2 focus:ring-green-300"
         >
-          {GPT_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          {GEMINI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
         <OutlineQuoteInput
           outline={outline}
@@ -2170,20 +2170,20 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
           disabled={reviewing || !outline.trim()}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
         >
-          {reviewing && <Spinner />}{reviewing ? '審稿中…' : <span className="flex items-center gap-1.5"><OpenAILogo className="w-3.5 h-3.5" /> 請 GPT 審稿</span>}
+          {reviewing && <Spinner />}{reviewing ? '審稿中…' : <span className="flex items-center gap-1.5"><GeminiLogo className="w-3.5 h-3.5" /> 請 Gemini 審稿</span>}
         </button>
         <button
           onClick={() => setShowGptPrompt(true)}
-          title="查看／修改 GPT 審稿提示詞"
+          title="查看／修改 Gemini 審稿提示詞"
           className={`w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineReviewOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-green-200 text-green-600 bg-white hover:bg-green-50'}`}
         >
           <EditIcon />審稿提示詞
         </button>
-        {/* GPT 架構審稿想法：列在自己欄位下方，參考後可複製貼回左邊 Gemini 需求欄重新出稿 */}
+        {/* Gemini 架構審稿想法：列在自己欄位下方，參考後可複製貼回左邊 GPT 需求欄重新出稿 */}
         {(reviewing || outlineEval) ? (
           <div className="w-full space-y-2 border-t border-gray-100 pt-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-green-700">
-              <OpenAILogo className="w-3.5 h-3.5" /> GPT 架構審稿{reviewing && <Spinner />}
+              <GeminiLogo className="w-3.5 h-3.5" /> Gemini 架構審稿{reviewing && <Spinner />}
             </div>
             {outlineEval && (
               <p className="text-xs text-gray-600 bg-green-50 rounded-lg px-2.5 py-2 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">{outlineEval}</p>
@@ -2199,7 +2199,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
                   className="w-full px-3 py-1.5 rounded-lg border border-green-200 text-green-700 text-xs hover:bg-green-50 transition-colors">
                   {evalCopied ? '已複製 ✓' : '複製想法'}
                 </button>
-                <p className="text-[10px] text-gray-400">參考想法後，貼到左邊 Gemini 的需求欄再按「修改架構」。</p>
+                <p className="text-[10px] text-gray-400">參考想法後，貼到左邊 GPT 的需求欄再按「修改架構」。</p>
               </>
             )}
           </div>
@@ -2940,7 +2940,7 @@ function stripMd(text: string): string {
     .replace(/\*([^*\n]+)\*/g, '$1');
 }
 
-// Gemini 泡泡的取捨說明：提示詞已要求純文字，但模型偶爾還是會吐 Markdown，前端一律洗乾淨再顯示
+// GPT 泡泡的取捨說明：提示詞已要求純文字，但模型偶爾還是會吐 Markdown，前端一律洗乾淨再顯示
 function cleanNoteText(t: string): string {
   return stripMd(t)
     .replace(/^[-*・]\s+/gm, '')   // 條列符號
