@@ -10,6 +10,15 @@
 四步驟精靈：取得 HTML → 貼入清洗 → 替換圖片 → 輸出上架版本。
 客戶設定存於 localStorage。
 
+### 寫手流程工具 `/writer/compose`
+
+四階段精靈：SEO 分析 → 文章架構（雙AI：GPT 主筆出稿、Gemini 審稿顧問）→ 段落撰寫 → AI 校稿（含「去AI味檢查」）。
+
+**2026-08-18**：
+- [x] 雙AI校稿腳色互換：原本 Gemini 主筆出稿／GPT 審稿，改成 GPT 主筆出稿／Gemini 審稿（含玩偶 logo／台詞／下拉選單／送給審稿模型的 prompt 內文全部同步互換），`app/writer/compose/page.tsx`
+- [x] Stage3 段落生成「死板／機械感」診斷：對照 dev-diary skill 發現不是模型不夠聰明，是 `DEPTH_INSTRUCTIONS` 篇幅規則用清單式硬規定（「深度」要求數字/步驟/案例/注意事項至少塞兩項），逼 AI 打勾湊項目而非判斷內容。已鬆綁「深度」「標準」兩級改成交 AI 依內容判斷
+- [ ] 待辦：目前懷疑 Stage3 死板感真正差異在於——dev-diary 的反AI味規則（禁用詞、禁句型、去工整化）是**寫的當下就塞進 prompt**，寫手工具的「去AI味檢查」只在 Stage4 事後檢查，Stage3 生成當下完全沒有這些規則引導。下一步可考慮把去AI味規則直接注入 `buildSectionPromptByStyle`，讓 AI 邊寫邊避開，而非寫完才抓包。細節待小積木確認方向後再動手
+
 ### IG 監控報告 `/ig`
 查看追蹤帳號近期貼文成效（愛心、留言、觀看數、AI 摘要）。
 資料來源由 N8N 寫入 Google Sheets CSV。
