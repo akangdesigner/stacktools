@@ -100,6 +100,8 @@ export default function RecommendationPage() {
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [cardTemplate, setCardTemplate] = useState("general");
   const [confirming, setConfirming] = useState(false);
+  // 第二階段拆兩步顯示：先確認品牌與網址，下一步才確認大綱，避免單一畫面塞太多東西
+  const [confirmStep, setConfirmStep] = useState<"brands" | "outline">("brands");
 
   // 品牌深度研究結果（第三階段確認用）
   const [brandDetailsList, setBrandDetailsList] = useState<BrandDetail[]>([]);
@@ -287,6 +289,7 @@ export default function RecommendationPage() {
             Array.isArray(data?.data?.titleSuggestions) ? data.data.titleSuggestions : []
           );
           setConfirmTitle(form.title);
+          setConfirmStep("brands");
           setPhase("awaiting_confirm");
         } else if (data?.status === "researching_details") {
           setPhase("researching_details");
@@ -438,8 +441,12 @@ export default function RecommendationPage() {
             </div>
           ) : phase === "awaiting_confirm" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <h2 className="text-sm font-semibold text-gray-700">第二階段：確認品牌與大綱</h2>
+              <h2 className="text-sm font-semibold text-gray-700">
+                第二階段：確認{confirmStep === "brands" ? "品牌與網址" : "文章大綱"}
+              </h2>
 
+              {confirmStep === "brands" ? (
+              <>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-gray-600">
                   標題（可編輯，或點下方 AI 建議套用）
@@ -534,6 +541,16 @@ export default function RecommendationPage() {
                 </p>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setConfirmStep("outline")}
+                className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+              >
+                下一步：確認大綱
+              </button>
+              </>
+              ) : (
+              <>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">
@@ -610,14 +627,25 @@ export default function RecommendationPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleConfirmGenerate}
-                disabled={confirming}
-                className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {confirming ? "送出中…" : "確認，開始生成文章"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmStep("brands")}
+                  className="py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  上一步
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmGenerate}
+                  disabled={confirming}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {confirming ? "送出中…" : "確認，開始生成文章"}
+                </button>
+              </div>
+              </>
+              )}
             </div>
           ) : phase === "researching_details" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
