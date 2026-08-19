@@ -317,13 +317,18 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   root.querySelectorAll("a").forEach((a) => {
     const existing = a.getAttribute("style") || "";
     const isBtn = existing.includes("background-color") || existing.includes("padding");
+    // m2 的 .cta-button class 有自己寫死的 15px 設計，不用通用字級蓋過去
+    const isM2CtaButton = isM2 && a.classList.contains("cta-button");
     if (isBtn && !client.stripButtonStyle) {
       a.setAttribute("style", mergeStyles(existing, {
         "background-color": client.buttonBgColor,
         color: client.buttonTextColor,
         "border-radius": client.buttonBorderRadius,
         padding: client.buttonPadding,
+        ...(isM2CtaButton ? {} : { "font-size": client.paragraphFontSize }),
       }));
+    } else if (isM2CtaButton) {
+      // 跳過通用連結字級／內部殘留字級清理，維持 m2 專屬設計
     } else {
       if (client.stripLinkBold) {
         a.querySelectorAll("strong, b").forEach((node) => {
@@ -338,16 +343,18 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
         color: client.linkColor,
         "text-decoration": client.linkTextDecoration,
         "font-weight": client.linkFontWeight,
+        "font-size": client.paragraphFontSize,
       }));
-      // 移除內部元素（span、strong、font...）上殘留的顏色，避免蓋掉連結顏色
+      // 移除內部元素（span、strong、font...）上殘留的顏色／字級，避免蓋掉連結顏色與字級
       a.querySelectorAll("*").forEach((node) => {
         // 舊式 <font color="..."> 等 HTML 屬性顏色，會直接蓋掉 <a> 的顏色，需移除
         if (node.getAttribute("color")) node.removeAttribute("color");
         const nodeStyle = node.getAttribute("style") || "";
         if (!nodeStyle) return;
         const nodeMap = parseStyleString(nodeStyle);
-        if (!nodeMap.has("color")) return;
+        if (!nodeMap.has("color") && !nodeMap.has("font-size")) return;
         nodeMap.delete("color");
+        nodeMap.delete("font-size");
         const cleanedNode = serializeStyleMap(nodeMap);
         if (cleanedNode) node.setAttribute("style", cleanedNode);
         else node.removeAttribute("style");
