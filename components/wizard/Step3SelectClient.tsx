@@ -18,6 +18,7 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
   const [modalOpen, setModalOpen] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState("");
+  const [stripSpecialChars, setStripSpecialChars] = useState(true);
 
   const selected = clients.find((c) => c.id === selectedClientId);
 
@@ -128,9 +129,22 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
 
       {/* Article slug for TOC anchors */}
       <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-gray-700">
-          文章 Slug <span className="text-gray-400 font-normal">（選填，用於目錄錨點連結）</span>
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="block text-sm font-medium text-gray-700">
+            文章 Slug <span className="text-gray-400 font-normal">（選填，用於目錄錨點連結）</span>
+          </label>
+          {selected?.blogBaseUrl && (
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={stripSpecialChars}
+                onChange={(e) => setStripSpecialChars(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              消除特殊符號
+            </label>
+          )}
+        </div>
         {selected?.blogBaseUrl ? (
           <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 bg-white">
             <span className="px-3 py-2 text-sm text-gray-400 bg-gray-50 border-r border-gray-300 whitespace-nowrap">
@@ -139,7 +153,13 @@ export function Step3SelectClient({ selectedClientId, onSelect, articleSlug, onA
             <input
               type="text"
               value={articleSlug}
-              onChange={(e) => onArticleSlugChange(e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}-]/gu, ""))}
+              onChange={(e) =>
+                onArticleSlugChange(
+                  stripSpecialChars
+                    ? e.target.value.toLowerCase().replace(/\s+/g, "-").replace(/[^\p{L}\p{N}-]/gu, "")
+                    : e.target.value
+                )
+              }
               placeholder="分泌物顏色怎麼看"
               className="flex-1 px-3 py-2 text-sm focus:outline-none bg-white placeholder-gray-400"
             />
