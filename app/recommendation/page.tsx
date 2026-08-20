@@ -29,7 +29,7 @@ function parseOutlineText(text: string): OutlineSection[] {
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
     if (!line) continue;
-    if (/^\d+\.\d+\./.test(line)) {
+    if (/^\d+\.\d+\.?/.test(line)) {
       if (current) current.h3s.push(line);
     } else {
       current = { id: crypto.randomUUID(), h2: line, h3s: [] };
