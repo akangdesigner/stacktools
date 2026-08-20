@@ -39,11 +39,14 @@ export async function generateTitleSuggestions(
   const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
   const brandNames = brands.map((b) => b.brand_name).filter(Boolean).slice(0, 8).join('、');
 
+  const currentYear = new Date().getFullYear();
+
   const prompt = `這是一篇推薦型文章，搜尋主題：「${input.searchTerm}」，主要關鍵字：「${input.keywords}」。
 使用者原本輸入的標題參考：「${input.title}」
 調查到的相關品牌：${brandNames || '（無）'}
+現在是西元 ${currentYear} 年。
 
-請依據以上資訊，提出 3 個更有吸引力、符合推薦型文章慣例（例如「精選/推薦 N 家」「怎麼選」「完整比較」等）的標題建議，主題要與原標題一致。
+請依據以上資訊，提出 3 個更有吸引力、符合推薦型文章慣例（例如「精選/推薦 N 家」「怎麼選」「完整比較」等）的標題建議，主題要與原標題一致。若標題要放年份，只能用 ${currentYear}，不可使用其他年份。
 
 只回傳 JSON 陣列，不要有其他文字：
 ["標題1", "標題2", "標題3"]`;

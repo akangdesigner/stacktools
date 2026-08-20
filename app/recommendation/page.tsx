@@ -191,6 +191,24 @@ export default function RecommendationPage() {
     }
   }
 
+  async function handleBackToConfirm() {
+    if (!jobId) return;
+    setError("");
+    try {
+      const res = await fetch("/api/recommendation/back", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "發生錯誤");
+      setConfirmStep("brands");
+      setPhase("awaiting_confirm");
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   async function handleConfirmFinalGenerate() {
     if (!jobId) return;
     setFinalConfirming(true);
@@ -685,14 +703,24 @@ export default function RecommendationPage() {
                   <p className="text-xs text-gray-400 py-2">沒有品牌深度研究資料</p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={handleConfirmFinalGenerate}
-                disabled={finalConfirming}
-                className="w-full py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {finalConfirming ? "送出中…" : "確認，開始生成文章"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleBackToConfirm}
+                  disabled={finalConfirming}
+                  className="py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  上一步，修改品牌/大綱
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmFinalGenerate}
+                  disabled={finalConfirming}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {finalConfirming ? "送出中…" : "確認，開始生成文章"}
+                </button>
+              </div>
             </div>
           ) : phase === "generating" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">

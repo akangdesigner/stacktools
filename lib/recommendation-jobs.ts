@@ -201,6 +201,18 @@ export function confirmBrandsAndStartDetailResearch(
   return readJob(id);
 }
 
+// 使用者在「確認品牌深度研究結果」畫面按下「上一步」：退回品牌／大綱確認畫面重新修改
+export function revertToAwaitingConfirm(id: string): RecommendationJob | null {
+  const prev = readJob(id);
+  if (!prev || prev.status !== "awaiting_final_confirm") return null;
+
+  const now = Date.now();
+  db.prepare(
+    `UPDATE recommendation_jobs SET status = ?, message = ?, updated_at = ? WHERE id = ?`
+  ).run("awaiting_confirm", "已退回品牌與大綱確認，請修改後重新送出", now, id);
+  return readJob(id);
+}
+
 export function getRecommendationJob(id: string): RecommendationJob | null {
   return readJob(id);
 }
