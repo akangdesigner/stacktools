@@ -74,6 +74,7 @@ const CARD_TEMPLATES: { value: string; label: string; hint: string }[] = [
   { value: "general", label: "通用", hint: "產品定位／主要特色／適用場景／官方特色，適合大多數品類" },
   { value: "supplement", label: "保健食品／美妝", hint: "核心成分／劑量／劑型／複方成分／包裝份量／產地" },
   { value: "electronics", label: "3C／家電", hint: "主要規格／核心功能／保固期限／隨附配件" },
+  { value: "service", label: "服務類", hint: "服務定位／收費模式／主要特色／適用場景，適合代操／顧問／教育訓練等服務型品牌" },
 ];
 
 export default function RecommendationPage() {
