@@ -96,6 +96,8 @@ export default function RecommendationPage() {
 
   // 確認面板的可編輯資料
   const [brands, setBrands] = useState<Brand[]>([]);
+  // 找品牌時搜到但沒進正式名單的備選（只有名稱、沒有網址，讓用戶自己判斷要不要換上）
+  const [backupBrands, setBackupBrands] = useState<string[]>([]);
   const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
@@ -126,6 +128,7 @@ export default function RecommendationPage() {
     setPhase("idle");
     setStatusMessage("");
     setBrands([]);
+    setBackupBrands([]);
     setOutlineSections([]);
     setConfirmTitle("");
     setTitleSuggestions([]);
@@ -141,6 +144,7 @@ export default function RecommendationPage() {
     setPhase("idle");
     setStatusMessage("");
     setBrands([]);
+    setBackupBrands([]);
     setOutlineSections([]);
     setConfirmTitle("");
     setTitleSuggestions([]);
@@ -243,6 +247,12 @@ export default function RecommendationPage() {
     setBrands((prev) => [...prev, { brand_name: "", official_url: "" }]);
   }
 
+  // 把備選品牌加進正式名單（網址留空，用戶自己點驗證 icon 查完再貼），並從備選清單移除
+  function applyBackupBrand(name: string) {
+    setBrands((prev) => [...prev, { brand_name: name, official_url: "" }]);
+    setBackupBrands((prev) => prev.filter((b) => b !== name));
+  }
+
   function addH2Section() {
     setOutlineSections((prev) => [...prev, { id: crypto.randomUUID(), h2: "", h3s: [] }]);
   }
@@ -301,6 +311,7 @@ export default function RecommendationPage() {
         }
         if (data?.status === "awaiting_confirm") {
           setBrands(Array.isArray(data?.data?.brands) ? data.data.brands : []);
+          setBackupBrands(Array.isArray(data?.data?.backupBrands) ? data.data.backupBrands : []);
           setOutlineSections(
             parseOutlineText(typeof data?.data?.outline === "string" ? data.data.outline : "")
           );
@@ -341,7 +352,7 @@ export default function RecommendationPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">推薦文生成器</h1>
         <p className="text-gray-500 mt-1 text-sm">
-          填入主題與條件 → 確認品牌與大綱 → AI 生成推薦型文章
+          填入主題與條件 → 確認品牌與大綱 → 確認品牌深度研究 → AI 生成推薦型文章
         </p>
       </div>
 
@@ -456,7 +467,7 @@ export default function RecommendationPage() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 {statusMessage || "正在查詢品牌與生成大綱"}{dots}
               </p>
-              <p className="text-xs text-gray-400">預估完成時間：2～5 分鐘（含品牌媒體/口碑深度研究）</p>
+              <p className="text-xs text-gray-400">預估完成時間：1～3 分鐘（品牌查詢與大綱生成）</p>
             </div>
           ) : phase === "awaiting_confirm" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
@@ -492,7 +503,8 @@ export default function RecommendationPage() {
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="flex gap-4 items-start">
+              <div className="flex-1 space-y-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">
                     品牌清單（可修改、刪除、新增）
@@ -522,6 +534,30 @@ export default function RecommendationPage() {
                         placeholder="官方網址"
                         className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                       />
+                      {brand.official_url && (
+                        <a
+                          href={brand.official_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="開新分頁確認網址是否正確"
+                          className="text-gray-400 hover:text-orange-500 px-1"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="w-4 h-4"
+                          >
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <path d="M15 3h6v6" />
+                            <path d="M10 14 21 3" />
+                          </svg>
+                        </a>
+                      )}
                       <button
                         type="button"
                         onClick={() => removeBrand(i)}
@@ -538,6 +574,28 @@ export default function RecommendationPage() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              {backupBrands.length > 0 && (
+                <div className="w-40 shrink-0 space-y-2">
+                  <label className="text-xs font-medium text-gray-600">
+                    備選品牌（點一下換上）
+                  </label>
+                  <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-1">
+                    {backupBrands.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => applyBackupBrand(name)}
+                        title="加入品牌清單（網址留空，請自己確認後補上）"
+                        className="text-xs text-left px-2 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-600 hover:border-orange-400 hover:text-orange-600 transition-colors"
+                      >
+                        ＋ {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               </div>
 
               <div className="space-y-2">
@@ -640,7 +698,7 @@ export default function RecommendationPage() {
                   ))}
                   {outlineSections.length === 0 && (
                     <p className="text-xs text-gray-400 py-2">
-                      沒有大綱，請點「＋ 新增 H2」手動加入
+                      沒有大綱，請點「＋ 新增大章」手動加入
                     </p>
                   )}
                 </div>

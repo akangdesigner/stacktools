@@ -43,6 +43,7 @@ export interface RecommendationJobInput {
 
 export interface RecommendationJobData {
   brands?: RecommendationBrand[];
+  backupBrands?: string[];
   outline?: string;
   titleSuggestions?: string[];
   references?: string;
