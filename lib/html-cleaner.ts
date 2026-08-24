@@ -453,6 +453,27 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     styleMap.set("background-color", "transparent !important");
     el.setAttribute("style", serializeStyleMap(styleMap));
   });
+  // ── 8.565. 所有客戶：草稿表格（尤其 Elementor 外掛表格）常常沒有任何框線／寬度／間距，
+  // 那些樣式都靠來源站外部 CSS 撐著，貼到目標站後台就完全裸奔、跑版，
+  // 補上基本框線＋100%寬度＋儲存格 padding，讓表格在任何後台都看得出欄位
+  root.querySelectorAll("table").forEach((t) => {
+    const styleMap = parseStyleString(t.getAttribute("style") || "");
+    styleMap.set("border-collapse", "collapse");
+    styleMap.set("width", "100%");
+    styleMap.set("margin", "1.2em 0");
+    t.setAttribute("style", serializeStyleMap(styleMap));
+  });
+  root.querySelectorAll("th, td").forEach((cell) => {
+    const styleMap = parseStyleString(cell.getAttribute("style") || "");
+    styleMap.set("border", "1px solid #e5e5e5");
+    styleMap.set("padding", "12px 16px");
+    styleMap.set("text-align", "left");
+    styleMap.set("vertical-align", "top");
+    if (cell.tagName.toLowerCase() === "th") {
+      styleMap.set("font-weight", "700");
+    }
+    cell.setAttribute("style", serializeStyleMap(styleMap));
+  });
 
   // ── 8.57. 1g 專屬：表格加淺紫框線＋表頭淺底，草稿表格常常沒有邊界看不出欄位
   if (is1g) {
