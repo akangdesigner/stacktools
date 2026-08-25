@@ -199,7 +199,12 @@ function buildAnalyzePrompt(keyword: string, brandName: string, brandUrl: string
     ? `\n\n【品牌網站實際內容（以此為準，不得超出範圍）】\n${brandSiteContent.trim()}`
     : '';
   const body = override.trim() || PROMPT_DEFAULTS.analyze;
+  // 模型不知道現在的真實日期，容易憑訓練資料慣性猜年份（常猜舊一年），標題若帶年份要明講今年是幾年
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
   return `${refBlock}${body}
+
+今天日期：${todayStr}。標題或內容若要提到年份（例如「${now.getFullYear()}年最新」「${now.getFullYear()}推薦」），一律使用今年（西元 ${now.getFullYear()} 年），不要用其他年份。
 
 關鍵字：${keyword}
 品牌名稱：${brandName.trim() || '（未提供）'}
@@ -570,14 +575,17 @@ function parseOutline(text: string): Section[] {
 
 // ── Stream ────────────────────────────────────────────────────────────
 
-// 文章架構環節：GPT 主筆出稿、Gemini 審稿顧問（共用同一把 OpenRouter key，只換 model）
+// 文章架構環節：架構主筆出稿、審稿顧問審稿（共用同一把 OpenRouter key，只換 model）
 const OUTLINE_MODEL = 'openai/gpt-5.2';
-const REVIEW_MODEL = 'google/gemini-2.5-flash';
-// 玩偶下方可切換的模型清單（共用同一把 OpenRouter key）
-const GEMINI_MODELS = [
-  { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+// 審稿顧問預設換成 Claude：內容時效性/真實性要查證的主題（如虛擬貨幣交易所上架狀態）靠審稿顧問呼叫 Tavily 即時查證，
+// Claude 的工具呼叫判斷力較穩，見 /api/writer/outline-review
+const REVIEW_MODEL = 'anthropic/claude-sonnet-5';
+// 玩偶下方可切換的模型清單，跨廠牌，圖示／名稱依選到的模型 provider 動態切換（見 reviewProvider）
+const REVIEW_MODELS = [
+  { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5（可查證即時資訊，推薦）', provider: 'anthropic' as const },
+  { id: 'anthropic/claude-opus-5', label: 'Claude Opus 5', provider: 'anthropic' as const },
+  { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'google' as const },
+  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'google' as const },
 ];
 // 架構主筆可跨廠牌選模型，玩偶圖示／名稱依選到的模型 provider 動態切換（見 outlineProvider）
 const OUTLINE_MODELS = [
@@ -590,7 +598,7 @@ const OUTLINE_MODELS = [
 ];
 // 玩偶台詞
 const OUTLINE_DEFAULT_LINE = '架構初稿排好了！我照 SEO 結構安排，幫你看看順不順～';
-const REVIEW_IDLE_LINE = '要我審稿嗎？在下面打需求或直接按按鈕，我幫你抓架構問題 👀';
+const REVIEW_IDLE_LINE = '要我審稿嗎？時效性內容我會上網查證再給意見，在下面打需求或直接按按鈕 👀';
 
 async function streamAPI(messages: Message[], onChunk: (t: string) => void, model?: string) {
   const res = await fetch('/api/writer/compose', {
@@ -1894,11 +1902,13 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
   const [outlineQuotes, setOutlineQuotes] = useState<string[]>([]);
   const [reviewQuotes, setReviewQuotes] = useState<string[]>([]);
 
-  // Gemini 架構審稿：只列出調整想法，使用者參考後自行貼回 GPT 需求欄重新出稿
+  // 審稿顧問架構審稿：只列出調整想法，使用者參考後自行貼回出稿 AI 需求欄重新出稿
   const [reviewInstruction, setReviewInstruction] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [outlineEval, setOutlineEval] = useState('');
   const [evalCopied, setEvalCopied] = useState(false);
+  // 審稿顧問查證時實際搜尋過的關鍵字，顯示出來讓寫手知道有真的去查、查了什麼
+  const [reviewQueries, setReviewQueries] = useState<string[]>([]);
 
   // GPT 修改架構：先說明決定怎麼調整（顯示在泡泡），再回傳完整新架構，前端做綠增紅刪對照供採用
   const [suggestedOutline, setSuggestedOutline] = useState<string | null>(null);
@@ -1909,8 +1919,11 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
   const [editorKey, setEditorKey] = useState(0);
   const isModifyRun = useRef(false);
 
-  // 玩偶圖示／名稱跟著選到的模型 provider 切換，不綁死 GPT
+  // 玩偶圖示／名稱跟著選到的模型 provider 切換，不綁死 GPT／Gemini
   const outlineProvider = outlineModel.startsWith('anthropic/') ? 'anthropic' : 'openai';
+  const reviewProvider = reviewModel.startsWith('anthropic/') ? 'anthropic' : 'google';
+  const outlineWriterLabel = outlineProvider === 'anthropic' ? 'Claude' : 'GPT';
+  const reviewerLabel = reviewProvider === 'anthropic' ? 'Claude' : 'Gemini';
 
   useEffect(() => { run(); }, []); // 自動開始
 
@@ -1981,7 +1994,7 @@ ${outlineInstruction.trim()}
         const note = cleanNoteText(splitNote(buf)) || '我調整好了，看中間的對照 👇';
         setGeminiNote(note);
         if (newOutline) { setSuggestedOutline(newOutline); setChatLog(log => [...log, { role: 'ai', text: note }]); }
-        else setError(`${outlineProvider === 'anthropic' ? 'Claude' : 'GPT'} 沒有回傳新的架構，請再按一次「修改架構」。`);
+        else setError(`${outlineWriterLabel} 沒有回傳新的架構，請再按一次「修改架構」。`);
       }
     } catch (e) {
       if (runId.current === id) {
@@ -2008,15 +2021,17 @@ ${outlineInstruction.trim()}
     onDone(outlineMsg.current, outline, sections);
   }
 
-  // 請 Gemini 審稿：只列出調整想法（不重新產生架構），使用者參考後貼回 GPT 需求欄
+  // 請審稿顧問審稿：只列出調整想法（不重新產生架構），使用者參考後貼回出稿 AI 需求欄。
+  // 走 /api/writer/outline-review（帶 tavily_search 工具），AI 覺得內容有時效性疑慮會自己先查證再給意見
   async function handleReview() {
     if (!outline.trim()) return;
-    setReviewing(true); setError(''); setOutlineEval(''); setEvalCopied(false);
-    let buf = '';
+    setReviewing(true); setError(''); setOutlineEval(''); setEvalCopied(false); setReviewQueries([]);
     try {
       const structureRules = outlineOverride.trim() || PROMPT_DEFAULTS.outline;
       // 把固定架構規則放進 system message，比塞在 user 內文更有約束力
       const sysMsg = `你是一位資深 SEO 內容主編，正在審閱文章目錄架構並提出調整想法。你提出的每個想法都必須尊重這篇文章既定的「固定架構規則」與「架構底線」：前言、常見問題 FAQ（含固定題數）、總結等固定段落的位置與格式不可被你的建議破壞或刪除，調整想法只能針對中間核心內容區。
+
+你有一個 tavily_search 工具可以查即時網路資訊。若架構內容涉及時效性強或會變動的資訊（例如虛擬貨幣／交易所是否仍上架某幣種、法規或官方公告是否已修改、公司或產品是否仍在營運、價格或排名等會變動的數據），務必先呼叫 tavily_search 查證最新狀況，不要只憑訓練資料的舊印象判斷；查證後若發現架構內容過時或有誤，要在想法中明確指出。跟時效性無關的一般內容不需要查證。
 
 ${STRUCTURE_HARD_RULES}
 
@@ -2032,15 +2047,23 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         structureRules,
         writingGuide,
         reviewOverride: outlineReviewOverride,
-        writerLabel: outlineProvider === 'anthropic' ? 'Claude' : 'GPT',
+        writerLabel: outlineWriterLabel,
       });
-      await streamAPI([
-        { role: 'system', content: sysMsg },
-        { role: 'user', content: prompt },
-      ], chunk => {
-        buf += chunk;
-        setOutlineEval(buf);
-      }, reviewModel);
+      const res = await fetch('/api/writer/outline-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: sysMsg },
+            { role: 'user', content: prompt },
+          ],
+          model: reviewModel,
+        }),
+      });
+      const data = await res.json() as { text?: string; queries?: string[]; error?: string };
+      if (!res.ok || data.error) throw new Error(data.error || '審稿失敗');
+      setOutlineEval(data.text ?? '');
+      setReviewQueries((data.queries ?? []).filter(Boolean));
     } catch (e) {
       setError(e instanceof Error ? e.message : '審稿失敗');
     } finally {
@@ -2054,18 +2077,18 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
       <aside className="hidden lg:flex flex-col items-center gap-2 w-52 shrink-0 sticky top-6">
         <div className="relative w-full bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-800 leading-relaxed shadow-sm">
           {outlining
-            ? (isModifyRun.current ? (geminiNote || '收到 Gemini 的建議，讓我決定怎麼調整…') : '讓我想想架構怎麼排…')
+            ? (isModifyRun.current ? (geminiNote || `收到 ${reviewerLabel} 的建議，讓我決定怎麼調整…`) : '讓我想想架構怎麼排…')
             : geminiNote
               ? geminiNote
               : (outlineEval && outlineInstruction.trim())
-                ? '好的，已收到 Gemini 的建議！按下方「修改架構」我來調整 💪'
+                ? `好的，已收到 ${reviewerLabel} 的建議！按下方「修改架構」我來調整 💪`
                 : OUTLINE_DEFAULT_LINE}
           <div className="absolute -bottom-2 left-8 w-3 h-3 bg-blue-50 border-b border-r border-blue-200 rotate-45" />
         </div>
         <div className={`${outlineProvider === 'anthropic' ? 'text-[#D97757]' : 'text-[#10A37F]'} ${outlining ? 'animate-bounce' : ''}`}>
           {outlineProvider === 'anthropic' ? <ClaudeLogo className="w-11 h-11" /> : <OpenAILogo className="w-11 h-11" />}
         </div>
-        <span className="text-xs font-semibold text-blue-600">{outlineProvider === 'anthropic' ? 'Claude' : 'GPT'}</span>
+        <span className="text-xs font-semibold text-blue-600">{outlineWriterLabel}</span>
         <span className="text-[10px] text-gray-400">架構主筆</span>
         <select
           value={outlineModel}
@@ -2106,7 +2129,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         </button>
         <button
           onClick={() => setShowGeminiPrompt(true)}
-          title={`查看／修改 ${outlineProvider === 'anthropic' ? 'Claude' : 'GPT'} 出稿提示詞`}
+          title={`查看／修改 ${outlineWriterLabel} 出稿提示詞`}
           className={`w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-blue-200 text-blue-500 bg-white hover:bg-blue-50'}`}
         >
           <EditIcon />出稿提示詞
@@ -2186,25 +2209,32 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
       )}
       </div>
 
-      {/* 右玩偶欄：Gemini（審稿顧問）＋ 選模型 ＋ 需求輸入 ＋ 審稿 */}
+      {/* 右玩偶欄：審稿顧問（可跨廠牌選模型，Claude 會查 Tavily 核實時效性）＋ 選模型 ＋ 需求輸入 ＋ 審稿 */}
       <aside className="hidden lg:flex flex-col items-center gap-2 w-56 shrink-0 sticky top-6">
         <div className="relative w-full bg-green-50 border border-green-200 rounded-2xl p-3 text-xs text-green-800 leading-relaxed shadow-sm min-h-[3rem]">
           {reviewing
-            ? '讓我從架構看看…🤔'
+            ? '讓我從架構看看，需要的話先上網查證…🤔'
             : outlineEval
-              ? '想法列在下面了，參考後可以貼回給 GPT 調整 👇'
+              ? `想法列在下面了，參考後可以貼回給 ${outlineWriterLabel} 調整 👇`
               : REVIEW_IDLE_LINE}
           <div className="absolute -bottom-2 right-8 w-3 h-3 bg-green-50 border-b border-r border-green-200 rotate-45" />
         </div>
-        <div className={reviewing ? 'animate-bounce' : ''}><GeminiLogo className="w-11 h-11" /></div>
-        <span className="text-xs font-semibold text-green-600">Gemini</span>
+        <div className={reviewing ? 'animate-bounce' : ''}>
+          {reviewProvider === 'anthropic' ? <ClaudeLogo className="w-11 h-11" /> : <GeminiLogo className="w-11 h-11" />}
+        </div>
+        <span className="text-xs font-semibold text-green-600">{reviewerLabel}</span>
         <span className="text-[10px] text-gray-400">審稿顧問</span>
         <select
           value={reviewModel}
           onChange={e => setReviewModel(e.target.value)}
           className="w-full mt-1 border border-green-200 rounded-lg px-2 py-1.5 text-xs bg-white text-green-800 focus:outline-none focus:ring-2 focus:ring-green-300"
         >
-          {GEMINI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <optgroup label="Claude（Anthropic，可查證即時資訊）">
+            {REVIEW_MODELS.filter(m => m.provider === 'anthropic').map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
+          <optgroup label="Gemini（Google）">
+            {REVIEW_MODELS.filter(m => m.provider === 'google').map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
         </select>
         <OutlineQuoteInput
           outline={outline}
@@ -2220,21 +2250,24 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
           disabled={reviewing || !outline.trim()}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
         >
-          {reviewing && <Spinner />}{reviewing ? '審稿中…' : <span className="flex items-center gap-1.5"><GeminiLogo className="w-3.5 h-3.5" /> 請 Gemini 審稿</span>}
+          {reviewing && <Spinner />}{reviewing ? '審稿中…' : <span className="flex items-center gap-1.5">{reviewProvider === 'anthropic' ? <ClaudeLogo className="w-3.5 h-3.5" /> : <GeminiLogo className="w-3.5 h-3.5" />} 請 {reviewerLabel} 審稿</span>}
         </button>
         <button
           onClick={() => setShowGptPrompt(true)}
-          title="查看／修改 Gemini 審稿提示詞"
+          title={`查看／修改 ${reviewerLabel} 審稿提示詞`}
           className={`w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineReviewOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-green-200 text-green-600 bg-white hover:bg-green-50'}`}
         >
           <EditIcon />審稿提示詞
         </button>
-        {/* Gemini 架構審稿想法：列在自己欄位下方，參考後可複製貼回左邊 GPT 需求欄重新出稿 */}
+        {/* 架構審稿想法：列在自己欄位下方，參考後可複製貼回左邊出稿 AI 需求欄重新出稿 */}
         {(reviewing || outlineEval) ? (
           <div className="w-full space-y-2 border-t border-gray-100 pt-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-green-700">
-              <GeminiLogo className="w-3.5 h-3.5" /> Gemini 架構審稿{reviewing && <Spinner />}
+              {reviewProvider === 'anthropic' ? <ClaudeLogo className="w-3.5 h-3.5" /> : <GeminiLogo className="w-3.5 h-3.5" />} {reviewerLabel} 架構審稿{reviewing && <Spinner />}
             </div>
+            {reviewQueries.length > 0 && (
+              <p className="text-[10px] text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5 leading-relaxed">🔍 已上網查證：{reviewQueries.join('、')}</p>
+            )}
             {outlineEval && (
               <p className="text-xs text-gray-600 bg-green-50 rounded-lg px-2.5 py-2 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">{outlineEval}</p>
             )}
@@ -2249,7 +2282,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
                   className="w-full px-3 py-1.5 rounded-lg border border-green-200 text-green-700 text-xs hover:bg-green-50 transition-colors">
                   {evalCopied ? '已複製 ✓' : '複製想法'}
                 </button>
-                <p className="text-[10px] text-gray-400">參考想法後，貼到左邊 GPT 的需求欄再按「修改架構」。</p>
+                <p className="text-[10px] text-gray-400">參考想法後，貼到左邊 {outlineWriterLabel} 的需求欄再按「修改架構」。</p>
               </>
             )}
           </div>
