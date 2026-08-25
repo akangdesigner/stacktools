@@ -525,14 +525,14 @@ export default function RecommendationPage() {
                         value={brand.brand_name}
                         onChange={(e) => updateBrand(i, "brand_name", e.target.value)}
                         placeholder="品牌名稱"
-                        className="w-2/5 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        className="w-2/5 min-w-[110px] shrink-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                       />
                       <input
                         type="text"
                         value={brand.official_url}
                         onChange={(e) => updateBrand(i, "official_url", e.target.value)}
                         placeholder="官方網址"
-                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                       />
                       {brand.official_url && (
                         <a
