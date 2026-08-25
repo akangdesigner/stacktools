@@ -109,7 +109,7 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 【固定結構規則 — 必須嚴格遵守】
 文章架構固定為以下順序，不得更改：
 1. 第一個 H2：標題固定為「前言」，不要加任何 H3，直接是短段落
-2. 中間 3–5 個 H2：核心內容段落，依搜尋意圖排列，每個 H2 底下有 2–4 個 H3
+2. 中間 3–5 個 H2：核心內容段落，依搜尋意圖排列，每個 H2 底下有 1–5 個 H3，實際拆幾個要依這個 H2 的內容比重判斷——內容豐富就多拆幾個小節，內容單薄就少拆甚至只留 1 個，不要每個 H2 都湊同一個數字
 3. 倒數第二個 H2：常見問題 FAQ，固定列出 5 個 H3（每個 H3 是一個常見問題的標題）
 4. 最後一個 H2：總結，不需要 H3
 
@@ -185,7 +185,7 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 const STRUCTURE_HARD_RULES = `【架構底線 — 硬性限制，任何需求或建議都不可越線】
 ・第一個 H2 固定為「前言」（無 H3）、倒數第二個 H2 固定為常見問題 FAQ（固定 5 個 H3）、最後一個 H2 固定為總結（無 H3）
 ・中間核心內容 H2 共 3–5 個
-・每個核心 H2 底下 2–4 個 H3：內容再多也不可超過 4 個，太多就拆成新的 H2 或合併相近主題
+・每個核心 H2 底下 1–5 個 H3：依這個 H2 的內容比重決定拆幾個，不要每個 H2 都固定湊同一個數字；內容再多也不可超過 5 個，太多就拆成新的 H2 或合併相近主題
 ・需求或建議若違反以上限制，以底線為準，自行調整成合規的做法`;
 
 // ── Prompts ───────────────────────────────────────────────────────────
@@ -461,9 +461,9 @@ NEW: （修改後的替換文字，長度與 OLD 對應；若整句要刪除則�
 
 // Gemini 審「目錄架構」：審稿角度模板可個人化（outline_review）。Gemini 只列出調整想法，
 // 不重新產生架構——使用者參考想法後自行貼回 GPT 的需求欄重新出稿。輸出格式尾段固定，不開放編輯
-function buildOutlineReviewPrompt(outline: string, opts: { title: string; instruction: string; structureRules: string; writingGuide: string; reviewOverride?: string }): string {
+function buildOutlineReviewPrompt(outline: string, opts: { title: string; instruction: string; structureRules: string; writingGuide: string; reviewOverride?: string; writerLabel?: string }): string {
   const reviewBody = (opts.reviewOverride ?? '').trim() || PROMPT_DEFAULTS.outline_review;
-  return `你是一位資深 SEO 內容主編，正在審核另一個 AI（GPT）排的「文章目錄架構」。
+  return `你是一位資深 SEO 內容主編，正在審核另一個 AI（${opts.writerLabel ?? 'GPT'}）排的「文章目錄架構」。
 
 文章標題：${opts.title}
 
@@ -485,7 +485,7 @@ ${opts.instruction.trim()
   : ''}${reviewBody}
 
 輸出格式（嚴格遵守）：
-把你的審稿想法逐條列出（每條用「- 」開頭），具體說明要調整哪個 H2/H3、怎麼調整、為什麼；除了條列符號外不要使用任何 Markdown 標記（不要粗體、不要標題、不要分隔線），每條控制在兩句話以內。寫手會把這些想法貼回給出稿 AI 重新產生架構，所以每條想法都必須具體可執行，且不得違反上面的固定架構規則與架構底線（例如一個 H2 底下最多 4 個 H3，想補的內容太多就建議拆成新的 H2）。絕對不要自己輸出新的目錄架構，不要出現 ## 或 ### 開頭的行。若架構已經很好不需要調整，直接說明理由即可。繁體中文輸出。`;
+把你的審稿想法逐條列出（每條用「- 」開頭），具體說明要調整哪個 H2/H3、怎麼調整、為什麼；除了條列符號外不要使用任何 Markdown 標記（不要粗體、不要標題、不要分隔線），每條控制在兩句話以內。寫手會把這些想法貼回給出稿 AI 重新產生架構，所以每條想法都必須具體可執行，且不得違反上面的固定架構規則與架構底線（例如一個 H2 底下最多 5 個 H3，且要依內容比重決定拆幾個，想補的內容太多就建議拆成新的 H2）。絕對不要自己輸出新的目錄架構，不要出現 ## 或 ### 開頭的行。若架構已經很好不需要調整，直接說明理由即可。繁體中文輸出。`;
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────
@@ -571,7 +571,7 @@ function parseOutline(text: string): Section[] {
 // ── Stream ────────────────────────────────────────────────────────────
 
 // 文章架構環節：GPT 主筆出稿、Gemini 審稿顧問（共用同一把 OpenRouter key，只換 model）
-const OUTLINE_MODEL = 'openai/gpt-4o';
+const OUTLINE_MODEL = 'openai/gpt-5.2';
 const REVIEW_MODEL = 'google/gemini-2.5-flash';
 // 玩偶下方可切換的模型清單（共用同一把 OpenRouter key）
 const GEMINI_MODELS = [
@@ -579,11 +579,14 @@ const GEMINI_MODELS = [
   { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
 ];
-const GPT_MODELS = [
-  { id: 'openai/gpt-4o', label: 'GPT-4o' },
-  { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini' },
-  { id: 'openai/gpt-4.1', label: 'GPT-4.1' },
-  { id: 'openai/gpt-4.1-mini', label: 'GPT-4.1 mini' },
+// 架構主筆可跨廠牌選模型，玩偶圖示／名稱依選到的模型 provider 動態切換（見 outlineProvider）
+const OUTLINE_MODELS = [
+  { id: 'openai/gpt-5.2', label: 'GPT-5.2（最新旗艦，推薦）', provider: 'openai' as const },
+  { id: 'openai/gpt-5.1', label: 'GPT-5.1', provider: 'openai' as const },
+  { id: 'openai/gpt-4.1', label: 'GPT-4.1', provider: 'openai' as const },
+  { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini（便宜快速）', provider: 'openai' as const },
+  { id: 'anthropic/claude-opus-5', label: 'Claude Opus 5（規則服從度最高）', provider: 'anthropic' as const },
+  { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', provider: 'anthropic' as const },
 ];
 // 玩偶台詞
 const OUTLINE_DEFAULT_LINE = '架構初稿排好了！我照 SEO 結構安排，幫你看看順不順～';
@@ -1852,6 +1855,15 @@ function OpenAILogo({ className = 'w-11 h-11' }: { className?: string }) {
   );
 }
 
+// fill 用 currentColor，顏色跟著外層文字走
+function ClaudeLogo({ className = 'w-11 h-11' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Claude">
+      <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
+    </svg>
+  );
+}
+
 // ── Stage 2 ───────────────────────────────────────────────────────────
 
 function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsights, outlineOverride, onSaveOutlineOverride, outlineReviewOverride, onSaveOutlineReviewOverride, onBack, onDone }: {
@@ -1891,9 +1903,14 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
   // GPT 修改架構：先說明決定怎麼調整（顯示在泡泡），再回傳完整新架構，前端做綠增紅刪對照供採用
   const [suggestedOutline, setSuggestedOutline] = useState<string | null>(null);
   const [geminiNote, setGeminiNote] = useState('');
+  // 對話紀錄：每輪「寫手提的需求」與「GPT 的調整說明」都留著，往下疊，不覆蓋
+  const [chatLog, setChatLog] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
   // OutlineEditor 內部 state 只在掛載時初始化，採用新架構後用這個 key 強制重新掛載以反映新值
   const [editorKey, setEditorKey] = useState(0);
   const isModifyRun = useRef(false);
+
+  // 玩偶圖示／名稱跟著選到的模型 provider 切換，不綁死 GPT
+  const outlineProvider = outlineModel.startsWith('anthropic/') ? 'anthropic' : 'openai';
 
   useEffect(() => { run(); }, []); // 自動開始
 
@@ -1904,6 +1921,14 @@ function Stage2({ title, analyzeMsg, analysisResult, writingGuide, selectedInsig
     // GPT 先說明決定怎麼調整，再輸出完整新架構，前端做綠增紅刪對照
     const isModify = outline.trim() !== '' && (outlineQuotes.length > 0 || outlineInstruction.trim() !== '');
     isModifyRun.current = isModify;
+    // 對話紀錄：送出前先把這輪需求疊進紀錄、清空輸入框，讓輸入框像聊天室一樣送出即清空
+    if (isModify) {
+      const quotedLabel = outlineQuotes.length > 0 ? `（局部改：${outlineQuotes.length} 段）` : '';
+      const userLogText = `${outlineInstruction.trim()}${quotedLabel}`.trim();
+      if (userLogText) setChatLog(log => [...log, { role: 'user', text: userLogText }]);
+      setOutlineInstruction('');
+      setOutlineQuotes([]);
+    }
     if (isModify) {
       msg += `\n\n【目前已有的完整架構】\n${outline}`;
       if (outlineQuotes.length > 0) {
@@ -1953,11 +1978,18 @@ ${outlineInstruction.trim()}
       if (isModify && runId.current === id) {
         const idx = buf.search(/^##\s/m);
         const newOutline = idx >= 0 ? buf.slice(idx).trim() : '';
-        setGeminiNote(cleanNoteText(splitNote(buf)) || '我調整好了，看中間的對照 👇');
-        if (newOutline) setSuggestedOutline(newOutline);
-        else setError('GPT 沒有回傳新的架構，請再按一次「修改架構」。');
+        const note = cleanNoteText(splitNote(buf)) || '我調整好了，看中間的對照 👇';
+        setGeminiNote(note);
+        if (newOutline) { setSuggestedOutline(newOutline); setChatLog(log => [...log, { role: 'ai', text: note }]); }
+        else setError(`${outlineProvider === 'anthropic' ? 'Claude' : 'GPT'} 沒有回傳新的架構，請再按一次「修改架構」。`);
       }
-    } catch (e) { if (runId.current === id) setError(e instanceof Error ? e.message : '產生架構失敗'); }
+    } catch (e) {
+      if (runId.current === id) {
+        const errMsg = e instanceof Error ? e.message : '產生架構失敗';
+        setError(errMsg);
+        if (isModify) setChatLog(log => [...log, { role: 'ai', text: `⚠️ 失敗：${errMsg}` }]);
+      }
+    }
     finally { if (runId.current === id) setOutlining(false); }
   }
 
@@ -1967,6 +1999,7 @@ ${outlineInstruction.trim()}
     setEditorKey(k => k + 1);
     setSuggestedOutline(null);
     setGeminiNote(c => (c ? `${c}（已採用 ✅）` : '已採用 ✅'));
+    setChatLog(log => log.map((m, i) => i === log.length - 1 && m.role === 'ai' ? { ...m, text: `${m.text}（已採用 ✅）` } : m));
   }
 
   function confirm() {
@@ -1999,6 +2032,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         structureRules,
         writingGuide,
         reviewOverride: outlineReviewOverride,
+        writerLabel: outlineProvider === 'anthropic' ? 'Claude' : 'GPT',
       });
       await streamAPI([
         { role: 'system', content: sysMsg },
@@ -2016,7 +2050,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
 
   return (
     <div className="flex justify-center items-start gap-6">
-      {/* 左玩偶欄：GPT（架構主筆）＋ 選模型 */}
+      {/* 左玩偶欄：架構主筆（可跨廠牌選模型）＋ 選模型 */}
       <aside className="hidden lg:flex flex-col items-center gap-2 w-52 shrink-0 sticky top-6">
         <div className="relative w-full bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-800 leading-relaxed shadow-sm">
           {outlining
@@ -2028,16 +2062,32 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
                 : OUTLINE_DEFAULT_LINE}
           <div className="absolute -bottom-2 left-8 w-3 h-3 bg-blue-50 border-b border-r border-blue-200 rotate-45" />
         </div>
-        <div className={`text-[#10A37F] ${outlining ? 'animate-bounce' : ''}`}><OpenAILogo className="w-11 h-11" /></div>
-        <span className="text-xs font-semibold text-blue-600">GPT</span>
+        <div className={`${outlineProvider === 'anthropic' ? 'text-[#D97757]' : 'text-[#10A37F]'} ${outlining ? 'animate-bounce' : ''}`}>
+          {outlineProvider === 'anthropic' ? <ClaudeLogo className="w-11 h-11" /> : <OpenAILogo className="w-11 h-11" />}
+        </div>
+        <span className="text-xs font-semibold text-blue-600">{outlineProvider === 'anthropic' ? 'Claude' : 'GPT'}</span>
         <span className="text-[10px] text-gray-400">架構主筆</span>
         <select
           value={outlineModel}
           onChange={e => setOutlineModel(e.target.value)}
           className="w-full mt-1 border border-blue-200 rounded-lg px-2 py-1.5 text-xs bg-white text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
-          {GPT_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <optgroup label="GPT（OpenAI）">
+            {OUTLINE_MODELS.filter(m => m.provider === 'openai').map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
+          <optgroup label="Claude（Anthropic）">
+            {OUTLINE_MODELS.filter(m => m.provider === 'anthropic').map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </optgroup>
         </select>
+        {chatLog.length > 0 && (
+          <div className="w-full max-h-56 overflow-y-auto space-y-1.5 border border-blue-100 rounded-lg p-2 bg-white">
+            {chatLog.map((m, i) => (
+              <div key={i} className={`text-xs rounded-lg px-2 py-1.5 leading-relaxed whitespace-pre-wrap ${m.role === 'user' ? 'bg-gray-100 text-gray-700' : 'bg-blue-50 text-blue-800'}`}>
+                {m.role === 'user' ? '🙋 ' : '🤖 '}{m.text}
+              </div>
+            ))}
+          </div>
+        )}
         <OutlineQuoteInput
           outline={outline}
           quotes={outlineQuotes}
@@ -2056,7 +2106,7 @@ ${structureRules}${writingGuide.trim() ? `\n\n全域寫作指引：\n${writingGu
         </button>
         <button
           onClick={() => setShowGeminiPrompt(true)}
-          title="查看／修改 GPT 出稿提示詞"
+          title={`查看／修改 ${outlineProvider === 'anthropic' ? 'Claude' : 'GPT'} 出稿提示詞`}
           className={`w-full flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${outlineOverride.trim() ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100' : 'border-blue-200 text-blue-500 bg-white hover:bg-blue-50'}`}
         >
           <EditIcon />出稿提示詞
