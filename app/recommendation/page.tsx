@@ -406,13 +406,14 @@ export default function RecommendationPage() {
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                必須包含品牌
+                必須包含品牌 <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
                 value={form.requiredBrand}
                 onChange={(e) => handleChange("requiredBrand", e.target.value)}
                 placeholder="例：穿透行銷"
+                required
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
             </div>

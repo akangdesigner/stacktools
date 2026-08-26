@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
       jobId,
       callbackUrl,
       brands: cleanedBrands,
+      searchTerm: job.input.searchTerm,
     }
   );
 
