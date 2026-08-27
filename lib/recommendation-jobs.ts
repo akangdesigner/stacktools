@@ -46,6 +46,7 @@ export interface RecommendationJobData {
   backupBrands?: string[];
   outline?: string;
   titleSuggestions?: string[];
+  brandsUrlReady?: boolean;
   references?: string;
   brandDetails?: RecommendationBrandDetail[];
   cardTemplate?: string;
@@ -161,7 +162,8 @@ export function applyStageResult(
     prev.status === "researching" &&
     mergedData.brands &&
     mergedData.outline !== undefined &&
-    mergedData.titleSuggestions !== undefined
+    mergedData.titleSuggestions !== undefined &&
+    mergedData.brandsUrlReady === true
   ) {
     status = "awaiting_confirm";
     nextMessage = message ?? "品牌與大綱已就緒，請確認後開始生成";
