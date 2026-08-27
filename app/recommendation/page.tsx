@@ -98,6 +98,8 @@ export default function RecommendationPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   // 找品牌時搜到但沒進正式名單的備選（只有名稱、沒有網址，讓用戶自己判斷要不要換上）
   const [backupBrands, setBackupBrands] = useState<string[]>([]);
+  // 換上備選品牌後正在即時查官方網址的品牌名稱集合，查完自動移除
+  const [urlLookupLoading, setUrlLookupLoading] = useState<Set<string>>(new Set());
   const [outlineSections, setOutlineSections] = useState<OutlineSection[]>([]);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
@@ -247,10 +249,35 @@ export default function RecommendationPage() {
     setBrands((prev) => [...prev, { brand_name: "", official_url: "" }]);
   }
 
-  // 把備選品牌加進正式名單（網址留空，用戶自己點驗證 icon 查完再貼），並從備選清單移除
-  function applyBackupBrand(name: string) {
+  // 把備選品牌加進正式名單，並從備選清單移除；網址先留空，馬上背景查一次官方網址填回去
+  async function applyBackupBrand(name: string) {
     setBrands((prev) => [...prev, { brand_name: name, official_url: "" }]);
     setBackupBrands((prev) => prev.filter((b) => b !== name));
+
+    setUrlLookupLoading((prev) => new Set(prev).add(name));
+    try {
+      const res = await fetch("/api/recommendation/lookup-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandName: name, searchTerm: form.searchTerm }),
+      });
+      const data = await res.json();
+      if (data?.official_url) {
+        setBrands((prev) =>
+          prev.map((b) =>
+            b.brand_name === name && !b.official_url ? { ...b, official_url: data.official_url } : b
+          )
+        );
+      }
+    } catch {
+      // 查不到就留空，使用者自己貼
+    } finally {
+      setUrlLookupLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+    }
   }
 
   function addH2Section() {
@@ -532,8 +559,9 @@ export default function RecommendationPage() {
                         type="text"
                         value={brand.official_url}
                         onChange={(e) => updateBrand(i, "official_url", e.target.value)}
-                        placeholder="官方網址"
-                        className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        placeholder={urlLookupLoading.has(brand.brand_name) ? "查詢官方網址中…" : "官方網址"}
+                        disabled={urlLookupLoading.has(brand.brand_name)}
+                        className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:bg-gray-50 disabled:text-gray-400"
                       />
                       {brand.official_url && (
                         <a

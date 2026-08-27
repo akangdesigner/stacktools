@@ -298,41 +298,22 @@ async function tavilySearch(query: string): Promise<TavilyResult[]> {
   }
 }
 
-// n8n「品牌查詢」工作流不再找官方網址（原本的 query 常被熱銷型號污染搜不到官網），改本地直接查
-// 品牌清單一到就觸發，跟 generateTitleSuggestions 同一套 fire-and-forget 模式
-export async function findOfficialUrls(
-  jobId: string,
-  input: RecommendationJobInput,
-  brands: RecommendationBrand[]
-): Promise<void> {
+// 單一品牌查官方網址，findOfficialUrls 的迴圈跟「新增/換上備選品牌」的即時查詢都共用這支
+export async function findOfficialUrlForBrand(
+  brandName: string,
+  searchTerm: string
+): Promise<string> {
   const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
 
-  // brandsUrlReady 是進確認畫面的必要條件之一，每個品牌都用自己的 try/catch
-  // 兜底（單一品牌查詢失敗不影響其他品牌），確保迴圈跑完一定會設成 true，
-  // 不會卡在 researching 出不去
-  //
-  // 品牌逐一處理、不平行送出：Tavily 有短時間內請求數限流（跟月額度是兩回事），
-  // 一次 Promise.all 把多個品牌同時炸出去會整批被限流打回空結果
-  // （8/27 實測撞過，明明月額度還有 134 次，一次爆量還是整批失敗）
-  const updated: RecommendationBrand[] = [];
-  for (const brand of brands) {
-    if (brand.official_url) {
-      updated.push(brand);
-      continue;
-    }
+  try {
+    const results = await tavilySearch(`${brandName} ${searchTerm} 熱銷 推薦 官方`);
+    if (!results.length) return '';
 
-    try {
-      const results = await tavilySearch(`${brand.brand_name} ${input.searchTerm} 熱銷 推薦 官方`);
-      if (!results.length) {
-        updated.push(brand);
-        continue;
-      }
+    const listText = results
+      .map((r, i) => `${i + 1}. 標題：${r.title}\n網址：${r.url}\n內容摘要：${(r.content || '').slice(0, 300)}`)
+      .join('\n\n');
 
-      const listText = results
-        .map((r, i) => `${i + 1}. 標題：${r.title}\n網址：${r.url}\n內容摘要：${(r.content || '').slice(0, 300)}`)
-        .join('\n\n');
-
-      const prompt = `你是品牌官方網站驗證員。品牌名稱：「${brand.brand_name}」
+    const prompt = `你是品牌官方網站驗證員。品牌名稱：「${brandName}」
 
 搜尋結果：
 ${listText}
@@ -348,20 +329,45 @@ ${listText}
 
 只回傳 JSON，不要有其他文字：{"official_url": "https://..."}`;
 
-      const raw = await askOpenRouter(prompt, openrouterKey);
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) {
-        console.error(`[findOfficialUrls] ${brand.brand_name} AI 回傳沒有 JSON，原始內容：${raw.slice(0, 300)}`);
-      }
-      const parsed = match ? (JSON.parse(match[0]) as { official_url?: string }) : {};
-      if (!parsed.official_url) {
-        console.error(`[findOfficialUrls] ${brand.brand_name} AI 判斷無夠格網址，Tavily 結果數：${results.length}`);
-      }
-      updated.push({ ...brand, official_url: parsed.official_url || '' });
-    } catch (err) {
-      console.error(`[findOfficialUrls] ${brand.brand_name} 例外：`, err);
-      updated.push(brand);
+    const raw = await askOpenRouter(prompt, openrouterKey);
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) {
+      console.error(`[findOfficialUrlForBrand] ${brandName} AI 回傳沒有 JSON，原始內容：${raw.slice(0, 300)}`);
+      return '';
     }
+    const parsed = JSON.parse(match[0]) as { official_url?: string };
+    if (!parsed.official_url) {
+      console.error(`[findOfficialUrlForBrand] ${brandName} AI 判斷無夠格網址，Tavily 結果數：${results.length}`);
+    }
+    return parsed.official_url || '';
+  } catch (err) {
+    console.error(`[findOfficialUrlForBrand] ${brandName} 例外：`, err);
+    return '';
+  }
+}
+
+// n8n「品牌查詢」工作流不再找官方網址（原本的 query 常被熱銷型號污染搜不到官網），改本地直接查
+// 品牌清單一到就觸發，跟 generateTitleSuggestions 同一套 fire-and-forget 模式
+export async function findOfficialUrls(
+  jobId: string,
+  input: RecommendationJobInput,
+  brands: RecommendationBrand[]
+): Promise<void> {
+  // brandsUrlReady 是進確認畫面的必要條件之一，每個品牌都用自己的 try/catch
+  // 兜底（單一品牌查詢失敗不影響其他品牌），確保迴圈跑完一定會設成 true，
+  // 不會卡在 researching 出不去
+  //
+  // 品牌逐一處理、不平行送出：Tavily 有短時間內請求數限流（跟月額度是兩回事），
+  // 一次 Promise.all 把多個品牌同時炸出去會整批被限流打回空結果
+  // （8/27 實測撞過，明明月額度還有 134 次，一次爆量還是整批失敗）
+  const updated: RecommendationBrand[] = [];
+  for (const brand of brands) {
+    if (brand.official_url) {
+      updated.push(brand);
+      continue;
+    }
+    const official_url = await findOfficialUrlForBrand(brand.brand_name, input.searchTerm);
+    updated.push({ ...brand, official_url });
   }
 
   applyStageResult(jobId, 'brands', { brands: updated, brandsUrlReady: true });
