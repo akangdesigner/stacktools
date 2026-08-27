@@ -9,6 +9,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '缺少 brandName 或 searchTerm' }, { status: 400 });
   }
 
-  const official_url = await findOfficialUrlForBrand(String(brandName).trim(), String(searchTerm).trim());
-  return NextResponse.json({ official_url });
+  const { url, title } = await findOfficialUrlForBrand(String(brandName).trim(), String(searchTerm).trim());
+  return NextResponse.json({ official_url: url, official_url_title: title });
 }

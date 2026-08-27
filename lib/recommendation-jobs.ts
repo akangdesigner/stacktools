@@ -16,6 +16,7 @@ export type RecommendationStage = "brands" | "outline" | "brand_details" | "fina
 export interface RecommendationBrand {
   brand_name: string;
   official_url: string;
+  official_url_title?: string;
 }
 
 export interface RecommendationBrandDetail {

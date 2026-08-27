@@ -286,7 +286,7 @@ async function tavilySearch(query: string): Promise<TavilyResult[]> {
         query,
         search_depth: 'advanced',
         include_answer: false,
-        max_results: 6,
+        max_results: 10,
       }),
       signal: AbortSignal.timeout(20000),
     });
@@ -302,30 +302,44 @@ async function tavilySearch(query: string): Promise<TavilyResult[]> {
 export async function findOfficialUrlForBrand(
   brandName: string,
   searchTerm: string
-): Promise<string> {
+): Promise<{ url: string; title: string }> {
   const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
+  const empty = { url: '', title: '' };
 
   try {
-    const results = await tavilySearch(`${brandName} ${searchTerm} 熱銷 推薦 官方`);
-    if (!results.length) return '';
+    const results = await tavilySearch(`${brandName} ${searchTerm} 官網`);
+    if (!results.length) return empty;
 
     const listText = results
       .map((r, i) => `${i + 1}. 標題：${r.title}\n網址：${r.url}\n內容摘要：${(r.content || '').slice(0, 300)}`)
       .join('\n\n');
 
     const prompt = `你是品牌官方網站驗證員。品牌名稱：「${brandName}」
+文章主題／要推薦的類型：「${searchTerm}」
 
 搜尋結果：
 ${listText}
 
-先從搜尋結果判斷這個品牌賣最好、最多人推薦的是「哪一款具體商品」，再挑出那一款商品的官方網址。這篇文章要能讓讀者點進去直接看到「這一款具體商品」進而購買，規則：
+第一步，先判斷「${searchTerm}」這個主題屬於「具體商品」還是「公司／服務」：
+- 具體商品（保健食品、美妝、3C、家電等零售商品）：目標是這個品牌賣最好、最多人推薦的「那一款具體商品」的官方網址，讓讀者點進去直接看到那一款商品進而購買
+- 公司／服務（行銷代操、顧問、教學、診所、施工、代理商等服務型主題，沒有「規格/購買按鈕」這種商品頁概念）：目標直接是品牌官方網站首頁或服務介紹頁，不用也不可能找到「單一商品頁」
+
+第二步，依照判斷結果套用對應規則：
+
+【具體商品規則】
 1. 最優先：品牌自己網域下、單一具體商品的產品詳情頁（頁面內容是規格/成分/價格/購買按鈕，網址通常帶產品代碼或型號）
 2. 絕對不能選品牌首頁、系列列表頁、分類頁（網址含 collections/category/list/products 這種多品項列表特徵，或內容是條列多款商品而不是單一商品規格介紹）——這些都不算數，除非搜尋結果裡真的完全沒有任何單一商品頁，才可以退而求其次選首頁
-3. 絕對不能選第三方電商平台（蝦皮、momo、PChome、樂天、Yahoo購物）即使頁面寫著「官方旗艦店」「官方授權店」也不行
-4. 絕對不能選人力銀行網站（104、1111、518、cake.me、yes123）
-5. 絕對不能選其他地區站台（.hk、.cn、海外站），只能選台灣站（.tw 或明確是台灣官方站）
-6. 社群連結（FB/IG/LINE/Threads）只在完全沒有其他選項時才選
-7. 找不到夠格的網址就回傳空字串，不要亂猜、不可自行修改品牌名稱
+
+【公司／服務規則】
+1. 直接選品牌官方網站首頁或服務介紹頁即可
+
+【不管哪一種都適用的規則】
+- 絕對不能選其他人寫的部落格文章、評比文、比較文、心得文、新聞報導——即使文章掛在品牌自己的網域下（例如 xxx.com/blog/...），只要內容是「介紹知識／推薦清單」而不是「這個品牌的商品或服務本身」，就不算數
+- 絕對不能選第三方電商平台（蝦皮、momo、PChome、樂天、Yahoo購物）即使頁面寫著「官方旗艦店」「官方授權店」也不行
+- 絕對不能選人力銀行網站（104、1111、518、cake.me、yes123）
+- 絕對不能選其他地區站台（.hk、.cn、海外站），只能選台灣站（.tw 或明確是台灣官方站）
+- 社群連結（FB/IG/LINE/Threads）只在完全沒有其他選項時才選
+- 找不到夠格的網址就回傳空字串，不要亂猜、不可自行修改品牌名稱
 
 只回傳 JSON，不要有其他文字：{"official_url": "https://..."}`;
 
@@ -333,16 +347,19 @@ ${listText}
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
       console.error(`[findOfficialUrlForBrand] ${brandName} AI 回傳沒有 JSON，原始內容：${raw.slice(0, 300)}`);
-      return '';
+      return empty;
     }
     const parsed = JSON.parse(match[0]) as { official_url?: string };
     if (!parsed.official_url) {
       console.error(`[findOfficialUrlForBrand] ${brandName} AI 判斷無夠格網址，Tavily 結果數：${results.length}`);
+      return empty;
     }
-    return parsed.official_url || '';
+    // 標題直接從 Tavily 結果比對回來，不叫 AI 額外輸出，避免多一層幻覺風險
+    const matchedResult = results.find((r) => r.url === parsed.official_url);
+    return { url: parsed.official_url, title: matchedResult?.title || '' };
   } catch (err) {
     console.error(`[findOfficialUrlForBrand] ${brandName} 例外：`, err);
-    return '';
+    return empty;
   }
 }
 
@@ -366,8 +383,8 @@ export async function findOfficialUrls(
       updated.push(brand);
       continue;
     }
-    const official_url = await findOfficialUrlForBrand(brand.brand_name, input.searchTerm);
-    updated.push({ ...brand, official_url });
+    const { url, title } = await findOfficialUrlForBrand(brand.brand_name, input.searchTerm);
+    updated.push({ ...brand, official_url: url, official_url_title: title });
   }
 
   applyStageResult(jobId, 'brands', { brands: updated, brandsUrlReady: true });

@@ -13,6 +13,7 @@ interface FormData {
 interface Brand {
   brand_name: string;
   official_url: string;
+  official_url_title?: string;
 }
 
 interface OutlineSection {
@@ -238,7 +239,14 @@ export default function RecommendationPage() {
   }
 
   function updateBrand(index: number, field: keyof Brand, value: string) {
-    setBrands((prev) => prev.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
+    setBrands((prev) =>
+      prev.map((b, i) => {
+        if (i !== index) return b;
+        // 手動改網址時舊標題已經對不上了，一起清掉避免誤導
+        if (field === "official_url") return { ...b, official_url: value, official_url_title: "" };
+        return { ...b, [field]: value };
+      })
+    );
   }
 
   function removeBrand(index: number) {
@@ -265,7 +273,9 @@ export default function RecommendationPage() {
       if (data?.official_url) {
         setBrands((prev) =>
           prev.map((b) =>
-            b.brand_name === name && !b.official_url ? { ...b, official_url: data.official_url } : b
+            b.brand_name === name && !b.official_url
+              ? { ...b, official_url: data.official_url, official_url_title: data.official_url_title || "" }
+              : b
           )
         );
       }
@@ -563,6 +573,14 @@ export default function RecommendationPage() {
                         disabled={urlLookupLoading.has(brand.brand_name)}
                         className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 disabled:bg-gray-50 disabled:text-gray-400"
                       />
+                      {brand.official_url_title && (
+                        <span
+                          title={brand.official_url_title}
+                          className="w-32 shrink-0 truncate text-xs text-gray-400"
+                        >
+                          {brand.official_url_title}
+                        </span>
+                      )}
                       {brand.official_url && (
                         <a
                           href={brand.official_url}
