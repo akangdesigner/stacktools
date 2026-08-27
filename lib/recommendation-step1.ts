@@ -143,9 +143,16 @@ ${listText}
 
       const raw = await askOpenRouter(prompt, openrouterKey);
       const match = raw.match(/\{[\s\S]*\}/);
+      if (!match) {
+        console.error(`[findOfficialUrls] ${brand.brand_name} AI 回傳沒有 JSON，原始內容：${raw.slice(0, 300)}`);
+      }
       const parsed = match ? (JSON.parse(match[0]) as { official_url?: string }) : {};
+      if (!parsed.official_url) {
+        console.error(`[findOfficialUrls] ${brand.brand_name} AI 判斷無夠格網址，Tavily 結果數：${results.length}`);
+      }
       updated.push({ ...brand, official_url: parsed.official_url || '' });
-    } catch {
+    } catch (err) {
+      console.error(`[findOfficialUrls] ${brand.brand_name} 例外：`, err);
       updated.push(brand);
     }
   }
