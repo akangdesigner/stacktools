@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const outline = body?.outline as string | undefined;
   const title = body?.title as string | undefined;
   const cardTemplate = (body?.cardTemplate as string | undefined) || "general";
-  const categoryId = (body?.categoryId as string | undefined) || "";
+  const categoryName = (body?.categoryName as string | undefined) || "";
 
   if (!jobId) {
     return NextResponse.json({ error: '缺少 jobId' }, { status: 400 });
@@ -69,6 +69,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
 
-  confirmBrandsAndStartDetailResearch(jobId, cleanedBrands, outline.trim(), confirmedTitle, cardTemplate, categoryId);
+  confirmBrandsAndStartDetailResearch(jobId, cleanedBrands, outline.trim(), confirmedTitle, cardTemplate, categoryName);
   return NextResponse.json({ jobId, status: 'researching_details' });
 }
