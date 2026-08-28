@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       references: job.data.references ?? '',
       brandDetails: job.data.brandDetails ?? [],
       cardTemplate: job.data.cardTemplate || 'general',
+      categoryId: job.data.categoryId || '',
     }
   );
 

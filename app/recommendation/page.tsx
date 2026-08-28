@@ -78,6 +78,24 @@ const CARD_TEMPLATES: { value: string; label: string; hint: string }[] = [
   { value: "service", label: "服務類", hint: "服務定位／收費模式／主要特色／適用場景，適合代操／顧問／教育訓練等服務型品牌" },
 ];
 
+// 推薦網（recommend.dg166.com）現有分類，value 是 WordPress 分類 ID；空字串＝未分類
+const CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "未分類" },
+  { value: "4", label: "3C數位" },
+  { value: "7", label: "健康醫療" },
+  { value: "8", label: "美妝保養" },
+  { value: "5", label: "美食" },
+  { value: "14", label: "運動健身" },
+  { value: "6", label: "生活居家" },
+  { value: "13", label: "寵物" },
+  { value: "11", label: "教育學習" },
+  { value: "9", label: "旅遊住宿" },
+  { value: "12", label: "汽車機車" },
+  { value: "10", label: "金融理財" },
+  { value: "15", label: "法律服務" },
+  { value: "18", label: "行銷" },
+];
+
 export default function RecommendationPage() {
   const emptyForm: FormData = {
     title: "",
@@ -105,6 +123,7 @@ export default function RecommendationPage() {
   const [confirmTitle, setConfirmTitle] = useState("");
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [cardTemplate, setCardTemplate] = useState("general");
+  const [categoryId, setCategoryId] = useState("");
   const [confirming, setConfirming] = useState(false);
   // 第二階段拆兩步顯示：先確認品牌與網址，下一步才確認大綱，避免單一畫面塞太多東西
   const [confirmStep, setConfirmStep] = useState<"brands" | "outline">("brands");
@@ -186,6 +205,7 @@ export default function RecommendationPage() {
           outline: serializeOutline(outlineSections),
           title: confirmTitle,
           cardTemplate,
+          categoryId,
         }),
       });
       const data = await res.json();
@@ -395,7 +415,7 @@ export default function RecommendationPage() {
 
       <div className="flex gap-8 items-start">
         {/* 表單 */}
-        <form onSubmit={handleSubmit} className="flex-1 space-y-4">
+        <form onSubmit={handleSubmit} className="w-[380px] shrink-0 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-gray-700">文章設定</h2>
 
@@ -663,6 +683,23 @@ export default function RecommendationPage() {
                 <p className="text-xs text-gray-400">
                   {CARD_TEMPLATES.find((t) => t.value === cardTemplate)?.hint}
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600">
+                  文章分類（發布到 WordPress 時套用，不選就是未分類）
+                </label>
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                >
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <button
