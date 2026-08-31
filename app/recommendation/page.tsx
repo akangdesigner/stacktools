@@ -405,11 +405,21 @@ export default function RecommendationPage() {
 
   return (
     <div className="p-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">推薦文生成器</h1>
-        <p className="text-gray-500 mt-1 text-sm">
-          填入主題與條件 → 確認品牌與大綱 → 確認品牌深度研究 → AI 生成推薦型文章
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">推薦文生成器</h1>
+          <p className="text-gray-500 mt-1 text-sm">
+            填入主題與條件 → 確認品牌與大綱 → 確認品牌深度研究 → AI 生成推薦型文章
+          </p>
+        </div>
+        <a
+          href="https://recommend.dg166.com/wp-admin"
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors"
+        >
+          後台
+        </a>
       </div>
 
       <div className="flex gap-8 items-start">
