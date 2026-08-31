@@ -168,8 +168,42 @@ ${listText}
   const updated = applyStageResult(jobId, 'brands', { brands, backupBrands });
   if (updated?.data.brands) {
     generateTitleSuggestions(jobId, input, updated.data.brands).catch(() => {});
+    generateTags(jobId, input, updated.data.brands).catch(() => {});
     findOfficialUrls(jobId, input, updated.data.brands).catch(() => {});
   }
+}
+
+// 標籤是 spaceA 前端「主題篩選」跟卡片顯示用的，跟品牌清單同一時間點觸發生成，
+// 一篇文章建議 3-5 個，不是每篇打一個代表性標籤，讓小積木在確認畫面看到建議後可以直接改
+export async function generateTags(
+  jobId: string,
+  input: RecommendationJobInput,
+  brands: RecommendationBrand[]
+): Promise<void> {
+  const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
+  const brandNames = brands.map((b) => b.brand_name).filter(Boolean).slice(0, 8).join('、');
+
+  const prompt = `這是一篇推薦型文章，標題：「${input.title}」，搜尋主題：「${input.searchTerm}」，主要關鍵字：「${input.keywords}」。
+文中會提到的品牌／公司：${brandNames || '（無）'}
+
+請提出 3 到 5 個適合當這篇文章「標籤」的關鍵詞，標籤是用來在網站的主題篩選跟相關文章推薦用的，要跟這篇主題直接相關、具體、簡短（2-6 個字），不要跟文章標題重複太多字、也不要是空泛的詞（例如「推薦」「精選」本身不能當標籤）。
+
+只回傳 JSON 陣列，不要有其他文字：
+["標籤1", "標籤2", "標籤3"]`;
+
+  let tags: string[] = [];
+  try {
+    const raw = await askOpenRouter(prompt, openrouterKey);
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error(`標籤建議 AI 回傳格式錯誤：${raw.slice(0, 200)}`);
+    tags = (JSON.parse(match[0]) as string[]).map((t) => String(t || '').trim()).filter(Boolean);
+  } catch (err) {
+    console.error(`[generateTags] jobId=${jobId} 例外：`, err);
+    // 標籤建議是加分功能，失敗不擋流程，使用者仍可在確認畫面手動輸入
+    tags = [];
+  }
+
+  applyStageResult(jobId, 'brands', { tags });
 }
 
 // 大綱生成改本地跑，規則跟 n8n「推薦文-2-大綱生成」workflow 一致：

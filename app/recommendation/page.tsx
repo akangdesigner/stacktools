@@ -123,6 +123,10 @@ export default function RecommendationPage() {
   const [titleSuggestions, setTitleSuggestions] = useState<string[]>([]);
   const [cardTemplate, setCardTemplate] = useState("general");
   const [categoryName, setCategoryName] = useState("");
+  // AI 建議的標籤先存這，確認畫面顯示的可編輯文字（逗號分隔）另外用 tagsInput 管理，
+  // 避免每次 polling 都覆蓋掉小積木正在編輯的內容
+  const [tagsSuggestion, setTagsSuggestion] = useState<string[]>([]);
+  const [tagsInput, setTagsInput] = useState("");
   const [confirming, setConfirming] = useState(false);
   // 第二階段拆兩步顯示：先確認品牌與網址，下一步才確認大綱，避免單一畫面塞太多東西
   const [confirmStep, setConfirmStep] = useState<"brands" | "outline">("brands");
@@ -153,6 +157,8 @@ export default function RecommendationPage() {
     setOutlineSections([]);
     setConfirmTitle("");
     setTitleSuggestions([]);
+    setTagsSuggestion([]);
+    setTagsInput("");
     setWpEditLink("");
     setWpLink("");
   }
@@ -169,6 +175,8 @@ export default function RecommendationPage() {
     setOutlineSections([]);
     setConfirmTitle("");
     setTitleSuggestions([]);
+    setTagsSuggestion([]);
+    setTagsInput("");
     setWpEditLink("");
     setWpLink("");
 
@@ -205,6 +213,10 @@ export default function RecommendationPage() {
           title: confirmTitle,
           cardTemplate,
           categoryName,
+          tags: tagsInput
+            .split(/[,，、]/)
+            .map((t) => t.trim())
+            .filter(Boolean),
         }),
       });
       const data = await res.json();
@@ -374,6 +386,12 @@ export default function RecommendationPage() {
           setTitleSuggestions(
             Array.isArray(data?.data?.titleSuggestions) ? data.data.titleSuggestions : []
           );
+          {
+            const suggested = Array.isArray(data?.data?.tags) ? (data.data.tags as string[]) : [];
+            setTagsSuggestion(suggested);
+            // 只在使用者還沒手動輸入過的時候套用 AI 建議，避免蓋掉已經在改的內容
+            setTagsInput((prev) => (prev ? prev : suggested.join("、")));
+          }
           setConfirmTitle(form.title);
           setConfirmStep("brands");
           setPhase("awaiting_confirm");
@@ -711,6 +729,42 @@ export default function RecommendationPage() {
                     <option key={name} value={name} />
                   ))}
                 </datalist>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600">
+                  文章標籤（3-5 個，AI 已建議，可直接改；用「、」或逗號分隔）
+                </label>
+                <input
+                  type="text"
+                  value={tagsInput}
+                  onChange={(e) => setTagsInput(e.target.value)}
+                  placeholder="例：SEO代操、SEO顧問、行銷公司推薦"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+                {tagsSuggestion.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {tagsSuggestion.map((t, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() =>
+                          setTagsInput((prev) => {
+                            const current = prev
+                              .split(/[,，、]/)
+                              .map((s) => s.trim())
+                              .filter(Boolean);
+                            if (current.includes(t)) return prev;
+                            return [...current, t].join("、");
+                          })
+                        }
+                        className="text-xs px-2 py-1 rounded-full border border-orange-200 text-orange-600 hover:bg-orange-50 text-left"
+                      >
+                        + {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button

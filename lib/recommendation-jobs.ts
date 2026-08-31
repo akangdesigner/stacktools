@@ -52,6 +52,7 @@ export interface RecommendationJobData {
   brandDetails?: RecommendationBrandDetail[];
   cardTemplate?: string;
   categoryName?: string;
+  tags?: string[];
   confirmedTitle?: string;
   wpLink?: string;
   wpEditLink?: string;
@@ -188,7 +189,8 @@ export function confirmBrandsAndStartDetailResearch(
   outline: string,
   confirmedTitle: string,
   cardTemplate?: string,
-  categoryName?: string
+  categoryName?: string,
+  tags?: string[]
 ): RecommendationJob | null {
   const prev = readJob(id);
   if (!prev) return null;
@@ -200,6 +202,7 @@ export function confirmBrandsAndStartDetailResearch(
     confirmedTitle,
     cardTemplate: cardTemplate || prev.data.cardTemplate || "general",
     categoryName: categoryName ?? prev.data.categoryName ?? "",
+    tags: tags ?? prev.data.tags ?? [],
   };
   const now = Date.now();
   db.prepare(

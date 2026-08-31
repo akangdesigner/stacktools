@@ -39,6 +39,9 @@ export async function POST(req: NextRequest) {
       brandDetails: job.data.brandDetails ?? [],
       cardTemplate: job.data.cardTemplate || 'general',
       categoryName: job.data.categoryName || '',
+      tags: job.data.tags ?? [],
+      // 這個生成器本來就只產「推薦文」，不用讓使用者選，固定送這個值給 n8n 打 article_type taxonomy
+      articleType: 'recommendation',
     }
   );
 
