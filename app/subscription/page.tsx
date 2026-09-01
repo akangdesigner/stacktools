@@ -55,6 +55,21 @@ function daysUntil(dateStr: string | null): number | null {
   return Math.ceil(diff / 86400000);
 }
 
+// 自動續約的訂閱：把過期的續約日往後推到下一次實際扣款日，避免顯示「已逾期」
+function effectiveBillingDate(s: Subscription): string | null {
+  if (!s.next_billing_date) return null;
+  if (s.auto_renew !== 1 || s.cycle === 'onetime') return s.next_billing_date;
+
+  const d = new Date(s.next_billing_date);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  while (d.getTime() < now.getTime()) {
+    if (s.cycle === 'yearly') d.setFullYear(d.getFullYear() + 1);
+    else d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 function BillingBadge({ dateStr }: { dateStr: string | null }) {
   const days = daysUntil(dateStr);
   if (days === null) return <span className="text-gray-300">—</span>;
@@ -135,7 +150,7 @@ export default function SubscriptionPage() {
   }, 0);
 
   const upcomingCount = active.filter(s => {
-    const d = daysUntil(s.next_billing_date);
+    const d = daysUntil(effectiveBillingDate(s));
     return d !== null && d >= 0 && d <= 7;
   }).length;
 
@@ -315,7 +330,8 @@ export default function SubscriptionPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                           {rows.map(s => {
-                            const days = daysUntil(s.next_billing_date);
+                            const billDate = effectiveBillingDate(s);
+                            const days = daysUntil(billDate);
                             const urgent = s.status === 'active' && days !== null && days >= 0 && days <= 7;
                             return (
                               <tr key={s.id}
@@ -337,8 +353,8 @@ export default function SubscriptionPage() {
                                 </td>
                                 <td className="px-4 py-3 text-center text-gray-600 whitespace-nowrap">{CYCLE_LABEL[s.cycle]}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
-                                  <div className="text-xs text-gray-400">{s.next_billing_date ?? '—'}</div>
-                                  <BillingBadge dateStr={s.next_billing_date} />
+                                  <div className="text-xs text-gray-400">{billDate ?? '—'}</div>
+                                  <BillingBadge dateStr={billDate} />
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{s.payer ?? '—'}</td>
                                 <td className="px-4 py-3 text-center">

@@ -20,6 +20,21 @@ function daysUntil(dateStr: string | null): number | null {
   return Math.ceil(diff / 86400000);
 }
 
+// 自動續約的訂閱：把過期的續約日往後推到下一次實際扣款日，避免誤報已逾期
+function effectiveBillingDate(dateStr: string | null, cycle: string, autoRenew: number): string | null {
+  if (!dateStr) return null;
+  if (autoRenew !== 1 || cycle === 'onetime') return dateStr;
+
+  const d = new Date(dateStr);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  while (d.getTime() < now.getTime()) {
+    if (cycle === 'yearly') d.setFullYear(d.getFullYear() + 1);
+    else d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 const CYCLE_LABEL: Record<string, string> = { monthly: '月付', yearly: '年付', onetime: '一次性' };
 const CATEGORY_LABEL: Record<string, string> = {
   ai: 'AI 工具', dev: '開發工具', design: '設計工具', storage: '雲端儲存', other: '其他雜支',
@@ -42,13 +57,15 @@ export async function POST(req: NextRequest) {
   const monthlyTWD = active.reduce((acc, s) => acc + toMonthlyTWD(s.amount, s.currency, s.cycle), 0);
   const yearlyTWD = monthlyTWD * 12;
 
-  // 30天內到期
+  // 30天內到期（自動續約項目會先把過期日推到下一次實際扣款日）
   const upcoming = active
     .filter(s => {
-      const d = daysUntil(s.next_billing_date);
+      const d = daysUntil(effectiveBillingDate(s.next_billing_date, s.cycle, s.auto_renew));
       return d !== null && d >= 0 && d <= 30;
     })
-    .sort((a, b) => (a.next_billing_date ?? '').localeCompare(b.next_billing_date ?? ''));
+    .sort((a, b) =>
+      (effectiveBillingDate(a.next_billing_date, a.cycle, a.auto_renew) ?? '')
+        .localeCompare(effectiveBillingDate(b.next_billing_date, b.cycle, b.auto_renew) ?? ''));
 
   // 訂閱清單（只列 active，按類別排序）
   const sorted = [...active].sort((a, b) => a.category.localeCompare(b.category));
@@ -88,13 +105,14 @@ export async function POST(req: NextRequest) {
       text: { type: 'mrkdwn', text: '*⚠️ 即將續約（30天內）*' },
     } as never);
     for (const s of upcoming) {
-      const days = daysUntil(s.next_billing_date)!;
+      const billDate = effectiveBillingDate(s.next_billing_date, s.cycle, s.auto_renew);
+      const days = daysUntil(billDate)!;
       const urgency = days <= 7 ? '🔴' : '🟡';
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `${urgency} *${s.name}*　${s.amount.toLocaleString()} ${s.currency}／${CYCLE_LABEL[s.cycle]}　→ *${days === 0 ? '今天' : `${days} 天後`}*（${s.next_billing_date}）`,
+          text: `${urgency} *${s.name}*　${s.amount.toLocaleString()} ${s.currency}／${CYCLE_LABEL[s.cycle]}　→ *${days === 0 ? '今天' : `${days} 天後`}*（${billDate}）`,
         },
       } as never);
     }
@@ -108,7 +126,7 @@ export async function POST(req: NextRequest) {
   } as never);
 
   const lines = sorted.map(s => {
-    const days = daysUntil(s.next_billing_date);
+    const days = daysUntil(effectiveBillingDate(s.next_billing_date, s.cycle, s.auto_renew));
     const renewLabel =
       s.cycle === 'onetime' ? '一次性'
       : days === null ? '未設定續費日'
