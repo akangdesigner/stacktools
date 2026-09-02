@@ -255,7 +255,9 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
           if (isFaq && client.faqLabelEnabled) {
             const labelColor = client.faqLabelColor || h3Color;
             const labelSize  = client.faqLabelFontSize || h3Size;
-            inner = `<span style="color: ${labelColor}; font-size: ${labelSize};">Q${h3Count}：</span>` + text;
+            // 原始草稿的 H3 常常已經手寫 Q1：/Q2：開頭，先去掉避免疊加變成 Q2：Q2：
+            const cleanText = text.replace(/^Q\d+[:：.、]\s*/, "");
+            inner = `<span style="color: ${labelColor}; font-size: ${labelSize};">Q${h3Count}：</span>` + cleanText;
             h3Count++;
           }
           el!.innerHTML = `<span style="color: ${h3Color};">${h3Bold !== false ? `<strong>${inner}</strong>` : inner}</span>`;
