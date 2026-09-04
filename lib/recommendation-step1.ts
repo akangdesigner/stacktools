@@ -6,6 +6,44 @@ import {
 
 const MODEL = 'anthropic/claude-haiku-4.5';
 
+// 大綱 LLM 偶爾會忘記幫第一個真正的章節標題加數字編號前綴（前言/總結不編號，
+// 其餘一級標題本該依序編號 1. 2.），導致下游（n8n 的章節分類器）把裸標題整段
+// 判成不明角色丟棄，底下的子項目變成沒有母標題的孤兒內容。這裡不靠 LLM 記得，
+// 直接用程式碼偵測沒編號的裸標題並補上正確的章節編號。
+function normalizeOutlineNumbering(raw: string): string {
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l !== '');
+
+  type Classified = { text: string; role: 'summary' | 'intro' | 'subitem' | 'chapterHeading' | 'unknown'; chapterNum?: number };
+
+  function classify(line: string): Omit<Classified, 'text'> {
+    if (/總結|結論/.test(line)) return { role: 'summary' };
+    if (/前言/.test(line)) return { role: 'intro' };
+
+    const subMatch = line.match(/^(\d+)\.(\d+)\.?/);
+    if (subMatch) return { role: 'subitem', chapterNum: Number(subMatch[1]) };
+
+    const headingMatch = line.match(/^(\d+)\.\s+/);
+    if (headingMatch) return { role: 'chapterHeading', chapterNum: Number(headingMatch[1]) };
+
+    return { role: 'unknown' };
+  }
+
+  const classified: Classified[] = lines.map((line) => ({ text: line, ...classify(line) }));
+
+  for (let i = 0; i < classified.length; i++) {
+    if (classified[i].role !== 'unknown') continue;
+    const next = classified.slice(i + 1).find((c) => c.role === 'subitem');
+    if (next && next.chapterNum !== undefined) {
+      classified[i].text = `${next.chapterNum}. ${classified[i].text}`;
+    }
+  }
+
+  return classified.map((c) => c.text).join('\n');
+}
+
 async function askOpenRouter(prompt: string, apiKey: string): Promise<string> {
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -218,8 +256,8 @@ export async function generateOutline(
 
   try {
     const queries = [
-      `${input.searchTerm} 衛福部`,
-      `${input.searchTerm} 食藥署`,
+      `${input.searchTerm} 政府機關 官方資料`,
+      `${input.searchTerm} 主管機關 公告`,
       `${input.searchTerm} 學術研究`,
     ];
     const collected: TavilyResult[] = [];
@@ -297,7 +335,7 @@ FAQ
 ${references || '（無）'}`;
 
     const outlineRaw = await askOpenRouter(outlinePrompt, openrouterKey);
-    outline = outlineRaw.trim();
+    outline = normalizeOutlineNumbering(outlineRaw.trim());
     if (!outline) throw new Error('大綱 AI 回傳空白');
   } catch (err) {
     console.error(`[generateOutline] jobId=${jobId} 例外：`, err);
