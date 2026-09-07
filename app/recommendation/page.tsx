@@ -12,6 +12,8 @@ interface FormData {
   introLink: string;
   // 第一步就要選：實體商品 or 服務／公司，決定 n8n 要不要抓真實商品圖
   subjectType: SubjectType;
+  // 文章分類先在第一階段填，第二階段的欄位會自動帶入（那邊仍可改）
+  categoryName: string;
 }
 
 // 推薦對象選項；選了服務會自動把卡片模板預設成「服務類」
@@ -113,6 +115,7 @@ export default function RecommendationPage() {
     requiredBrand: "",
     introLink: "",
     subjectType: "",
+    categoryName: "",
   };
 
   const [form, setForm] = useState<FormData>({ ...emptyForm });
@@ -201,6 +204,8 @@ export default function RecommendationPage() {
       if (!res.ok) throw new Error(data.error || "發生錯誤");
       // 服務類直接把卡片模板預設成「服務類」，使用者在第二階段還是可以改
       setCardTemplate(form.subjectType === "service" ? "service" : "general");
+      // 第一階段填的分類直接帶到第二階段，不用再打一次
+      setCategoryName(form.categoryName.trim());
       setJobId(data.jobId ?? "");
       setStatusMessage(data.message ?? "正在查詢品牌與生成大綱");
       setPhase("researching");
@@ -551,6 +556,28 @@ export default function RecommendationPage() {
                 required
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                文章分類
+              </label>
+              <input
+                type="text"
+                list="category-suggestions-form"
+                value={form.categoryName}
+                onChange={(e) => handleChange("categoryName", e.target.value)}
+                placeholder="例：行銷（留空＝未分類）"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              <datalist id="category-suggestions-form">
+                {CATEGORY_SUGGESTIONS.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                可從建議選或直接打新分類，第二階段還能改
+              </p>
             </div>
 
             <div>
