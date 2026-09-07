@@ -11,6 +11,69 @@ const MODEL = 'anthropic/claude-haiku-4.5';
 // 其餘一級標題本該依序編號 1. 2.），導致下游（n8n 的章節分類器）把裸標題整段
 // 判成不明角色丟棄，底下的子項目變成沒有母標題的孤兒內容。這裡不靠 LLM 記得，
 // 直接用程式碼偵測沒編號的裸標題並補上正確的章節編號。
+// 大綱提示詞明文禁止「列出具體品牌名單」的章節，但 LLM 偶爾照樣生一章
+// 「2026年五家口碑優質的OO公司 / 1.1. 第一家公司 …」出來。品牌清單是 n8n 用真實品牌卡片
+// 另外組的章節，大綱再放一份就會重複，而且「第一家公司」這種代號會直接變成文章裡的 h3。
+// 提示詞管不住就用程式擋：把這種章節連同子項整段拿掉，再交給 normalizeOutlineNumbering 重編號。
+//
+// 注意：不能用章節編號當 key。LLM 生出來的多餘章節常常跟正常章節撞號（實測撞過兩個「1.」），
+// 用編號分組會把正常章節一起砍掉，所以這裡照行序切區塊。
+const PLACEHOLDER_SUBITEM =
+  /^\d+\.\d+\.?\s*(第[一二三四五六七八九十\d]+\s*(家|個|名)?\s*(公司|品牌|廠商|業者|店家|服務商)|(公司|品牌|廠商|業者|方案)\s*[A-Za-z甲乙丙丁戊]\s*$)/
+
+const BRAND_LIST_HEADING =
+  /^\d+\.\s*(?=.*(公司|品牌|廠商|業者|服務商|名單|合作夥伴))(?=.*(推薦|精選|嚴選|口碑|評比|排行|\d+\s*(家|款|大)))/
+
+function isSubitem(line: string) {
+  return /^\d+\.\d+\.?/.test(line)
+}
+
+function isChapterHeading(line: string) {
+  return /^\d+\./.test(line) && !isSubitem(line)
+}
+
+function stripBrandListSections(raw: string): string {
+  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean)
+
+  // 依行序切成區塊：每個編號章節帶著它後面的子項，其餘（前言／總結）各自成塊
+  type Block = { heading: string | null; subitems: string[]; loose: string[] }
+  const blocks: Block[] = []
+  let current: Block | null = null
+
+  for (const line of lines) {
+    if (isChapterHeading(line)) {
+      current = { heading: line, subitems: [], loose: [] }
+      blocks.push(current)
+    } else if (isSubitem(line) && current) {
+      current.subitems.push(line)
+    } else {
+      current = null
+      blocks.push({ heading: null, subitems: [], loose: [line] })
+    }
+  }
+
+  const kept: string[] = []
+  for (const block of blocks) {
+    if (block.heading === null) {
+      kept.push(...block.loose)
+      continue
+    }
+
+    const placeholders = block.subitems.filter((l) => PLACEHOLDER_SUBITEM.test(l)).length
+    // 一半以上子項是「第N家公司」這種代號，或標題本身就是品牌名單 → 整章丟掉
+    const isBrandList =
+      (block.subitems.length > 0 && placeholders * 2 >= block.subitems.length) ||
+      BRAND_LIST_HEADING.test(block.heading)
+    if (isBrandList) continue
+
+    kept.push(block.heading)
+    // 章節留著，但個別代號子項還是要拿掉
+    kept.push(...block.subitems.filter((l) => !PLACEHOLDER_SUBITEM.test(l)))
+  }
+
+  return kept.join('\n')
+}
+
 function normalizeOutlineNumbering(raw: string): string {
   const lines = raw
     .split('\n')
@@ -312,20 +375,35 @@ ${listText}
       )
       .join('\n\n');
 
+    // 這裡刻意不把 input.title 當主題餵進去。標題本身就是「OO怎麼選？2026推薦5家口碑優質合作夥伴」，
+    // 模型看到「推薦5家」就會生一章「2026年五家口碑優質的OO公司 / 第一家公司…」出來。
+    // 主題改用 searchTerm，標題只拿來對齊語氣；同時把一級標題寫成封閉清單，
+    // 多生一章在規則上就是違規（原本的規則只描述三個標題該長怎樣，沒說不能再加）。
     const outlinePrompt = `你是一個精準的文章結構生成器。你的輸出將直接被程式解析，嚴禁包含任何自然語言描述、開場白、Markdown 代碼塊或結尾建議，嚴禁生成任何文章內容。
 
-請針對主題：${input.title} 輸出精確的目錄結構。
+主題：${input.searchTerm}
+這篇文章的標題是「${input.title}」，僅供你抓語氣與讀者輪廓，不要照著標題的字面去安排章節。
 
-目錄生成規則：
+這份大綱的一級標題是固定的封閉清單，只有這三個，順序也固定：
 
 前言
-這一級標題要傳達「怎麼找到高 CP 值的${input.searchTerm}」這個概念，用你覺得最適合這個主題、讀起來自然的講法命名，不要固定套用「如何尋找高CP值的XXX」這句型。標題必須具體易懂，禁止用「框架」「機制」「策略」「要素」「原則」這類抽象包裝詞收尾，也不要用冒號接抽象詞組。這一章的內文只教讀者怎麼自己判斷、怎麼比較，不會列出具體品牌名單，標題絕對不可暗示這一章會列出/推薦具體品牌（禁用「推薦品牌」「必看十家」「202X推薦」「口碑優質...名單」「口碑...公司/服務」這類字眼，任何讓人誤以為這裡會列出一群具體公司/品牌名稱的說法都算違規；標題要讓人一看就知道這裡是在談評估方法而不是名單）。標題必須是文法完整的句子，不能因為避開年份數字就把「年」「屆」這種需要接數字的字單獨留在句首或句中（例如「年5家口碑優質OO」這種缺數字的破損寫法絕對禁止），要嘛整句改寫成不需要年份數字的自然講法。子項數量依主題實際情況判斷，建議 3～5 個，不要每次固定套用同一數字；子項標題本身也必須是具體、有意義的講法，嚴禁發明「公司A」「品牌B」「甲方案」這類沒根據的代號當作子項標題，子項標題只能描述評估的面向或做法本身，不可暗示存在一個叫這個代號的實體。
-下含 1.1. 至 1.[N]。
-
 FAQ
-下含 2.1. 至 2.5.（相關常見問題）。
-
 總結
+
+除了這三個之外不可以再有任何一級標題。這篇文章的具體品牌清單由系統另外用真實資料組成獨立章節，不經過這份大綱，所以整份大綱裡不會出現任何公司名、品牌名，也不會有「列出N家」性質的章節；你只需要產出上面三個標題與它們的子項。
+
+各章規則：
+
+【前言】
+用你覺得最適合這個主題、讀起來自然的講法命名，傳達「怎麼判斷一家${input.searchTerm}好不好」這個概念，不要固定套用「如何尋找高CP值的XXX」這句型。標題必須具體易懂，是文法完整的句子，不要用「框架」「機制」「策略」「要素」「原則」這類抽象包裝詞收尾，也不要用冒號接抽象詞組。
+這一章談的是讀者自己怎麼判斷、怎麼比較，子項標題只描述評估的面向或做法本身。
+子項數量依主題實際情況判斷，建議 3～5 個，不要每次固定套用同一數字。
+
+【FAQ】
+子項 5 個，貼近讀者真的會搜尋的問句。
+
+【總結】
+不需要子項。
 
 輸出格式規範：
 純文字輸出，嚴禁使用代碼塊，每一項獨立一行。
@@ -336,7 +414,7 @@ FAQ
 ${references || '（無）'}`;
 
     const outlineRaw = await askOpenRouter(outlinePrompt, openrouterKey);
-    outline = normalizeOutlineNumbering(outlineRaw.trim());
+    outline = normalizeOutlineNumbering(stripBrandListSections(outlineRaw.trim()));
     if (!outline) throw new Error('大綱 AI 回傳空白');
   } catch (err) {
     console.error(`[generateOutline] jobId=${jobId} 例外：`, err);
