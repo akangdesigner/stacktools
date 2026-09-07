@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
       references: job.data.references ?? '',
       brandDetails: job.data.brandDetails ?? [],
       cardTemplate: job.data.cardTemplate || 'general',
+      // product = 實體商品（n8n 要抓真實商品圖進卡片）；service = 服務／公司（不抓）
+      subjectType: job.input.subjectType,
       categoryName: job.data.categoryName || '',
       tags: job.data.tags ?? [],
       // 這個生成器本來就只產「推薦文」，不用讓使用者選，固定送這個值給 n8n 打 article_type taxonomy

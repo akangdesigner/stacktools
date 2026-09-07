@@ -2,6 +2,7 @@ import {
   applyStageResult,
   RecommendationJobInput,
   RecommendationBrand,
+  RecommendationSubjectType,
 } from './recommendation-jobs';
 
 const MODEL = 'anthropic/claude-haiku-4.5';
@@ -373,7 +374,8 @@ async function tavilySearch(query: string): Promise<TavilyResult[]> {
 // 單一品牌查官方網址，findOfficialUrls 的迴圈跟「新增/換上備選品牌」的即時查詢都共用這支
 export async function findOfficialUrlForBrand(
   brandName: string,
-  searchTerm: string
+  searchTerm: string,
+  subjectType: RecommendationSubjectType
 ): Promise<{ url: string; title: string }> {
   const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
   const empty = { url: '', title: '' };
@@ -386,24 +388,28 @@ export async function findOfficialUrlForBrand(
       .map((r, i) => `${i + 1}. 標題：${r.title}\n網址：${r.url}\n內容摘要：${(r.content || '').slice(0, 300)}`)
       .join('\n\n');
 
+    // 推薦對象由使用者在第一階段就選定，不再讓 AI 自己判斷商品/服務——
+    // 產品類要的是「單一商品的產品頁」（後面 n8n 才抓得到真實商品圖），服務類要的是官網首頁
+    const targetRules =
+      subjectType === 'product'
+        ? `這篇推薦的對象是「具體商品」。目標是這個品牌賣最好、最多人推薦的「那一款具體商品」的產品頁，讓讀者點進去直接看到那一款商品進而購買。
+
+【產品頁規則】
+1. 最優先：品牌自己網域下、單一具體商品的產品詳情頁（頁面內容是規格/成分/價格/購買按鈕，網址通常帶產品代碼或型號）
+2. 絕對不能選品牌首頁、系列列表頁、分類頁（網址含 collections/category/list/products 這種多品項列表特徵，或內容是條列多款商品而不是單一商品規格介紹）——這些都不算數，除非搜尋結果裡真的完全沒有任何單一商品頁，才可以退而求其次選首頁
+3. 這個網址之後會被用來抓「該商品的商品圖」，所以頁面主體必須就是那一款商品本身`
+        : `這篇推薦的對象是「公司／服務」（行銷代操、顧問、教學、診所、施工、代理商等），沒有「規格/購買按鈕」這種商品頁概念。
+
+【公司／服務規則】
+1. 直接選品牌官方網站首頁或服務介紹頁即可，不用也不可能找到「單一商品頁」`;
+
     const prompt = `你是品牌官方網站驗證員。品牌名稱：「${brandName}」
 文章主題／要推薦的類型：「${searchTerm}」
 
 搜尋結果：
 ${listText}
 
-第一步，先判斷「${searchTerm}」這個主題屬於「具體商品」還是「公司／服務」：
-- 具體商品（保健食品、美妝、3C、家電等零售商品）：目標是這個品牌賣最好、最多人推薦的「那一款具體商品」的官方網址，讓讀者點進去直接看到那一款商品進而購買
-- 公司／服務（行銷代操、顧問、教學、診所、施工、代理商等服務型主題，沒有「規格/購買按鈕」這種商品頁概念）：目標直接是品牌官方網站首頁或服務介紹頁，不用也不可能找到「單一商品頁」
-
-第二步，依照判斷結果套用對應規則：
-
-【具體商品規則】
-1. 最優先：品牌自己網域下、單一具體商品的產品詳情頁（頁面內容是規格/成分/價格/購買按鈕，網址通常帶產品代碼或型號）
-2. 絕對不能選品牌首頁、系列列表頁、分類頁（網址含 collections/category/list/products 這種多品項列表特徵，或內容是條列多款商品而不是單一商品規格介紹）——這些都不算數，除非搜尋結果裡真的完全沒有任何單一商品頁，才可以退而求其次選首頁
-
-【公司／服務規則】
-1. 直接選品牌官方網站首頁或服務介紹頁即可
+${targetRules}
 
 【不管哪一種都適用的規則】
 - 絕對不能選其他人寫的部落格文章、評比文、比較文、心得文、新聞報導——即使文章掛在品牌自己的網域下（例如 xxx.com/blog/...），只要內容是「介紹知識／推薦清單」而不是「這個品牌的商品或服務本身」，就不算數
@@ -455,7 +461,7 @@ export async function findOfficialUrls(
       updated.push(brand);
       continue;
     }
-    const { url, title } = await findOfficialUrlForBrand(brand.brand_name, input.searchTerm);
+    const { url, title } = await findOfficialUrlForBrand(brand.brand_name, input.searchTerm, input.subjectType);
     updated.push({ ...brand, official_url: url, official_url_title: title });
   }
 

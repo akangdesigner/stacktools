@@ -2,13 +2,23 @@
 
 import { useEffect, useState } from "react";
 
+type SubjectType = "" | "product" | "service";
+
 interface FormData {
   title: string;
   keywords: string;
   searchTerm: string;
   requiredBrand: string;
   introLink: string;
+  // 第一步就要選：實體商品 or 服務／公司，決定 n8n 要不要抓真實商品圖
+  subjectType: SubjectType;
 }
+
+// 推薦對象選項；選了服務會自動把卡片模板預設成「服務類」
+const SUBJECT_TYPES: { value: Exclude<SubjectType, "">; label: string; hint: string }[] = [
+  { value: "product", label: "產品", hint: "實體商品，會抓真實商品圖放進品牌卡片" },
+  { value: "service", label: "服務／公司", hint: "代操、顧問、教學等，不抓商品圖" },
+];
 
 interface Brand {
   brand_name: string;
@@ -102,6 +112,7 @@ export default function RecommendationPage() {
     searchTerm: "",
     requiredBrand: "",
     introLink: "",
+    subjectType: "",
   };
 
   const [form, setForm] = useState<FormData>({ ...emptyForm });
@@ -188,6 +199,8 @@ export default function RecommendationPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
+      // 服務類直接把卡片模板預設成「服務類」，使用者在第二階段還是可以改
+      setCardTemplate(form.subjectType === "service" ? "service" : "general");
       setJobId(data.jobId ?? "");
       setStatusMessage(data.message ?? "正在查詢品牌與生成大綱");
       setPhase("researching");
@@ -298,7 +311,7 @@ export default function RecommendationPage() {
       const res = await fetch("/api/recommendation/lookup-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandName: name, searchTerm: form.searchTerm }),
+        body: JSON.stringify({ brandName: name, searchTerm: form.searchTerm, subjectType: form.subjectType }),
       });
       const data = await res.json();
       if (data?.official_url) {
@@ -445,6 +458,44 @@ export default function RecommendationPage() {
         <form onSubmit={handleSubmit} className="w-[380px] shrink-0 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-gray-700">文章設定</h2>
+
+            <div>
+              <span className="block text-xs font-medium text-gray-600 mb-1">
+                推薦對象 <span className="text-red-400">*</span>
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {SUBJECT_TYPES.map((t) => {
+                  const on = form.subjectType === t.value;
+                  return (
+                    <label
+                      key={t.value}
+                      title={t.hint}
+                      className={`cursor-pointer rounded-lg border px-3 py-2 text-center text-sm font-semibold transition-colors ${
+                        on
+                          ? "border-orange-400 bg-orange-50 text-orange-600"
+                          : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="subjectType"
+                        value={t.value}
+                        checked={on}
+                        onChange={() => handleChange("subjectType", t.value)}
+                        required
+                        className="sr-only"
+                      />
+                      {t.label}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+                {form.subjectType
+                  ? SUBJECT_TYPES.find((t) => t.value === form.subjectType)?.hint
+                  : "先選一個：只有「產品」會去抓真實商品圖"}
+              </p>
+            </div>
 
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">

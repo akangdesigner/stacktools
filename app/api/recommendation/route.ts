@@ -3,10 +3,13 @@ import { createRecommendationJob } from '@/lib/recommendation-jobs';
 import { generateBrands, generateOutline } from '@/lib/recommendation-step1';
 
 export async function POST(req: NextRequest) {
-  const { title, keywords, searchTerm, requiredBrand, introLink } = await req.json();
+  const { title, keywords, searchTerm, requiredBrand, introLink, subjectType } = await req.json();
 
   if (!title || !keywords || !searchTerm) {
     return NextResponse.json({ error: '缺少必填欄位' }, { status: 400 });
+  }
+  if (subjectType !== 'product' && subjectType !== 'service') {
+    return NextResponse.json({ error: '請先選擇這篇推薦的是「產品」還是「服務」' }, { status: 400 });
   }
 
   const jobId = crypto.randomUUID();
@@ -16,6 +19,7 @@ export async function POST(req: NextRequest) {
     searchTerm: String(searchTerm).trim(),
     requiredBrand: String(requiredBrand ?? '').trim(),
     introLink: String(introLink ?? '').trim(),
+    subjectType,
   };
 
   createRecommendationJob(jobId, input);

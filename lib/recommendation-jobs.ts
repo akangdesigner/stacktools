@@ -34,12 +34,16 @@ export interface RecommendationBrandDetail {
   reference_links: string;
 }
 
+// 這篇推薦的對象是實體商品還是服務／公司——第一階段就要選，決定 n8n 要不要抓真實商品圖
+export type RecommendationSubjectType = "product" | "service";
+
 export interface RecommendationJobInput {
   title: string;
   keywords: string;
   searchTerm: string;
   requiredBrand: string;
   introLink: string;
+  subjectType: RecommendationSubjectType;
 }
 
 export interface RecommendationJobData {
