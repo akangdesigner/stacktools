@@ -1,4 +1,4 @@
-import { parse, HTMLElement as NHTMLElement } from "node-html-parser";
+import { parse, HTMLElement as NHTMLElement, Node as NNode, TextNode, NodeType } from "node-html-parser";
 import type { ClientProfile } from "@/types";
 
 function parseStyleString(style: string): Map<string, string> {
@@ -196,6 +196,99 @@ details summary::-webkit-details-marker { display: none; }
 }
 </style>
 `;
+
+// ── 純語意 HTML（1g 新後台用）────────────────────────────────────────────
+// 1g 換成自製後台後，內文編輯器是 TipTap 富文本，貼上時會把所有 inline style
+// 全部清掉，只留語意標籤（實測：<h2 style="...">→<h2>），排版改吃站上自己的 CSS。
+// 所以最後把結果攤平成純語意 HTML：拆掉 div/span 等排版容器、移除樣式屬性。
+
+// 保留的語意標籤，其餘標籤一律攤平（只輸出子內容）
+const SEMANTIC_TAGS = new Set([
+  "h2", "h3", "h4", "h5", "p", "a", "ul", "ol", "li", "img", "br",
+  "strong", "b", "em", "i", "u", "s", "blockquote", "hr", "code", "pre",
+  "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+]);
+
+// 不需要結尾標籤的空元素（void element）
+const VOID_TAGS = new Set(["img", "br", "hr"]);
+
+// 每個標籤允許留下的屬性，其餘（style／class／id／data-*／onclick）全部丟掉
+const SEMANTIC_ATTRS: Record<string, string[]> = {
+  a: ["href"],
+  img: ["src", "alt"],
+  th: ["colspan", "rowspan"],
+  td: ["colspan", "rowspan"],
+};
+
+// 整個丟掉（連子內容都不要）的標籤
+const DROP_TAGS = new Set(["script", "style", "noscript", "iframe"]);
+
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+function serializeSemantic(nodes: NNode[], preserveWhitespace = false): string {
+  let out = "";
+
+  for (const node of nodes) {
+    if (node.nodeType === NodeType.TEXT_NODE) {
+      const text = (node as TextNode).rawText;
+      if (preserveWhitespace) {
+        out += text;
+      } else if (/^\s+$/.test(text)) {
+        // Elementor 版面留下的縮排／換行，容器攤平後會變成整片空行，只有行內的單一空白要留
+        out += text.includes("\n") ? "" : " ";
+      } else {
+        out += text.replace(/\s+/g, " ");
+      }
+      continue;
+    }
+    if (node.nodeType !== NodeType.ELEMENT_NODE) continue; // 註解等一律丟掉
+
+    const el = node as NHTMLElement;
+    const tag = (el.rawTagName || "").toLowerCase();
+
+    if (DROP_TAGS.has(tag)) continue;
+
+    // emoji 圖示在純語意模式下沒有 style 撐尺寸，會變成一張大圖，改用 alt 的 emoji 文字
+    if (tag === "img") {
+      const role = el.getAttribute("role") || "";
+      const src = el.getAttribute("src") || "";
+      if (role === "img" || src.includes("/emoji/") || src.endsWith(".svg")) {
+        out += el.getAttribute("alt") || "";
+        continue;
+      }
+    }
+
+    if (!SEMANTIC_TAGS.has(tag)) {
+      out += serializeSemantic(el.childNodes, preserveWhitespace); // 排版容器（div／span…）只留內容
+      continue;
+    }
+
+    const attrs = (SEMANTIC_ATTRS[tag] || [])
+      .map((name) => {
+        const value = el.getAttribute(name);
+        return value ? ` ${name}="${escapeAttr(value)}"` : "";
+      })
+      .join("");
+
+    if (VOID_TAGS.has(tag)) {
+      out += `<${tag}${attrs}>`;
+      continue;
+    }
+
+    out += `<${tag}${attrs}>${serializeSemantic(el.childNodes, preserveWhitespace || tag === "pre")}</${tag}>`;
+  }
+
+  return out;
+}
+
+function toSemanticHtml(html: string): string {
+  return serializeSemantic(parse(html).childNodes)
+    .replace(/(<\/(?:h[2-5]|p|ul|ol|li|table|blockquote)>|<img\b[^>]*>)\s*/g, "$1\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: string): string {
   const root = parse(rawHtml);
@@ -557,7 +650,8 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
 
   // ── 9. Insert TOC before first H2 (via string replace to preserve onclick)
   let result = root.toString();
-  if (client.generateToc && tocItems.length > 0) {
+  // 1g 走純語意輸出，目錄的錨點連結會因為 id 被清掉而失效，直接不產生
+  if (client.generateToc && tocItems.length > 0 && !is1g) {
     const firstH2Match = result.match(/<h2[\s>]/i);
     if (firstH2Match && firstH2Match.index !== undefined) {
       const toc = (isM2
@@ -577,6 +671,12 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
 
   if (isM2) {
     result = M2_STYLE_BLOCK + result;
+  }
+
+  // 1g 新後台的 TipTap 編輯器貼上時會清掉所有 inline style，
+  // 前面那些樣式加了也留不住，最後統一攤平成純語意 HTML
+  if (is1g) {
+    result = toSemanticHtml(result);
   }
 
   return result;
