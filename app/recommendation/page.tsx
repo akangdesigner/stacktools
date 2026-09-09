@@ -66,7 +66,8 @@ type Phase =
   | "researching_details"
   | "awaiting_final_confirm"
   | "generating"
-  | "completed";
+  | "completed"
+  | "failed";
 
 interface BrandDetail {
   brand_name: string;
@@ -148,6 +149,8 @@ export default function RecommendationPage() {
   // 品牌深度研究結果（第三階段確認用）
   const [brandDetailsList, setBrandDetailsList] = useState<BrandDetail[]>([]);
   const [finalConfirming, setFinalConfirming] = useState(false);
+  // 第五階段重送（n8n 掛掉沒回 callback、或已回報失敗）用的 loading
+  const [retrying, setRetrying] = useState(false);
 
   // 完成後的 WordPress 連結
   const [wpEditLink, setWpEditLink] = useState("");
@@ -284,6 +287,29 @@ export default function RecommendationPage() {
       setError(String(err));
     } finally {
       setFinalConfirming(false);
+    }
+  }
+
+  // 第五階段重送：後端拿 DB 裡既有的 brands/outline/references/brandDetails 重打一次 n8n，
+  // 前四階段的研究成果不會重跑，也不會再花一次錢
+  async function handleRetryFinalGenerate() {
+    if (!jobId) return;
+    setRetrying(true);
+    setError("");
+    try {
+      const res = await fetch("/api/recommendation/generate-final", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, retry: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "發生錯誤");
+      setStatusMessage("已重新送出，文章生成中（約 3～5 分鐘）");
+      setPhase("generating");
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -427,8 +453,8 @@ export default function RecommendationPage() {
           setWpLink(data?.data?.wpLink ?? "");
           setPhase("completed");
         } else if (data?.status === "failed") {
-          setPhase("idle");
-          setError(data.message || "生成失敗，請稍後重試。");
+          setStatusMessage(data.message || "生成失敗，請稍後重試。");
+          setPhase("failed");
         }
       } catch {
         // Ignore transient polling errors.
@@ -1015,6 +1041,47 @@ export default function RecommendationPage() {
                 {statusMessage || "文章生成中"}{dots}
               </p>
               <p className="text-xs text-gray-400">預估完成時間：3～5 分鐘</p>
+              <div className="pt-1 border-t border-gray-100">
+                <p className="text-xs text-gray-400 mb-2">
+                  超過 10 分鐘還停在這裡，通常是生成流程中途斷了。可以用同一份研究結果重送一次，不會重跑前面的品牌查詢。
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRetryFinalGenerate}
+                  disabled={retrying}
+                  className="py-2 px-4 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {retrying ? "重新送出中…" : "重新送出生成"}
+                </button>
+              </div>
+            </div>
+          ) : phase === "failed" ? (
+            <div className="bg-white rounded-xl border border-red-200 p-5 space-y-3">
+              <h2 className="text-sm font-semibold text-red-600">第五階段：生成失敗</h2>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {statusMessage || "生成失敗，請稍後重試。"}
+              </p>
+              <p className="text-xs text-gray-400">
+                前四階段的品牌與大綱研究結果都還在，重送不會重跑，也不會再花一次查詢的錢。
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRetryFinalGenerate}
+                  disabled={retrying}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {retrying ? "重新送出中…" : "重新生成文章"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={retrying}
+                  className="py-2.5 px-4 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  全部重來
+                </button>
+              </div>
             </div>
           ) : phase === "completed" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
