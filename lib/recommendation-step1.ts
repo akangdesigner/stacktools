@@ -462,7 +462,10 @@ async function tavilySearch(query: string): Promise<TavilyResult[]> {
 export async function findOfficialUrlForBrand(
   brandName: string,
   searchTerm: string,
-  subjectType: RecommendationSubjectType
+  subjectType: RecommendationSubjectType,
+  // 同一篇文章裡已經選定的其他品牌品項，用來讓後面的品牌盡量挑同類型的品項，
+  // 不然會變成「洗顏膜 399 元」跟「精華液 3280 元」放在同一張比較表，讀者根本沒得比
+  pickedTitles: string[] = []
 ): Promise<{ url: string; title: string }> {
   const openrouterKey = process.env.OPENROUTER_API_KEY ?? '';
   const empty = { url: '', title: '' };
@@ -483,15 +486,22 @@ export async function findOfficialUrlForBrand(
 
 【產品頁規則】
 1. 最優先：品牌自己網域下、單一具體商品的產品詳情頁（頁面內容是規格/成分/價格/購買按鈕，網址通常帶產品代碼或型號）
-2. 絕對不能選品牌首頁、系列列表頁、分類頁（網址含 collections/category/list/products 這種多品項列表特徵，或內容是條列多款商品而不是單一商品規格介紹）——這些都不算數，除非搜尋結果裡真的完全沒有任何單一商品頁，才可以退而求其次選首頁
-3. 這個網址之後會被用來抓「該商品的商品圖」，所以頁面主體必須就是那一款商品本身`
+2. 絕對不能選品牌首頁、系列列表頁、分類頁——判斷依據是「內容是條列多款商品」而不是單純看網址關鍵字。常見的分類頁網址特徵是 /categories/、/category/、/collections/、/product-category/、/shop/、/search、/tag/
+3. 注意：/products/商品名稱 這種網址在 Shopline、Shopify、CYBERBIZ 上就是「單一商品頁」，是最理想的選擇，不要因為看到 products 這個字就當成列表頁排除掉
+4. 只有搜尋結果裡真的完全沒有任何單一商品頁，才可以退而求其次選首頁
+5. 這個網址之後會被用來抓「該商品的商品圖」與規格，所以頁面主體必須就是那一款商品本身`
         : `這篇推薦的對象是「公司／服務」（行銷代操、顧問、教學、診所、施工、代理商等），沒有「規格/購買按鈕」這種商品頁概念。
 
 【公司／服務規則】
 1. 直接選品牌官方網站首頁或服務介紹頁即可，不用也不可能找到「單一商品頁」`;
 
+    const sameTypeHint =
+      subjectType === 'product' && pickedTitles.length
+        ? `\n\n【同篇文章已選定的其他品牌品項】\n${pickedTitles.map((t) => `- ${t}`).join('\n')}\n這幾個品項會跟你這次選的放在同一張比較表互相比較，所以請盡量選「同一種品類」的商品（例如上面都是精華液，就不要選洗面乳、面膜或套組）。若該品牌真的沒有同品類商品，才選最接近主題的主力單品。`
+        : '';
+
     const prompt = `你是品牌官方網站驗證員。品牌名稱：「${brandName}」
-文章主題／要推薦的類型：「${searchTerm}」
+文章主題／要推薦的類型：「${searchTerm}」${sameTypeHint}
 
 搜尋結果：
 ${listText}
@@ -543,13 +553,21 @@ export async function findOfficialUrls(
   // 一次 Promise.all 把多個品牌同時炸出去會整批被限流打回空結果
   // （8/27 實測撞過，明明月額度還有 134 次，一次爆量還是整批失敗）
   const updated: RecommendationBrand[] = [];
+  const pickedTitles: string[] = [];
   for (const brand of brands) {
     if (brand.official_url) {
       updated.push(brand);
+      if (brand.official_url_title) pickedTitles.push(brand.official_url_title);
       continue;
     }
-    const { url, title } = await findOfficialUrlForBrand(brand.brand_name, input.searchTerm, input.subjectType);
+    const { url, title } = await findOfficialUrlForBrand(
+      brand.brand_name,
+      input.searchTerm,
+      input.subjectType,
+      pickedTitles
+    );
     updated.push({ ...brand, official_url: url, official_url_title: title });
+    if (title) pickedTitles.push(title);
   }
 
   applyStageResult(jobId, 'brands', { brands: updated, brandsUrlReady: true });
