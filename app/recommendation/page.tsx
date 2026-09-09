@@ -59,6 +59,34 @@ function serializeOutline(sections: OutlineSection[]): string {
     .join("\n\n");
 }
 
+// 品牌網址若指向首頁或分類／列表頁，抓到的會是分類 banner 或品牌 logo，
+// 規格、價格、產品圖全都取不到（實測 relove 指到 /categories/… 就是這樣整篇失準）。
+// 只檢查商品類，服務類本來就常常只有首頁可以指。
+const LIST_PAGE_HINTS = [
+  '/categories/', '/category/', '/collections/', '/collection/',
+  '/product-category/', '/shop/', '/search', '/tag/', '/tags/', '/brands/',
+];
+
+function checkBrandUrl(url: string, subjectType: string): string {
+  if (subjectType !== 'product') return '';
+  const u = String(url || '').trim();
+  if (!u) return '沒有網址';
+  let path = '';
+  try {
+    path = u.replace(/^https?:\/\//i, '');
+    path = path.slice(path.indexOf('/') === -1 ? path.length : path.indexOf('/'));
+  } catch {
+    return '';
+  }
+  const clean = path.split('?')[0].split('#')[0];
+  if (!clean || clean === '/') return '這是首頁，抓不到單一產品的規格與圖片';
+  const lower = clean.toLowerCase();
+  if (LIST_PAGE_HINTS.some((h) => lower.includes(h))) {
+    return '這像是分類／列表頁，抓到的會是分類圖或 logo';
+  }
+  return '';
+}
+
 type Phase =
   | "idle"
   | "researching"
@@ -143,6 +171,8 @@ export default function RecommendationPage() {
   const [tagsSuggestion, setTagsSuggestion] = useState<string[]>([]);
   const [tagsInput, setTagsInput] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // 網址警告只擋一次，使用者確定要用就讓他過
+  const [urlWarningAck, setUrlWarningAck] = useState(false);
   // 第二階段拆兩步顯示：先確認品牌與網址，下一步才確認大綱，避免單一畫面塞太多東西
   const [confirmStep, setConfirmStep] = useState<"brands" | "outline">("brands");
 
@@ -221,6 +251,22 @@ export default function RecommendationPage() {
 
   async function handleConfirmGenerate() {
     if (!jobId) return;
+
+    // 帶著首頁／分類頁網址跑下去，整篇的規格與產品圖都會是錯的，
+    // 而且要等八分鐘才看得到結果，所以先擋一次讓使用者確認
+    const badUrls = brands
+      .map((b) => ({ name: b.brand_name, why: checkBrandUrl(b.official_url, form.subjectType) }))
+      .filter((x) => x.why);
+    if (badUrls.length && !urlWarningAck) {
+      setUrlWarningAck(true);
+      setError(
+        `這些品牌的網址可能抓不到產品資料：${badUrls
+          .map((x) => `${x.name}（${x.why}）`)
+          .join("、")}。建議改成單一產品頁網址；確定要照原樣跑，再按一次確認。`
+      );
+      return;
+    }
+
     setConfirming(true);
     setError("");
     try {
@@ -314,6 +360,8 @@ export default function RecommendationPage() {
   }
 
   function updateBrand(index: number, field: keyof Brand, value: string) {
+    // 網址改過就把警告重置，改完要再檢查一次
+    if (field === "official_url") setUrlWarningAck(false);
     setBrands((prev) =>
       prev.map((b, i) => {
         if (i !== index) return b;
@@ -730,6 +778,14 @@ export default function RecommendationPage() {
                           className="w-32 shrink-0 truncate text-xs text-gray-400"
                         >
                           {brand.official_url_title}
+                        </span>
+                      )}
+                      {checkBrandUrl(brand.official_url, form.subjectType) && (
+                        <span
+                          title={checkBrandUrl(brand.official_url, form.subjectType)}
+                          className="shrink-0 text-amber-500 text-sm leading-none cursor-help"
+                        >
+                          ⚠
                         </span>
                       )}
                       {brand.official_url && (
