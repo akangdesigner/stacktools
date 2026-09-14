@@ -296,7 +296,7 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
   // m2 客戶特化樣式（紅底 H2 banner／左框線 H3／紅底表格標題），寫死不開放調整，只認客戶名稱＝m2
   const isM2 = client.name.trim().toLowerCase() === "m2";
 
-  // 1g 客戶特化樣式（紫底白字 H2 色塊＋陰影＋✓前綴／FAQ 紫框陰影卡片），寫死不開放調整，只認客戶名稱＝1g
+  // 1g 客戶特化處理（H2 只留文字、FAQ 卡片），寫死不開放調整，只認客戶名稱＝1g
   const is1g = client.name.trim().toLowerCase() === "1g";
 
   // ── 0. Remove <h1>
@@ -321,8 +321,8 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
           el!.setAttribute("class", "section-title");
           el!.innerHTML = text;
         } else if (is1g) {
-          el!.setAttribute("style", "padding: 10px 20px; background: #8d6bcb; color: #fff; font-size: 24px; font-weight: 700; box-shadow: 5px 5px 0px 0px #d1b5ff; border-radius: 3px; margin: 1rem 0; line-height: 26px; letter-spacing: 2px;");
-          el!.innerHTML = `<span style="padding-right: 0.4rem;">✓</span>${text.replace(/^✓\s*/, "")}`;
+          // 1g 走純語意輸出，紫底色塊與 ✓ 前綴都留不住（樣式會被編輯器清掉、✓ 會變成標題文字），只留標題文字
+          el!.innerHTML = text.replace(/^✓\s*/, "");
         } else {
           el!.setAttribute("style", `font-size: ${client.h2FontSize}; line-height: ${client.h2LineHeight}; margin-top: 17px; margin-bottom: 17px;`);
           el!.innerHTML = `<span style="color: ${client.h2Color};">${client.h2Bold !== false ? `<strong>${text}</strong>` : text}</span>`;
@@ -535,6 +535,10 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     const styleMap = parseStyleString(existing);
     styleMap.delete("background-color");
     styleMap.delete("background");
+    // 儲存格內的 span/p 若帶草稿殘留的小字級（如 Google Docs 貼上的 font-size:12px），會蓋掉儲存格字級，一併清掉
+    if (!/^(table|thead|tbody|tfoot|tr|th|td)$/i.test(el.tagName)) {
+      styleMap.delete("font-size");
+    }
     const cleaned = serializeStyleMap(styleMap);
     if (cleaned) el.setAttribute("style", cleaned);
     else el.removeAttribute("style");
@@ -564,6 +568,13 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
     styleMap.set("padding", "12px 16px");
     styleMap.set("text-align", "left");
     styleMap.set("vertical-align", "top");
+    // 儲存格內的字通常沒被 <p> 包住，第 3 步套不到字級，會直接吃目標站後台對 td 的預設小字（探物就是這樣變超小），
+    // 所以這裡比照段落補上字級／顏色／行高；m2 有自己的樣式表（18px !important）不用補
+    if (!isM2) {
+      styleMap.set("font-size", client.paragraphFontSize);
+      styleMap.set("color", client.paragraphColor);
+      styleMap.set("line-height", client.paragraphLineHeight);
+    }
     if (cell.tagName.toLowerCase() === "th") {
       styleMap.set("font-weight", "700");
     }
