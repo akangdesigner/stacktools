@@ -522,14 +522,20 @@ export default function RecommendationPage() {
             填入主題與條件 → 確認品牌與大綱 → 確認品牌深度研究 → AI 生成推薦型文章
           </p>
         </div>
-        <a
-          href="https://recommend.dg166.com/wp-admin"
-          target="_blank"
-          rel="noreferrer"
-          className="shrink-0 inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors"
-        >
-          後台
-        </a>
+        <div className="shrink-0 flex items-center gap-3">
+          {/* WP 後台帳密放按鈕旁邊，校稿的人不用再問。值放 env（NEXT_PUBLIC_WP_ADMIN_LOGIN），不進 git；工具本身有 Google 登入擋著 */}
+          {process.env.NEXT_PUBLIC_WP_ADMIN_LOGIN && (
+            <span className="text-xs text-gray-500 font-mono select-all">{process.env.NEXT_PUBLIC_WP_ADMIN_LOGIN}</span>
+          )}
+          <a
+            href="https://recommend.dg166.com/wp-admin"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors"
+          >
+            後台
+          </a>
+        </div>
       </div>
 
       <div className="flex gap-8 items-start">
