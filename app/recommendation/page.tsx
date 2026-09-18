@@ -148,6 +148,24 @@ export default function RecommendationPage() {
   };
 
   const [form, setForm] = useState<FormData>({ ...emptyForm });
+  // 推薦網 WP 後台的帳密，從 Elementor 編輯器那頁的客戶清單撈（url 含 recommend.dg166.com 的那筆）
+  const [wpAdmin, setWpAdmin] = useState<{ username: string; password: string } | null>(null);
+  const [copyToast, setCopyToast] = useState("");
+  useEffect(() => {
+    fetch("/api/elementor-clients")
+      .then((r) => r.json())
+      .then((list: Array<{ url?: string; username?: string; password?: string }>) => {
+        const hit = Array.isArray(list) ? list.find((c) => (c.url || "").includes("recommend.dg166.com")) : null;
+        if (hit) setWpAdmin({ username: hit.username || "", password: hit.password || "" });
+      })
+      .catch(() => {});
+  }, []);
+  function copyText(text: string, label: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyToast(`${label}已複製`);
+      setTimeout(() => setCopyToast(""), 2000);
+    });
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState("");
@@ -522,10 +540,27 @@ export default function RecommendationPage() {
             填入主題與條件 → 確認品牌與大綱 → 確認品牌深度研究 → AI 生成推薦型文章
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-3">
-          {/* WP 後台帳密放按鈕旁邊，校稿的人不用再問。值放 env（NEXT_PUBLIC_WP_ADMIN_LOGIN），不進 git；工具本身有 Google 登入擋著 */}
-          {process.env.NEXT_PUBLIC_WP_ADMIN_LOGIN && (
-            <span className="text-xs text-gray-500 font-mono select-all">{process.env.NEXT_PUBLIC_WP_ADMIN_LOGIN}</span>
+        <div className="shrink-0 flex items-center gap-2">
+          {/* 後台帳密跟「Elementor 編輯器」那頁走同一份客戶資料（/api/elementor-clients），
+              在那頁新增一筆 url 含 recommend.dg166.com 的客戶，這裡就會長出帳號＋複製密碼 */}
+          {wpAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={() => copyText(wpAdmin.username, "帳號")}
+                className="text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                title={wpAdmin.username}
+              >
+                帳號 {wpAdmin.username || "—"}
+              </button>
+              <button
+                type="button"
+                onClick={() => copyText(wpAdmin.password, "密碼")}
+                className="text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                複製密碼
+              </button>
+            </>
           )}
           <a
             href="https://recommend.dg166.com/wp-admin"
@@ -535,6 +570,7 @@ export default function RecommendationPage() {
           >
             後台
           </a>
+          {copyToast && <span className="text-xs text-green-600">{copyToast}</span>}
         </div>
       </div>
 
