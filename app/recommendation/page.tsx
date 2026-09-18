@@ -543,25 +543,24 @@ export default function RecommendationPage() {
         <div className="shrink-0 flex items-center gap-2">
           {/* 後台帳密跟「Elementor 編輯器」那頁走同一份客戶資料（/api/elementor-clients），
               在那頁新增一筆 url 含 recommend.dg166.com 的客戶，這裡就會長出帳號＋複製密碼 */}
-          {wpAdmin && (
-            <>
-              <button
-                type="button"
-                onClick={() => copyText(wpAdmin.username, "帳號")}
-                className="text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
-                title={wpAdmin.username}
-              >
-                帳號 {wpAdmin.username || "—"}
-              </button>
-              <button
-                type="button"
-                onClick={() => copyText(wpAdmin.password, "密碼")}
-                className="text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                複製密碼
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={() => copyText(wpAdmin?.username || "admin", "帳號")}
+            className="text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            帳號 {wpAdmin?.username || "admin"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              wpAdmin?.password
+                ? copyText(wpAdmin.password, "密碼")
+                : (setCopyToast("先到「Elementor 編輯器」新增一筆網址含 recommend.dg166.com 的客戶"), setTimeout(() => setCopyToast(""), 3500))
+            }
+            className="text-xs px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            複製密碼
+          </button>
           <a
             href="https://recommend.dg166.com/wp-admin"
             target="_blank"
@@ -570,7 +569,7 @@ export default function RecommendationPage() {
           >
             後台
           </a>
-          {copyToast && <span className="text-xs text-green-600">{copyToast}</span>}
+          {copyToast && <span className="text-xs text-amber-600">{copyToast}</span>}
         </div>
       </div>
 
