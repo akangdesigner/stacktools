@@ -271,7 +271,7 @@ export default function RecommendationPage() {
     if (!jobId) return;
 
     // 帶著首頁／分類頁網址跑下去，整篇的規格與產品圖都會是錯的，
-    // 而且要等八分鐘才看得到結果，所以先擋一次讓使用者確認
+    // 而且要等十幾分鐘才看得到結果，所以先擋一次讓使用者確認
     const badUrls = brands
       .map((b) => ({ name: b.brand_name, why: checkBrandUrl(b.official_url, form.subjectType) }))
       .filter((x) => x.why);
@@ -306,7 +306,7 @@ export default function RecommendationPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
-      setStatusMessage("正在研究品牌細節（約 1～3 分鐘）");
+      setStatusMessage("正在研究品牌細節（約 5～7 分鐘）");
       setPhase("researching_details");
     } catch (err) {
       setError(String(err));
@@ -345,7 +345,7 @@ export default function RecommendationPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
-      setStatusMessage("文章生成中（約 3～5 分鐘）");
+      setStatusMessage("文章生成中（10 家約 10～16 分鐘）");
       setPhase("generating");
     } catch (err) {
       setError(String(err));
@@ -368,7 +368,7 @@ export default function RecommendationPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "發生錯誤");
-      setStatusMessage("已重新送出，文章生成中（約 3～5 分鐘）");
+      setStatusMessage("已重新送出，文章生成中（10 家約 10～16 分鐘）");
       setPhase("generating");
     } catch (err) {
       setError(String(err));
@@ -745,7 +745,7 @@ export default function RecommendationPage() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 {statusMessage || "正在查詢品牌與生成大綱"}{dots}
               </p>
-              <p className="text-xs text-gray-400">預估完成時間：1～3 分鐘（品牌查詢與大綱生成）</p>
+              <p className="text-xs text-gray-400">預估完成時間：5～7 分鐘（品牌查詢與大綱生成）</p>
             </div>
           ) : phase === "awaiting_confirm" ? (
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
@@ -1081,7 +1081,7 @@ export default function RecommendationPage() {
                 {statusMessage || "正在研究品牌細節"}{dots}
               </p>
               <p className="text-xs text-gray-400">
-                預估完成時間：1～3 分鐘，跑完會請你確認研究結果再生成文章
+                預估完成時間：5～7 分鐘，跑完會請你確認研究結果再生成文章
               </p>
             </div>
           ) : phase === "awaiting_final_confirm" ? (
@@ -1137,10 +1137,10 @@ export default function RecommendationPage() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 {statusMessage || "文章生成中"}{dots}
               </p>
-              <p className="text-xs text-gray-400">預估完成時間：3～5 分鐘</p>
+              <p className="text-xs text-gray-400">預估完成時間：10～16 分鐘（8～10 家實測）</p>
               <div className="pt-1 border-t border-gray-100">
                 <p className="text-xs text-gray-400 mb-2">
-                  超過 10 分鐘還停在這裡，通常是生成流程中途斷了。可以用同一份研究結果重送一次，不會重跑前面的品牌查詢。
+                  超過 25 分鐘還停在這裡，通常是生成流程中途斷了。可以用同一份研究結果重送一次，不會重跑前面的品牌查詢。
                 </p>
                 <button
                   type="button"
