@@ -8,14 +8,14 @@ interface BannedWord {
   word: string;
   replace?: string;
   note?: string;
+  group?: string; // 出自哪個產品的規範
 }
 interface ClientOption {
   id: string;
   name: string;
   source: string;
-  banned: (BannedWord & { group?: string })[];
+  banned: BannedWord[];
   required: string[];
-  groups: string[]; // 產品分組（Relove 依產品分禁詞）
 }
 type JevKey = "medical_claim" | "body_change" | "solicitation" | "exaggeration" | "ai_contrast";
 interface SentenceResult {
@@ -44,12 +44,17 @@ const JEV_LABELS: Record<JevKey, string> = {
 };
 // 「是」的機率 ≥ 0.6 才算命中：She is 文章實測 0.5～0.6 幾乎都是誤判（一般衛教句被當成反轉句、誇大），真問題都在 0.6 以上
 const JEV_THRESHOLD = 0.6;
+// 法規風險和 AI 味分開判斷、分開列
+const LEGAL_KEYS: JevKey[] = ["medical_claim", "body_change", "solicitation", "exaggeration"];
+const AI_KEYS: JevKey[] = ["ai_contrast"];
 const STORAGE_KEY = "compliance-check:extra-banned"; // 自訂禁詞依客戶存在瀏覽器
 
-type Filter = "flagged" | "banned" | "jev" | "all";
+type Filter = "banned" | "legal" | "ai" | "all";
 
-function jevHits(s: SentenceResult): [JevKey, number][] {
-  return (Object.entries(s.jev) as [JevKey, number][]).filter(([, v]) => v >= JEV_THRESHOLD).sort((a, b) => b[1] - a[1]);
+function jevHits(s: SentenceResult, keys: JevKey[]): [JevKey, number][] {
+  return (Object.entries(s.jev) as [JevKey, number][])
+    .filter(([k, v]) => keys.includes(k) && v >= JEV_THRESHOLD)
+    .sort((a, b) => b[1] - a[1]);
 }
 
 export default function ComplianceCheckPage() {
@@ -60,11 +65,10 @@ export default function ComplianceCheckPage() {
   const [text, setText] = useState("");
   const [extraBanned, setExtraBanned] = useState("");
   const [showRules, setShowRules] = useState(false);
-  const [groups, setGroups] = useState<string[]>([]); // 勾選的產品分組
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<Report | null>(null);
-  const [filter, setFilter] = useState<Filter>("flagged");
+  const [filter, setFilter] = useState<Filter>("banned");
 
   useEffect(() => {
     fetch("/api/compliance-check")
@@ -96,12 +100,6 @@ export default function ComplianceCheckPage() {
 
   const client = clients.find((c) => c.id === clientId);
 
-  // 換客戶時產品分組清空，讓使用者自己勾這篇寫的是哪個產品
-  useEffect(() => {
-    setGroups([]);
-  }, [clientId]);
-  const needGroup = !!client && client.groups.length > 0 && groups.length === 0;
-
   const run = async () => {
     setLoading(true);
     setError("");
@@ -112,7 +110,6 @@ export default function ComplianceCheckPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId,
-          groups,
           extraBanned,
           ...(inputMode === "url" ? { url } : { text }),
         }),
@@ -120,7 +117,7 @@ export default function ComplianceCheckPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "檢查失敗");
       setReport(data);
-      setFilter("flagged");
+      setFilter("banned");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -131,29 +128,29 @@ export default function ComplianceCheckPage() {
   const counts = useMemo(() => {
     if (!report) return null;
     const banned = report.sentences.filter((s) => s.banned.length > 0).length;
-    const jev = report.sentences.filter((s) => jevHits(s).length > 0).length;
-    const flagged = report.sentences.filter((s) => s.banned.length > 0 || jevHits(s).length > 0).length;
-    return { banned, jev, flagged };
+    const legal = report.sentences.filter((s) => jevHits(s, LEGAL_KEYS).length > 0).length;
+    const ai = report.sentences.filter((s) => jevHits(s, AI_KEYS).length > 0).length;
+    return { banned, legal, ai };
   }, [report]);
 
   const visible = useMemo(() => {
     if (!report) return [];
     return report.sentences.filter((s) => {
-      if (filter === "all") return true;
       if (filter === "banned") return s.banned.length > 0;
-      if (filter === "jev") return jevHits(s).length > 0;
-      return s.banned.length > 0 || jevHits(s).length > 0;
+      if (filter === "legal") return jevHits(s, LEGAL_KEYS).length > 0;
+      if (filter === "ai") return jevHits(s, AI_KEYS).length > 0;
+      return true;
     });
   }, [report, filter]);
 
-  const canRun = !loading && !needGroup && (inputMode === "url" ? url.trim() : text.trim());
+  const canRun = !loading && (inputMode === "url" ? url.trim() : text.trim());
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">文案法規檢查</h1>
         <p className="text-sm text-gray-500 mt-1">
-          逐句檢查客戶禁詞，再用 Jev 判斷「沒用禁詞、但意思在宣稱療效或招攬」的句子。結果是高風險提示，最後仍要人確認。
+          逐句分三類檢查：客戶禁詞（程式比對）、法規風險（Jev 判斷換句話說的療效宣稱或招攬）、AI 味反轉句（Jev）。結果是高風險提示，最後仍要人確認。
         </p>
       </div>
 
@@ -193,27 +190,6 @@ export default function ComplianceCheckPage() {
             </div>
           )}
         </div>
-
-        {/* 產品分組：禁詞依產品分的客戶，只套用這篇文章相關的產品 */}
-        {client && client.groups.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              這篇寫的是哪個產品？ <span className="text-xs font-normal text-gray-400">只套用勾選產品的禁詞</span>
-            </label>
-            <div className="flex flex-wrap gap-3">
-              {client.groups.map((g) => (
-                <label key={g} className="flex items-center gap-1.5 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={groups.includes(g)}
-                    onChange={(e) => setGroups((prev) => (e.target.checked ? [...prev, g] : prev.filter((x) => x !== g)))}
-                  />
-                  {g}
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* 自訂禁詞 */}
         <div>
@@ -271,7 +247,6 @@ export default function ComplianceCheckPage() {
         >
           {loading ? "檢查中…（一篇約 10～20 秒）" : "開始檢查"}
         </button>
-        {needGroup && <p className="text-xs text-gray-400">先勾選這篇寫的是哪個產品</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
 
@@ -305,9 +280,9 @@ export default function ComplianceCheckPage() {
           <div className="flex gap-2 flex-wrap">
             {(
               [
-                ["flagged", `有問題 ${counts.flagged}`],
-                ["banned", `禁詞 ${counts.banned}`],
-                ["jev", `Jev 判斷 ${counts.jev}`],
+                ["banned", `🔴 禁詞 ${counts.banned}`],
+                ["legal", `🟠 法規風險 ${counts.legal}`],
+                ["ai", `🟡 AI 味 ${counts.ai}`],
                 ["all", `全部 ${report.sentenceCount}`],
               ] as [Filter, string][]
             ).map(([f, label]) => (
@@ -330,14 +305,20 @@ export default function ComplianceCheckPage() {
               <div key={i} className="p-4">
                 <p className="text-sm text-gray-800 leading-relaxed">{s.text}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {s.banned.map((b) => (
+                  {(filter === "banned" || filter === "all") && s.banned.map((b) => (
                     <span key={b.word} className="text-xs bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
                       禁詞「{b.word}」{b.replace && ` → 改「${b.replace}」`}
-                      {b.note && !b.replace && `（${b.note}）`}
+                      {b.group && `（${b.group}規範）`}
+                      {b.note && !b.replace && !b.group && `（${b.note}）`}
                     </span>
                   ))}
-                  {jevHits(s).map(([k, v]) => (
-                    <span key={k} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded px-2 py-0.5">
+                  {jevHits(s, filter === "legal" ? LEGAL_KEYS : filter === "ai" ? AI_KEYS : filter === "all" ? [...LEGAL_KEYS, ...AI_KEYS] : []).map(([k, v]) => (
+                    <span
+                      key={k}
+                      className={`text-xs border rounded px-2 py-0.5 ${
+                        AI_KEYS.includes(k) ? "bg-yellow-50 text-yellow-700 border-yellow-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}
+                    >
                       {JEV_LABELS[k]} {Math.round(v * 100)}%
                     </span>
                   ))}

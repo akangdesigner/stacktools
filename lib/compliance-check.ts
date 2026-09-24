@@ -15,7 +15,7 @@ export interface BannedWord {
   replace?: string; // 建議替換詞（客戶規範有給才填）
   note?: string; // 為什麼不能用（例如「涉及身體結構」）
   except?: string[]; // 正常用法例外：命中處落在這些詞裡面就不算（例如「塑身」遇到「塑身衣」）
-  group?: string; // 產品分組：客戶規範依產品分禁詞時，只套用畫面上勾選的組
+  group?: string; // 出自哪個產品的規範（只做顯示，禁詞一律全部套用）
 }
 
 // 必備項目：文章裡至少要出現 anyOf 其中一個字串，否則報缺
@@ -207,7 +207,8 @@ export async function fetchArticleText(url: string): Promise<{ title: string; bl
   const title = root.querySelector('h1')?.text.trim() || root.querySelector('title')?.text.trim() || '';
 
   const container =
-    root.querySelector('.entry-content') ||
+    root.querySelector('.entry-content') || // WordPress
+    root.querySelector('.Post-content') || // Shopline 部落格（class 大寫 P）
     root.querySelector('.post-content') ||
     root.querySelector('.article-content') ||
     root.querySelector('article') ||
@@ -225,7 +226,8 @@ export async function fetchArticleText(url: string): Promise<{ title: string; bl
     if (el.querySelector('p, li')) continue; // 外層容器（例如 li 裡包 p）交給內層處理，避免重複
     if (isLinkOnly(el)) continue; // 整段只有一個連結＝「前往購買>>」這種按鈕文字，不是正文
     const text = el.text.replace(/\s+/g, ' ').trim();
-    if (text) blocks.push(text);
+    if (!text || /\{\{.*\}\}/.test(text)) continue; // 前端模板碼（Shopline 的 {{ ... | translate }}），不是正文
+    blocks.push(text);
   }
   return { title, blocks };
 }
@@ -262,6 +264,7 @@ export interface BannedHit {
   word: string;
   replace?: string;
   note?: string;
+  group?: string;
 }
 
 export function findBanned(sentence: string, banned: BannedWord[]): BannedHit[] {
@@ -277,7 +280,7 @@ export function findBanned(sentence: string, banned: BannedWord[]): BannedHit[] 
       const inside = covered.some(([s, e]) => idx >= s && end <= e);
       if (!inside && !isException(sentence, idx, b)) {
         covered.push([idx, end]);
-        if (!hits.some((h) => h.word === b.word)) hits.push({ word: b.word, replace: b.replace, note: b.note });
+        if (!hits.some((h) => h.word === b.word)) hits.push({ word: b.word, replace: b.replace, note: b.note, group: b.group });
       }
       from = end;
     }
@@ -291,11 +294,6 @@ function isException(sentence: string, idx: number, b: BannedWord): boolean {
     const offset = ex.indexOf(b.word);
     return offset !== -1 && sentence.startsWith(ex, idx - offset);
   });
-}
-
-// 客戶規範的產品分組清單（沒分組的客戶回空陣列）
-export function ruleGroups(ruleSet: ClientRuleSet): string[] {
-  return [...new Set(ruleSet.banned.map((b) => b.group).filter((g): g is string => !!g))];
 }
 
 // 使用者在畫面上補的禁詞：一行一個，可寫「禁詞=>替換詞」
@@ -390,16 +388,13 @@ export async function runComplianceCheck(opts: {
   blocks: string[];
   title: string;
   ruleSet: ClientRuleSet;
-  groups?: string[]; // 勾選的產品分組；沒傳＝全部套用
   extraBanned: BannedWord[];
 }): Promise<ComplianceReport> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('缺少 OPENROUTER_API_KEY 環境變數');
 
   const sentences = splitSentences(opts.blocks).slice(0, MAX_SENTENCES);
-  // 有分組的禁詞只套用勾選的組；沒分組的一律套用
-  const ruleBanned = opts.ruleSet.banned.filter((b) => !b.group || !opts.groups || opts.groups.includes(b.group));
-  const banned = [...ruleBanned, ...opts.extraBanned];
+  const banned = [...opts.ruleSet.banned, ...opts.extraBanned];
 
   const results: SentenceResult[] = sentences.map((text) => ({ text, banned: findBanned(text, banned), jev: {} }));
 

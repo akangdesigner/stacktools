@@ -3,7 +3,6 @@ import {
   CLIENT_RULES,
   fetchArticleText,
   parseExtraBanned,
-  ruleGroups,
   runComplianceCheck,
   textToBlocks,
 } from '@/lib/compliance-check';
@@ -20,14 +19,13 @@ export async function GET() {
       source: c.source,
       banned: c.banned,
       required: c.required.map((r) => r.label),
-      groups: ruleGroups(c),
     })),
   });
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { url?: string; text?: string; clientId?: string; extraBanned?: string; groups?: string[] };
+    const body = (await req.json()) as { url?: string; text?: string; clientId?: string; extraBanned?: string };
     const ruleSet = CLIENT_RULES.find((c) => c.id === body.clientId) ?? CLIENT_RULES[0];
 
     let title = '';
@@ -48,7 +46,6 @@ export async function POST(req: NextRequest) {
       blocks,
       title,
       ruleSet,
-      groups: body.groups,
       extraBanned: parseExtraBanned(body.extraBanned ?? ''),
     });
     return NextResponse.json(report);
