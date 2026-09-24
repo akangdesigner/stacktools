@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   CLIENT_RULES,
   fetchArticleText,
+  type Block,
   parseExtraBanned,
   runComplianceCheck,
   textToBlocks,
@@ -25,11 +26,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { url?: string; text?: string; clientId?: string; extraBanned?: string };
+    const body = (await req.json()) as { url?: string; text?: string; clientId?: string; extraBanned?: string; mode?: 'legal' | 'ai' };
     const ruleSet = CLIENT_RULES.find((c) => c.id === body.clientId) ?? CLIENT_RULES[0];
 
     let title = '';
-    let blocks: string[];
+    let blocks: Block[];
     if (body.url?.trim()) {
       const url = /^https?:\/\//i.test(body.url.trim()) ? body.url.trim() : 'https://' + body.url.trim();
       const article = await fetchArticleText(url);
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     if (blocks.length === 0) return NextResponse.json({ error: '抓不到文章內文' }, { status: 400 });
 
     const report = await runComplianceCheck({
+      mode: body.mode === 'ai' ? 'ai' : 'legal',
       blocks,
       title,
       ruleSet,

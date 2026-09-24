@@ -22,6 +22,8 @@ interface SentenceResult {
   text: string;
   banned: BannedWord[];
   jev: Partial<Record<JevKey, number>>;
+  category: "cosmetic" | "food" | "textile" | "laundry" | "none"; // Jev 判斷這句在講哪類產品
+  allowed: string[]; // 該類別官方明列可用的詞句
   jevError?: boolean;
 }
 interface Report {
@@ -47,9 +49,17 @@ const JEV_THRESHOLD = 0.6;
 // 法規風險和 AI 味分開判斷、分開列
 const LEGAL_KEYS: JevKey[] = ["medical_claim", "body_change", "solicitation", "exaggeration"];
 const AI_KEYS: JevKey[] = ["ai_contrast"];
+const CATEGORY_LABELS: Record<SentenceResult["category"], string> = {
+  cosmetic: "化粧品",
+  food: "食品",
+  textile: "紡織品",
+  laundry: "衣物清潔劑",
+  none: "",
+};
 const STORAGE_KEY = "compliance-check:extra-banned"; // 自訂禁詞依客戶存在瀏覽器
 
-type Filter = "banned" | "legal" | "ai" | "all";
+type Mode = "legal" | "ai"; // 一開始選：檢查法規（禁詞＋法規風險）或檢查 AI 味
+type Filter = "banned" | "legal"; // 法規模式底下再分禁詞／法規風險兩頁
 
 function jevHits(s: SentenceResult, keys: JevKey[]): [JevKey, number][] {
   return (Object.entries(s.jev) as [JevKey, number][])
@@ -68,6 +78,7 @@ export default function ComplianceCheckPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<Report | null>(null);
+  const [mode, setMode] = useState<Mode>("legal");
   const [filter, setFilter] = useState<Filter>("banned");
 
   useEffect(() => {
@@ -109,6 +120,7 @@ export default function ComplianceCheckPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mode,
           clientId,
           extraBanned,
           ...(inputMode === "url" ? { url } : { text }),
@@ -129,19 +141,24 @@ export default function ComplianceCheckPage() {
     if (!report) return null;
     const banned = report.sentences.filter((s) => s.banned.length > 0).length;
     const legal = report.sentences.filter((s) => jevHits(s, LEGAL_KEYS).length > 0).length;
-    const ai = report.sentences.filter((s) => jevHits(s, AI_KEYS).length > 0).length;
-    return { banned, legal, ai };
+    return { banned, legal };
   }, [report]);
 
   const visible = useMemo(() => {
     if (!report) return [];
     return report.sentences.filter((s) => {
+      if (mode === "ai") return jevHits(s, AI_KEYS).length > 0;
       if (filter === "banned") return s.banned.length > 0;
-      if (filter === "legal") return jevHits(s, LEGAL_KEYS).length > 0;
-      if (filter === "ai") return jevHits(s, AI_KEYS).length > 0;
-      return true;
+      return jevHits(s, LEGAL_KEYS).length > 0;
     });
-  }, [report, filter]);
+  }, [report, filter, mode]);
+
+  // 換模式時清掉舊結果，避免法規結果留在 AI 味畫面上
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setReport(null);
+    setError("");
+  };
 
   const canRun = !loading && (inputMode === "url" ? url.trim() : text.trim());
 
@@ -150,11 +167,34 @@ export default function ComplianceCheckPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">文案法規檢查</h1>
         <p className="text-sm text-gray-500 mt-1">
-          逐句分三類檢查：客戶禁詞（程式比對）、法規風險（Jev 判斷換句話說的療效宣稱或招攬）、AI 味反轉句（Jev）。結果是高風險提示，最後仍要人確認。
+          先選要檢查法規還是 AI 味。法規＝客戶禁詞（程式比對）＋法規風險（Jev 判斷換句話說的療效宣稱或招攬）；AI 味＝Jev 抓反轉句。結果是高風險提示，最後仍要人確認。
         </p>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        {/* 檢查模式 */}
+        <div className="flex gap-2">
+          {(
+            [
+              ["legal", "⚖️ 檢查法規（禁詞＋法規風險）"],
+              ["ai", "🤖 檢查 AI 味"],
+            ] as [Mode, string][]
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => switchMode(m)}
+              className={`text-sm font-medium px-4 py-2 rounded-lg border-2 ${
+                mode === m ? "border-orange-500 bg-orange-50 text-orange-700" : "border-gray-200 text-gray-500 hover:border-gray-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "legal" && (
+        <>
         {/* 客戶規則 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">客戶規則</label>
@@ -204,6 +244,8 @@ export default function ComplianceCheckPage() {
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
           />
         </div>
+        </>
+        )}
 
         {/* 文章輸入 */}
         <div>
@@ -253,8 +295,7 @@ export default function ComplianceCheckPage() {
       {report && counts && (
         <div className="mt-6 space-y-4">
           <div className="text-sm text-gray-500">
-            {report.title && <span className="font-medium text-gray-800">{report.title}．</span>}
-            {report.client}．共 {report.sentenceCount} 句．Jev 花費 ${report.cost.toFixed(4)}
+            {report.title && <span className="font-medium text-gray-800">{report.title}</span>}
             {report.jevFailed > 0 && <span className="text-red-500">．{report.jevFailed} 句 Jev 判斷失敗</span>}
           </div>
 
@@ -277,13 +318,12 @@ export default function ComplianceCheckPage() {
             </div>
           )}
 
+          {mode === "legal" && (
           <div className="flex gap-2 flex-wrap">
             {(
               [
                 ["banned", `🔴 禁詞 ${counts.banned}`],
                 ["legal", `🟠 法規風險 ${counts.legal}`],
-                ["ai", `🟡 AI 味 ${counts.ai}`],
-                ["all", `全部 ${report.sentenceCount}`],
               ] as [Filter, string][]
             ).map(([f, label]) => (
               <button
@@ -298,6 +338,7 @@ export default function ComplianceCheckPage() {
               </button>
             ))}
           </div>
+          )}
 
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {visible.length === 0 && <p className="p-4 text-sm text-gray-400">沒有符合的句子</p>}
@@ -305,14 +346,14 @@ export default function ComplianceCheckPage() {
               <div key={i} className="p-4">
                 <p className="text-sm text-gray-800 leading-relaxed">{s.text}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {(filter === "banned" || filter === "all") && s.banned.map((b) => (
+                  {mode === "legal" && filter === "banned" && s.banned.map((b) => (
                     <span key={b.word} className="text-xs bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
                       禁詞「{b.word}」{b.replace && ` → 改「${b.replace}」`}
                       {b.group && `（${b.group}規範）`}
                       {b.note && !b.replace && !b.group && `（${b.note}）`}
                     </span>
                   ))}
-                  {jevHits(s, filter === "legal" ? LEGAL_KEYS : filter === "ai" ? AI_KEYS : filter === "all" ? [...LEGAL_KEYS, ...AI_KEYS] : []).map(([k, v]) => (
+                  {jevHits(s, mode === "ai" ? AI_KEYS : filter === "legal" ? LEGAL_KEYS : []).map(([k, v]) => (
                     <span
                       key={k}
                       className={`text-xs border rounded px-2 py-0.5 ${
@@ -322,6 +363,14 @@ export default function ComplianceCheckPage() {
                       {JEV_LABELS[k]} {Math.round(v * 100)}%
                     </span>
                   ))}
+                  {mode === "legal" && s.category !== "none" && (
+                    <span className="text-xs bg-gray-100 text-gray-500 rounded px-2 py-0.5">產品類別：{CATEGORY_LABELS[s.category]}</span>
+                  )}
+                  {mode === "legal" && s.allowed.length > 0 && (
+                    <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5">
+                      {CATEGORY_LABELS[s.category]}可用：{s.allowed.join("、")}（有數據佐證的前提下）
+                    </span>
+                  )}
                   {s.jevError && <span className="text-xs text-gray-400">Jev 判斷失敗</span>}
                 </div>
               </div>

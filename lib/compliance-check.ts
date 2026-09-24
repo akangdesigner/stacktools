@@ -45,12 +45,38 @@ const COMMON_EXCEPTIONS: Record<string, string[]> = {
   推薦: ['推薦閱讀'],
 };
 
+// 官方準則裡「不論有沒有認證都不能用」的詞，所有客戶的法規檢查都套用
+// 出處：化粧品標示宣傳廣告涉及虛偽誇大或醫療效能認定準則附件一、四；藥事法第 69 條（非藥物不得宣稱醫療效能）
+export const OFFICIAL_BANNED: BannedWord[] = [
+  '殺菌', '換膚', '醫美級', '水光針', '婦女病', '預防感染', '降低感染', '減少感染', '防脫髮', '預防落髮', '生髮', '消痘', '除疤',
+].map((word) => ({ word, note: '官方準則：不論有沒有認證都不能用', group: '官方準則' }));
+
+// Jev 判斷的產品類別
+export type ProductCategory = 'cosmetic' | 'food' | 'textile' | 'laundry' | 'none';
+export const CATEGORY_LABELS: Record<ProductCategory, string> = {
+  cosmetic: '化粧品',
+  food: '食品',
+  textile: '紡織品',
+  laundry: '衣物清潔劑',
+  none: '',
+};
+
+// 各類別「官方明列可用」的詞句：句子被 Jev 判高風險時，若含這些詞就標註「此類別可用」讓人判斷
+// 出處：化粧品認定準則附件二（需有數據佐證）、食品認定準則附件一／二；紡織品不歸化粧品法管
+const ALLOWED_BY_CATEGORY: Record<ProductCategory, string[]> = {
+  cosmetic: ['美白', '淨白', '改善暗沉', '保濕', '控油', '抗痘', '抗屑', '強健髮根', '弱酸'],
+  food: ['使排便順暢', '幫助維持消化道機能', '改變細菌叢生態', '調整體質', '養顏美容', '促進膠原蛋白形成', '營養補給'],
+  textile: ['3A', 'AAA', '抗菌', '排濕', '透氣'],
+  laundry: ['去漬', '去污', '洗淨'],
+  none: [],
+};
+
 // 規則來自 Drive「客戶」資料夾裡各客戶的規範文件（2026-09-24 整理）
 export const CLIENT_RULES: ClientRuleSet[] = [
   {
     id: 'general',
-    name: '通用（只跑 AI 判斷）',
-    source: '無客戶專屬規範',
+    name: '通用（只套官方準則）',
+    source: '無客戶專屬規範，只套官方準則禁詞',
     banned: [],
     required: [],
   },
@@ -197,10 +223,23 @@ export const JEV_CHECKS = [
 
 export type JevKey = (typeof JEV_CHECKS)[number]['key'];
 
+// 檢查模式：法規（禁詞＋必備項目＋Jev 法規題）和 AI 味（只問 Jev 反轉句）分開跑，只問需要的題目
+export type CheckMode = 'legal' | 'ai';
+const MODE_KEYS: Record<CheckMode, JevKey[]> = {
+  legal: ['medical_claim', 'body_change', 'solicitation', 'exaggeration'],
+  ai: ['ai_contrast'],
+};
+
 // ── 抓文章、拆句 ────────────────────────────────────
 
 // 從網址抓文章正文：優先找常見的文章容器，找不到才退回整個 body
-export async function fetchArticleText(url: string): Promise<{ title: string; blocks: string[] }> {
+// 文章區塊：標題（h1～h4）要另外標記，拆句時當作後面句子的段落脈絡給 Jev 判斷產品類別
+export interface Block {
+  text: string;
+  heading: boolean;
+}
+
+export async function fetchArticleText(url: string): Promise<{ title: string; blocks: Block[] }> {
   const res = await fetchWithTimeout(url, 15000);
   if (!res.ok) throw new Error(`抓取文章失敗：HTTP ${res.status}`);
   const root = parse(await res.text());
@@ -221,13 +260,13 @@ export async function fetchArticleText(url: string): Promise<{ title: string; bl
     .querySelectorAll('script, style, noscript, nav, header, footer, aside, form, button, iframe, svg')
     .forEach((el) => el.remove());
 
-  const blocks: string[] = [];
+  const blocks: Block[] = [];
   for (const el of container.querySelectorAll('h1, h2, h3, h4, p, li, td, blockquote, figcaption')) {
     if (el.querySelector('p, li')) continue; // 外層容器（例如 li 裡包 p）交給內層處理，避免重複
     if (isLinkOnly(el)) continue; // 整段只有一個連結＝「前往購買>>」這種按鈕文字，不是正文
     const text = el.text.replace(/\s+/g, ' ').trim();
     if (!text || /\{\{.*\}\}/.test(text)) continue; // 前端模板碼（Shopline 的 {{ ... | translate }}），不是正文
-    blocks.push(text);
+    blocks.push({ text, heading: /^h[1-4]$/i.test(el.tagName) });
   }
   return { title, blocks };
 }
@@ -241,18 +280,24 @@ function isLinkOnly(el: NHTMLElement): boolean {
 }
 
 // 貼上的純文字：一行一個區塊
-export function textToBlocks(text: string): string[] {
-  return text.split(/\n+/).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+export function textToBlocks(text: string): Block[] {
+  return text
+    .split(/\n+/)
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .map((t) => ({ text: t, heading: false }));
 }
 
-// 區塊再依句號／問號／驚嘆號切句
-export function splitSentences(blocks: string[]): string[] {
-  const out: string[] = [];
+// 區塊再依句號／問號／驚嘆號切句，每句帶上所在段落的標題
+export function splitSentences(blocks: Block[]): { text: string; heading: string }[] {
+  const out: { text: string; heading: string }[] = [];
+  let heading = '';
   for (const b of blocks) {
+    if (b.heading) heading = b.text;
     // 句尾標點後面緊接的右引號跟著前一句（「…會自己好嗎？」的「」」不能落到下一句開頭）
-    for (const s of b.split(/(?<=[。！？!?][」』”]?)(?![」』”])/)) {
+    for (const s of b.text.split(/(?<=[。！？!?][」』”]?)(?![」』”])/)) {
       const t = s.trim();
-      if (t.length >= 4) out.push(t);
+      if (t.length >= 4) out.push({ text: t, heading });
     }
   }
   return out;
@@ -320,13 +365,37 @@ const JEV_CONCURRENCY = 10; // 實測 10 併發 443 句約 50 秒，一篇文章
 
 type JevScores = Partial<Record<JevKey, number>>;
 
-async function askJev(sentence: string, apiKey: string): Promise<{ scores: JevScores; cost: number }> {
-  const questions = Object.fromEntries(JEV_CHECKS.map((c) => [c.key, c.q]));
+// 產品類別題（choice）：同一個「抗菌」放在內褲和清潔液上合法性不同，要先知道句子在講哪類產品
+// 實測（Relove 文章 8 句）有段落標題當脈絡時，講到產品的句子類別都判對、信心 0.83～1；一般衛教句信心低
+const CATEGORY_QUESTION = {
+  type: 'choice',
+  instructions: 'Which kind of product is THIS sentence describing or making a claim about? Use the section heading as context.',
+  criteria: {
+    cosmetic: 'Skin/hair/intimate cleanser, gel, lotion, mask, shampoo, wipes, perfume, hair-removal cream (cosmetics).',
+    food: 'Supplement, probiotic capsule, drink, vitamin, collagen, any food eaten or drunk.',
+    textile: 'Underwear, panties, clothing, fabric.',
+    laundry: 'Laundry detergent or hand-wash liquid for washing clothes/underwear.',
+    none: 'Not about a specific product (general health education, habits, symptoms, advice).',
+  },
+};
+const CATEGORY_MIN_CONFIDENCE = 0.6; // 類別信心低於這個值就當作「沒在講產品」
+
+async function askJev(
+  sentence: string,
+  heading: string,
+  keys: JevKey[],
+  withCategory: boolean,
+  apiKey: string,
+): Promise<{ scores: JevScores; category: ProductCategory; cost: number }> {
+  const checks = JEV_CHECKS.filter((c) => keys.includes(c.key));
+  const questions: Record<string, unknown> = Object.fromEntries(checks.map((c) => [c.key, c.q]));
+  if (withCategory) questions.category = CATEGORY_QUESTION;
   const body = JSON.stringify({
     model: JEV_MODEL,
     state: {
       article_language: 'Traditional Chinese',
       context: 'marketing article / blog post written for a brand or clinic in Taiwan',
+      section_heading: heading,
       sentence,
     },
     questions,
@@ -347,15 +416,20 @@ async function askJev(sentence: string, apiKey: string): Promise<{ scores: JevSc
         continue;
       }
       const data = (await res.json()) as {
-        answers?: Record<string, { noul?: number }>;
+        answers?: Record<string, { noul?: number; choice?: string; confidence?: number }>;
         usage?: { cost?: number };
       };
       const scores: JevScores = {};
-      for (const c of JEV_CHECKS) {
+      for (const c of checks) {
         const v = data.answers?.[c.key]?.noul;
         if (typeof v === 'number') scores[c.key] = v;
       }
-      return { scores, cost: data.usage?.cost ?? 0 };
+      const cat = data.answers?.category;
+      const category: ProductCategory =
+        cat?.choice && cat.choice in CATEGORY_LABELS && (cat.confidence ?? 0) >= CATEGORY_MIN_CONFIDENCE
+          ? (cat.choice as ProductCategory)
+          : 'none';
+      return { scores, category, cost: data.usage?.cost ?? 0 };
     } catch (e) {
       lastErr = String(e);
     }
@@ -369,6 +443,8 @@ export interface SentenceResult {
   text: string;
   banned: BannedHit[];
   jev: JevScores; // 各題「是」的機率 0～1
+  category: ProductCategory; // Jev 判斷這句在講哪類產品（法規模式才判）
+  allowed: string[]; // 句子裡出現、且在該類別官方明列可用的詞句
   jevError?: boolean;
 }
 
@@ -385,7 +461,8 @@ export interface ComplianceReport {
 const MAX_SENTENCES = 400; // 超過就截斷，避免一次跑太久撞到閘道逾時
 
 export async function runComplianceCheck(opts: {
-  blocks: string[];
+  mode: CheckMode;
+  blocks: Block[];
   title: string;
   ruleSet: ClientRuleSet;
   extraBanned: BannedWord[];
@@ -394,9 +471,17 @@ export async function runComplianceCheck(opts: {
   if (!apiKey) throw new Error('缺少 OPENROUTER_API_KEY 環境變數');
 
   const sentences = splitSentences(opts.blocks).slice(0, MAX_SENTENCES);
-  const banned = [...opts.ruleSet.banned, ...opts.extraBanned];
+  const legal = opts.mode === 'legal';
+  // AI 味模式不比對禁詞；法規模式＝官方準則禁詞＋客戶禁詞＋自訂禁詞
+  const banned = legal ? [...OFFICIAL_BANNED, ...opts.ruleSet.banned, ...opts.extraBanned] : [];
 
-  const results: SentenceResult[] = sentences.map((text) => ({ text, banned: findBanned(text, banned), jev: {} }));
+  const results: SentenceResult[] = sentences.map((s) => ({
+    text: s.text,
+    banned: findBanned(s.text, banned),
+    jev: {},
+    category: 'none',
+    allowed: [],
+  }));
 
   // 併發呼叫 Jev：固定數量的 worker 輪流領下一句
   let cost = 0;
@@ -406,8 +491,10 @@ export async function runComplianceCheck(opts: {
     while (next < results.length) {
       const i = next++;
       try {
-        const r = await askJev(results[i].text, apiKey);
+        const r = await askJev(results[i].text, sentences[i].heading, MODE_KEYS[opts.mode], legal, apiKey);
         results[i].jev = r.scores;
+        results[i].category = r.category;
+        results[i].allowed = ALLOWED_BY_CATEGORY[r.category].filter((w) => results[i].text.includes(w));
         cost += r.cost;
       } catch {
         results[i].jevError = true;
@@ -421,7 +508,7 @@ export async function runComplianceCheck(opts: {
     title: opts.title,
     client: opts.ruleSet.name,
     sentenceCount: sentences.length,
-    required: checkRequired(opts.blocks.join('\n'), opts.ruleSet.required),
+    required: legal ? checkRequired(opts.blocks.map((b) => b.text).join('\n'), opts.ruleSet.required) : [],
     sentences: results,
     cost,
     jevFailed,
