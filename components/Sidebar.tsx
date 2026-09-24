@@ -43,6 +43,19 @@ const marketingItems: NavItem[] = [
     ),
   },
   {
+    href: '/compliance-check',
+    label: '文案法規檢查',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v18" />
+        <path d="M5 21h14" />
+        <path d="M3 7h18" />
+        <path d="M6 7l-3 7a3 3 0 0 0 6 0z" />
+        <path d="M18 7l-3 7a3 3 0 0 0 6 0z" />
+      </svg>
+    ),
+  },
+  {
     href: '/knowledge',
     label: '精選知識文章',
     icon: (

@@ -36,6 +36,15 @@ const marketingTools: Tool[] = [
     inDev: false,
   },
   {
+    href: "/compliance-check",
+    title: "文案法規檢查",
+    description: "逐句檢查客戶禁詞與必備但書，再用 Jev 抓出換句話說的療效宣稱、招攬用語。",
+    icon: "⚖️",
+    color: "bg-rose-50 border-rose-200 hover:border-rose-400",
+    iconBg: "bg-rose-100",
+    inDev: false,
+  },
+  {
     href: "/knowledge",
     title: "精選知識文章",
     description: "瀏覽 AI 趨勢與 SEO 新知，掌握最新產業動態與實用知識。",
