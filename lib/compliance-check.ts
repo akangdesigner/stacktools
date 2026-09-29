@@ -248,15 +248,15 @@ export const JEV_CHECKS = [
       criteria: { true: 'Uses inflated emphasis words or forced sensory adjectives.', false: 'Plain, concrete wording.' },
     },
   },
-  // C 類：社群情緒假詞、簡中技術黑話
+  // C 類：社群情緒假詞、簡中技術黑話（「其實／很清楚／很簡單」小積木說還好，2026-09-29 拿掉）
   {
     key: 'ai_slang',
     label: 'AI 味社群假詞',
     q: {
       type: 'noul',
       instructions:
-        'Does this sentence use hollow social-media buzzwords such as 穩/撐/懂的都懂/接住/不繞/很現實, filler adverbs 其實/很清楚/很簡單 used only for tone, or the pit metaphors 踩坑/踩雷/避坑/填坑/入坑?',
-      criteria: { true: 'Uses hollow buzzwords, tone-filler adverbs or pit metaphors.', false: 'No such words.' },
+        'Does this sentence use hollow social-media buzzwords such as 穩/撐/懂的都懂/接住/不繞/很現實, or the pit metaphors 踩坑/踩雷/避坑/填坑/入坑? Plain words like 其實/很清楚/很簡單 do NOT count.',
+      criteria: { true: 'Uses hollow buzzwords or pit metaphors.', false: 'No such words (其實/很簡單 alone is fine).' },
     },
   },
   // D 類：標題的 AI 味（先搞懂、冒號＋斷言、懸念、殘句口號、做作比喻）
