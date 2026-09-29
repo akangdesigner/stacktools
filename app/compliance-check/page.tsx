@@ -66,6 +66,7 @@ const CATEGORY_LABELS: Record<SentenceResult["category"], string> = {
 };
 const STORAGE_KEY = "compliance-check:extra-banned"; // 自訂禁詞依客戶存在瀏覽器
 
+type Rewrite = { loading: boolean; text?: string; error?: string; applied?: boolean };
 type Mode = "legal" | "ai"; // 一開始選：檢查法規（禁詞＋法規風險）或檢查 AI 味
 type Filter = "banned" | "legal"; // 法規模式底下再分禁詞／法規風險兩頁
 
@@ -88,6 +89,8 @@ export default function ComplianceCheckPage() {
   const [report, setReport] = useState<Report | null>(null);
   const [mode, setMode] = useState<Mode>("legal");
   const [filter, setFilter] = useState<Filter>("banned");
+  // 每句的改寫結果（key＝原句）：按「改寫」才呼叫 AI，不按不花錢
+  const [rewrites, setRewrites] = useState<Record<string, Rewrite>>({});
 
   useEffect(() => {
     fetch("/api/compliance-check")
@@ -136,6 +139,7 @@ export default function ComplianceCheckPage() {
     setLoading(true);
     setError("");
     setReport(null);
+    setRewrites({});
     try {
       const res = await fetch("/api/compliance-check", {
         method: "POST",
@@ -178,7 +182,42 @@ export default function ComplianceCheckPage() {
   const switchMode = (m: Mode) => {
     setMode(m);
     setReport(null);
+    setRewrites({});
     setError("");
+  };
+
+  // 這句被抓到的問題（畫面上看到的標籤），帶給 AI 當改寫方向
+  const issuesOf = (s: SentenceResult) => [
+    ...(mode === "legal" && filter === "banned"
+      ? s.banned.map((b) => `禁詞「${b.word}」${b.replace ? `（建議改「${b.replace}」）` : ""}`)
+      : []),
+    ...jevHits(s, mode === "ai" ? AI_KEYS : filter === "legal" ? LEGAL_KEYS : []).map(([k]) => JEV_LABELS[k]),
+  ];
+
+  const rewrite = async (s: SentenceResult) => {
+    setRewrites((r) => ({ ...r, [s.text]: { loading: true } }));
+    try {
+      const res = await fetch("/api/compliance-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rewrite", sentence: s.text, issues: issuesOf(s) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "改寫失敗");
+      setRewrites((r) => ({ ...r, [s.text]: { loading: false, text: data.rewritten } }));
+    } catch (e) {
+      setRewrites((r) => ({ ...r, [s.text]: { loading: false, error: e instanceof Error ? e.message : String(e) } }));
+    }
+  };
+
+  // 套用：把貼上文字框裡的原句換成改寫版（只有貼上文字模式能套，網址抓的文章改不回原站）
+  const applyRewrite = (original: string, rewritten: string) => {
+    if (!text.includes(original)) {
+      setRewrites((r) => ({ ...r, [original]: { ...r[original], loading: false, error: "文字框裡找不到原句（可能已經改過），請手動複製" } }));
+      return;
+    }
+    setText((t) => t.replace(original, rewritten));
+    setRewrites((r) => ({ ...r, [original]: { ...r[original], loading: false, applied: true } }));
   };
 
   const canRun = !loading && (inputMode === "url" ? url.trim() : text.trim());
@@ -393,7 +432,49 @@ export default function ComplianceCheckPage() {
                     </span>
                   )}
                   {s.jevError && <span className="text-xs text-gray-400">Jev 判斷失敗</span>}
+                  {!rewrites[s.text]?.text && (
+                    <button
+                      type="button"
+                      onClick={() => rewrite(s)}
+                      disabled={rewrites[s.text]?.loading}
+                      className="text-xs text-blue-600 border border-blue-200 hover:bg-blue-50 disabled:text-gray-400 rounded px-2 py-0.5"
+                    >
+                      {rewrites[s.text]?.loading ? "改寫中…" : "✏️ 改寫"}
+                    </button>
+                  )}
                 </div>
+                {rewrites[s.text]?.error && <p className="text-xs text-red-600 mt-2">{rewrites[s.text].error}</p>}
+                {rewrites[s.text]?.text && (
+                  <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                    <p className="text-sm text-gray-800 leading-relaxed">{rewrites[s.text].text}</p>
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(rewrites[s.text].text!)}
+                        className="text-xs text-gray-600 border border-gray-300 hover:bg-white rounded px-2 py-0.5"
+                      >
+                        複製
+                      </button>
+                      {inputMode === "text" && (
+                        <button
+                          type="button"
+                          onClick={() => applyRewrite(s.text, rewrites[s.text].text!)}
+                          disabled={rewrites[s.text].applied}
+                          className="text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:bg-green-600 rounded px-2 py-0.5"
+                        >
+                          {rewrites[s.text].applied ? "✓ 已套用到文字框" : "套用"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => rewrite(s)}
+                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-0.5"
+                      >
+                        重新改寫
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

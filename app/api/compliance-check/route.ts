@@ -24,9 +24,55 @@ export async function GET() {
   });
 }
 
+// 改寫用的規則摘要：出自小積木的去 AI 味規則（GitHub akangdesigner/qkangber docs/anti-ai-style.md）＋化粧品／食品廣告法規
+const REWRITE_SYSTEM = `你是繁體中文文案編輯，負責改寫「單一句子」，讓它沒有 AI 味、也不違反台灣廣告法規。
+規則：
+- 反轉句：不要用「不是A而是B」「不只A更B」「…，而非…」「…，不是…」，把判斷正面講完。
+- 報幕／過渡詞：刪掉「首先、舉例來說、簡單來說、以下逐一說明、值得注意的是」這類宣告，直接講內容。
+- 浮誇詞：「至關重要、關鍵、顯著」換成具體後果或直接刪掉。
+- 社群假詞：不用穩、撐、接住、踩坑、踩雷，直接講發生什麼事。
+- 標題：不叫讀者「先搞懂／先了解／先認識」做任何事（換成同義詞也不行）、不用冒號加聳動斷言、不寫懸念或口號，也不要寫成名詞堆疊的冷標籤（「…說明」「…介紹」「…解析」），要改成有動詞、讀起來是一句話的短句。例：「面膜種類與功效定位：先搞懂再開始挑」→「面膜有哪些種類，各適合什麼膚況」。
+- 假擬人：產品、成分不會「對付、衝著、顧到、搞定」，只寫成分是什麼、作用和結果。
+- 不用破折號（——），標點一律用全形（，。：）。
+- 法規：不宣稱醫療效果、不宣稱改變身體結構或生理機能、不用促銷招攬與絕對用語；有禁詞就換掉。
+- 保留原句的資訊與意思，不新增原句沒有的數字或事實，長度跟原句差不多。
+只輸出改寫後的那一句，不要解釋、不要加引號。`;
+
+// 改寫單句：前端按「改寫」時呼叫，帶這句被抓到的問題
+async function rewriteSentence(sentence: string, issues: string[]) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('缺少 OPENROUTER_API_KEY 環境變數');
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'anthropic/claude-sonnet-5',
+      temperature: 0.4,
+      max_tokens: 800,
+      messages: [
+        { role: 'system', content: REWRITE_SYSTEM },
+        { role: 'user', content: `這句被抓到的問題：${issues.join('、') || '（未指定）'}\n\n原句：${sentence}` },
+      ],
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || `改寫失敗：HTTP ${res.status}`);
+  const out = (data.choices?.[0]?.message?.content ?? '').trim().replace(/^[「"]|[」"]$/g, '');
+  if (!out) throw new Error('改寫結果是空的');
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { url?: string; text?: string; clientId?: string; extraBanned?: string; mode?: 'legal' | 'ai' };
+    const body = (await req.json()) as {
+      url?: string; text?: string; clientId?: string; extraBanned?: string; mode?: 'legal' | 'ai';
+      action?: 'rewrite'; sentence?: string; issues?: string[];
+    };
+
+    if (body.action === 'rewrite') {
+      if (!body.sentence?.trim()) return NextResponse.json({ error: '沒有要改寫的句子' }, { status: 400 });
+      return NextResponse.json({ rewritten: await rewriteSentence(body.sentence.trim(), body.issues ?? []) });
+    }
     const ruleSet = CLIENT_RULES.find((c) => c.id === body.clientId) ?? CLIENT_RULES[0];
 
     let title = '';
