@@ -140,44 +140,7 @@ MMA格鬥流派全解析：3分鐘看懂7大核心武術與實戰應用！
 如果你是讀者，看完這份目錄後，你覺得還有什麼『沒被解決的疑慮』嗎？
 專業堅持：當我主動提出修改建議時，請基於真實搜尋意圖與 SEO 價值審視。若我的建議會導致主題發散或無助於排名，請「明確拒絕我並給出專業理由」，不允許為了討好我而盲目附和。`,
 
-  review: `你是一位專業的 SEO 文章審稿員，專門審查繁體中文內容行銷文章。每條修改建議只針對一句話，不改整段。
 
-【文字品質】
-・刪除低資訊句：每句必須帶新資訊，不用不同說法重複同一件事
-・禁用「先否定、再肯定」句型：不是A而是B／不只A更是B／不應該A而應該B
-・避免低資訊連接詞開頭：「然而」「換句話說」「這樣」「這件事」「這一點」
-・錯誤做法的提醒順序：先給正確判斷標準，再簡短補充風險；不要先講錯誤
-
-【E-E-A-T】
-・文章中以 [文字](URL) 格式標注的超連結代表已引用來源，審稿時視為具備可查證依據，不需要建議補充來源
-・數據、研究、法規若沒有附超連結，才建議補充來源或改為保守說法
-・術語說明層次清楚：概念 → 判斷依據 → 實作，不可跳過關鍵步驟
-・效果宣稱保守，不得出現「保證」「100%」「一定」等絕對用語
-・可建議補充具體案例、操作情境或參考文獻
-
-【其他】
-・品牌相關宣稱不得超出品牌描述範圍，不捏造成效或數據
-・H3 小節之間不可重複說明相同概念`,
-
-  violation: `你是一位專業的廣告合規審稿員，專門檢查繁體中文內容行銷文章是否使用客戶禁用詞。只挑出明確違規的地方，不要對文字品質、語氣、風格、結構、SEO 等非違規問題提供建議。`,
-
-  antiai: `你是一位專門抓「AI 腔調」的繁體中文編輯，判準完全依據以下黑名單，不判斷其他文字品質、SEO、結構問題。
-
-【用字黑名單 — 命中就是問題】
-・灌水開頭／教科書過渡詞：深入探討、值得注意的是、首先/其次/最後、然而、總而言之；宣告式開場如「先誠實講」「我會說清楚」「舉個例子來說」「先交代一下」「一句話講完」；換段報幕句如「X 講完了，來看 Y」「好戲在後頭」
-・浮誇強調詞：至關重要、關鍵的、不可磨滅、顯著的、凸顯了／強調了；給抽象事物套虛無的感官形容詞（發現「觸目驚心」、結果「血淋淋」、「發人深省」）
-・社群情緒假詞：穩、撐、懂的都懂、接住、很現實（裝熟裝感性）
-・經典 AI 句型：「這不是……而是……」「不僅是……更是……」「從……到……」假範圍、破折號（——）句尾補充、三段式排比、僵化結尾（綜上所述／In conclusion）、殘句標語式標題（問句＋聳動斷句沒講完）、懸念式標題（「…長什麼樣」不講內容）、標題用「先搞懂／先了解」對讀者下指令、憑空宣告「是真的／不是假的」、「閃得掉／躲得掉」裝順口語動詞、冒號＋聳動斷言式標題、縮略口號式標題（沒主詞動詞的斷句）
-・空洞模糊：空洞讚美（燈塔、見證）、模糊歸因（「批評者認為」不指名）、Markdown 符號殘留在正文
-・抽象化缺錨點：概念名詞化（自我的探索、效率的提升）、缺乏具體時間地點人名數字（某個午後、許多企業）
-
-【EEAT 具體化 — 正面檢查】
-・是否有具體時間、地點、數字、真實情境，而不是空泛宏觀敘述
-・句子是否靠動詞推動，而非堆砌名詞
-・段落節奏是否有長有短，不是每段都對稱工整
-・唸出聲音會不會像真人在講話，而不是像作文範本
-
-不要報告與上述黑名單無關的文字品質、SEO、結構問題。`,
 };
 
 // 架構底線：硬性結構限制，寫死、不會被個人化提示詞覆蓋。
@@ -353,116 +316,9 @@ function normalizeBoldPunctuation(md: string): string {
   return md.replace(/\*\*([^*\n]+?)([：:，。、；！？]+)\*\*(?=\S)/g, '**$1**$2');
 }
 
-function buildReviewSystemMessage(opts: {
-  writingGuide: string; clientWritingRules: string;
-  sectionOverride: string; brandDescription: string;
-  reviewOverride?: string; // 個人化的審稿規則（覆蓋 PROMPT_DEFAULTS.review）
-}): string {
-  const parts: string[] = [];
 
-  parts.push((opts.reviewOverride ?? '').trim() || PROMPT_DEFAULTS.review);
 
-  if (opts.brandDescription.trim())
-    parts.push(`【品牌背景資訊 — 宣稱必須在此範圍內】\n${opts.brandDescription.trim()}`);
-  if (opts.clientWritingRules.trim())
-    parts.push(`【客戶寫作風格規則】\n${opts.clientWritingRules.trim()}`);
-  if (opts.sectionOverride.trim())
-    parts.push(`【使用者指定寫作規則 — 最高優先】\n${opts.sectionOverride.trim()}`);
-  return parts.join('\n\n');
-}
 
-// 違規詞校驗完全依據客戶設定的禁詞清單判斷；客戶沒設定禁詞就不需要檢查（直接跳過）
-function buildViolationReviewSystemMessage(opts: { bannedWords: string; violationOverride?: string }): string {
-  return `${(opts.violationOverride ?? '').trim() || PROMPT_DEFAULTS.violation}
-
-【禁止使用的詞彙或宣稱 — 文章中若出現以下詞彙、或語意相近的宣稱，一律視為違規】
-${opts.bannedWords.trim()}`;
-}
-
-function buildViolationReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
-  return `文章標題：${opts.title}
-目標關鍵字：${opts.keyword}
-
-待審稿文章：
-
-${article}
-
----
-
-請逐字檢查文章，找出所有使用禁用詞（或語意相近宣稱）的地方，不可遺漏。若完全沒有違規，請只輸出「整體評分：10/10 — 未發現違規」，不要輸出任何建議區塊。否則請先輸出「整體評分：X/10 — 說明」（依違規嚴重程度與數量評分），再逐條列出違規，每條格式如下：
-
----SUGGESTION---
-SECTION: （問題所在的 H2 段落名稱）
-ISSUE: （違反了哪一條禁詞或規範，具體說明）
-OLD: （從文章中精確複製違規的詞句本身；若是局部刪除（不是整句刪除），必須把刪掉後會變得多餘或斷裂的相鄰標點符號、連接詞一併包含進來，例如前後的「、」「，」「和」「以及」「並」等，不可只複製違規詞本身；必須與文章一字不差）
-NEW: （建議替換的安全用詞或調整後的銜接文字，確保替換或刪除後語句仍然通順完整、不留斷裂標點；若整句都需要刪除則此欄完全空白）
----END---
-
-重要規定（違反則建議無效）：
-1. OLD 只複製真正違規的詞句本身，不要包含不相關的上下文；但若是局部刪除，必須照上面規則把多餘標點、連接詞也納入 OLD 範圍
-2. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
-3. 只挑出真正違規的地方，不要報告文字品質、語氣、風格、結構等非違規問題
-4. 局部刪除違規詞時，務必確認刪除/替換後語句通順，不留下多餘或斷裂的標點符號
-5. 繁體中文輸出`;
-}
-
-// 去AI味檢查不依賴客戶設定，判準固定就是黑名單本身，只允許用個人化覆蓋整份取代
-function buildAntiAiReviewSystemMessage(opts: { antiaiOverride?: string }): string {
-  return (opts.antiaiOverride ?? '').trim() || PROMPT_DEFAULTS.antiai;
-}
-
-function buildAntiAiReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
-  return `文章標題：${opts.title}
-目標關鍵字：${opts.keyword}
-
-待審稿文章：
-
-${article}
-
----
-
-請逐句檢查文章，找出命中「去 AI 味黑名單」的用字、句型或段落過渡方式，不可遺漏。若完全沒有命中，請只輸出「整體評分：10/10 — 未發現 AI 腔調痕跡」，不要輸出任何建議區塊。否則請先輸出「整體評分：X/10 — 說明」（依命中數量與嚴重程度評分），再逐條列出，每條格式如下：
-
----SUGGESTION---
-SECTION: （問題所在的 H2 段落名稱）
-ISSUE: （命中黑名單的哪一類、具體是什麼問題）
-OLD: （從文章中精確複製需要改動的最短文字：若只改一個詞或片語，就只複製那個詞或片語；若需要改整句，就複製到句號/問號/驚嘆號為止，不得超過一個句子；絕對不可引用多句或整段；不可含 ## / ### 標題行；必須與文章一字不差）
-NEW: （建議改寫後的文字，語意不變但去除 AI 腔；若整句需要刪除則此欄完全空白）
----END---
-
-重要規定（違反則建議無效）：
-1. OLD 最多一句話，若一段有多個問題請拆成多條建議各改一句
-2. OLD 禁止引用整段落或跨句引用
-3. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
-4. 只挑出真正命中黑名單的地方，不要報告與 AI 腔調無關的文字品質、SEO、結構問題
-5. 若刪除整句則 NEW 欄留空；繁體中文輸出`;
-}
-
-function buildReviewPrompt(article: string, opts: { title: string; keyword: string }): string {
-  return `文章標題：${opts.title}
-目標關鍵字：${opts.keyword}
-
-待審稿文章：
-
-${article}
-
----
-
-請先輸出整體評分（格式：「整體評分：X/10 — 說明」），再挑出最重要的問題，最多輸出 15 條修改建議（優先選對品質影響最大的，微小措辭問題請忽略）。每條建議輸出以下格式區塊：
-
----SUGGESTION---
-SECTION: （問題所在的 H2 段落名稱）
-ISSUE: （一句話說明問題）
-OLD: （從文章中精確複製需要改動的最短文字：若只改一個詞或片語，就只複製那個詞或片語；若需要改整句，就複製到句號/問號/驚嘆號為止，不得超過一個句子；絕對不可引用多句或整段；不可含 ## / ### 標題行；必須與文章一字不差）
-NEW: （修改後的替換文字，長度與 OLD 對應；若整句要刪除則此欄完全空白）
----END---
-
-重要規定（違反則建議無效）：
-1. OLD 最多一句話，若一段有多個問題請拆成多條建議各改一句
-2. OLD 禁止引用整段落或跨句引用
-3. OLD 必須直接從文章複製，系統用字串比對套用，不符就無法生效
-4. 若刪除整句則 NEW 欄留空；繁體中文輸出`;
-}
 
 // Gemini 審「目錄架構」：審稿角度模板可個人化（outline_review）。Gemini 只列出調整想法，
 // 不重新產生架構——使用者參考想法後自行貼回 GPT 的需求欄重新出稿。輸出格式尾段固定，不開放編輯
@@ -943,7 +799,7 @@ function Stepper({ stage }: { stage: Stage }) {
     { key: 'analyze', label: 'SEO 分析' },
     { key: 'outline', label: '文章架構' },
     { key: 'write', label: '段落撰寫' },
-    { key: 'review', label: 'AI 校稿' },
+    { key: 'review', label: '完稿發布' },
   ];
   const idx = steps.findIndex(s => s.key === stage);
   return (
@@ -2838,14 +2694,14 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
             </div>
           </div>
 
-          {/* 進入 AI 校稿 */}
+          {/* 進入完稿發布 */}
           {doneCount > 0 && !anyGenerating && (
             <div className="flex justify-end pt-2 pb-1">
               <button
                 onClick={() => onNext(sections)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white text-sm rounded-xl hover:bg-violet-700 transition-colors"
               >
-                進入 AI 校稿 →
+                完稿發布 →
               </button>
             </div>
           )}
@@ -2873,149 +2729,6 @@ function Stage3({ title, keyword, analyzeMsg, analysisResult, outlineMsg, outlin
   );
 }
 
-// ── ReviewMd（校稿報告專用輕量 Markdown 渲染）────────────────────────
-
-function inlineNodes(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*\n]+\*\*|✓|✗)/g);
-  return parts.map((p, i) => {
-    if (p === '✓') return <span key={i} className="text-emerald-600 font-bold">✓</span>;
-    if (p === '✗') return <span key={i} className="text-red-500 font-bold">✗</span>;
-    if (p.startsWith('**') && p.endsWith('**')) return <strong key={i} className="font-semibold text-gray-900">{p.slice(2, -2)}</strong>;
-    return p || null;
-  });
-}
-
-function ReviewMd({ text }: { text: string }) {
-  const nodes: React.ReactNode[] = [];
-  let listBuf: string[] = [];
-  let tableBuf: string[] = [];
-
-  function flushList() {
-    if (!listBuf.length) return;
-    nodes.push(
-      <ul key={nodes.length} className="list-disc pl-5 my-1.5 space-y-0.5">
-        {listBuf.map((t, i) => <li key={i} className="text-sm text-gray-700 leading-relaxed">{inlineNodes(t)}</li>)}
-      </ul>
-    );
-    listBuf = [];
-  }
-
-  function flushTable() {
-    if (!tableBuf.length) return;
-    const rows = tableBuf.filter(l => !/^\s*\|[-:\s|]+\|\s*$/.test(l));
-    if (rows.length > 0) {
-      const parse = (row: string) => row.split('|').slice(1, -1).map(c => c.trim());
-      const [header, ...body] = rows;
-      nodes.push(
-        <div key={nodes.length} className="overflow-x-auto my-2">
-          <table className="text-xs border-collapse w-full">
-            <thead>
-              <tr>{parse(header).map((c, i) => <th key={i} className="border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-left font-semibold text-gray-700">{inlineNodes(c)}</th>)}</tr>
-            </thead>
-            <tbody>
-              {body.map((row, ri) => (
-                <tr key={ri} className="even:bg-gray-50/50">
-                  {parse(row).map((c, ci) => <td key={ci} className="border border-gray-200 px-2.5 py-1.5 text-gray-600">{inlineNodes(c)}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-    tableBuf = [];
-  }
-
-  for (const raw of text.split('\n')) {
-    const line = raw.trimEnd();
-    if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
-      flushList();
-      tableBuf.push(line);
-    } else if (line.startsWith('### ')) {
-      flushList(); flushTable();
-      nodes.push(<h3 key={nodes.length} className="text-sm font-bold text-gray-900 mt-4 mb-1 pb-0.5 border-b border-gray-200">{inlineNodes(line.slice(4))}</h3>);
-    } else if (line.startsWith('## ')) {
-      flushList(); flushTable();
-      nodes.push(<h2 key={nodes.length} className="text-sm font-bold text-gray-900 mt-5 mb-1">{inlineNodes(line.slice(3))}</h2>);
-    } else if (/^#+ /.test(line)) {
-      /* 跳過 H1/其他標題行 */
-    } else if (/^\s*[-*]\s+/.test(line) || /^\s*\d+[.)]\s+/.test(line)) {
-      flushList(); flushTable();
-      listBuf.push(line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, ''));
-    } else if (line.trim() === '') {
-      flushList(); flushTable();
-    } else {
-      flushList(); flushTable();
-      nodes.push(<p key={nodes.length} className="text-sm text-gray-700 leading-relaxed my-0.5">{inlineNodes(line)}</p>);
-    }
-  }
-  flushList(); flushTable();
-  return <div className="space-y-0">{nodes}</div>;
-}
-
-// ── Diff / Suggestion helpers ─────────────────────────────────────────
-
-type DiffPart = { type: 'same' | 'del' | 'add'; text: string };
-type Suggestion = {
-  id: string; section: string; issue: string;
-  old: string; new: string;
-  status: 'pending' | 'accepted' | 'rejected' | 'error';
-};
-
-function computeDiff(a: string, b: string): DiffPart[] {
-  const ac = [...a], bc = [...b];
-  const m = ac.length, n = bc.length;
-  if (m === 0 && n === 0) return [];
-  if (m === 0) return [{ type: 'add', text: b }];
-  if (n === 0) return [{ type: 'del', text: a }];
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = ac[i-1] === bc[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
-  const raw: { type: 'same' | 'del' | 'add'; ch: string }[] = [];
-  let i = m, j = n;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && ac[i-1] === bc[j-1]) { raw.unshift({ type: 'same', ch: ac[i-1] }); i--; j--; }
-    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { raw.unshift({ type: 'add', ch: bc[j-1] }); j--; }
-    else { raw.unshift({ type: 'del', ch: ac[i-1] }); i--; }
-  }
-  const parts: DiffPart[] = [];
-  for (const r of raw) {
-    const last = parts[parts.length - 1];
-    if (last && last.type === r.type) last.text += r.ch;
-    else parts.push({ type: r.type, text: r.ch });
-  }
-  return parts;
-}
-
-function parseSuggestions(text: string): Suggestion[] {
-  const result: Suggestion[] = [];
-  const blocks = text.split(/---SUGGESTION---/);
-  for (const block of blocks.slice(1)) {
-    const endIdx = block.indexOf('---END---');
-    const content = endIdx >= 0 ? block.slice(0, endIdx) : block;
-
-    // 逐行解析，避免 regex 跨行誤匹配
-    const fields: Record<string, string[]> = {};
-    let cur = '';
-    for (const line of content.split('\n')) {
-      const km = line.match(/^(SECTION|ISSUE|OLD|NEW):\s*(.*)/);
-      if (km) { cur = km[1]; fields[cur] = [km[2]]; }
-      else if (cur && line.trim()) fields[cur].push(line);
-    }
-    // 把前後包著的引號／括號去掉，否則 AI 輸出 "違規詞" 這種帶引號的格式會跟文章原文比對不到
-    const get = (k: string) => (fields[k] ?? []).join('\n').trim().replace(/^[「『【"“'']+/, '').replace(/[」』】"”'']+$/, '');
-
-    const section = get('SECTION'), issue = get('ISSUE'), old = get('OLD');
-    let nw = get('NEW');
-    // 刪除標記正規化：AI 有時填「應刪除」、「（刪除）」等，統一轉成空字串
-    if (/^[（(]?(?:刪除此句|刪除|移除|空)[）)]?$/.test(nw)) nw = '';
-
-    if (old || nw) result.push({ id: Math.random().toString(36).slice(2), section, issue, old, new: nw, status: 'pending' });
-  }
-  return result.slice(0, 15);
-}
-
 function stripMd(text: string): string {
   return text
     .replace(/^#{1,6}\s*/gm, '')
@@ -3032,279 +2745,42 @@ function cleanNoteText(t: string): string {
     .trim();
 }
 
-function SuggestionCard({ s, onAccept, onReject, onJump }: {
-  s: Suggestion; onAccept: () => void; onReject: () => void; onJump: () => void;
-}) {
-  const diff = (s.old || s.new) ? computeDiff(stripMd(s.old), stripMd(s.new)) : null;
-  return (
-    <div className={`border rounded-xl p-4 space-y-2.5 transition-opacity ${s.status !== 'pending' ? 'opacity-50' : 'border-gray-200 bg-white'}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          {s.section && <span className="inline-block text-xs text-violet-500 font-medium mb-0.5">{s.section}</span>}
-          <p className="text-sm text-gray-700">{s.issue}</p>
-        </div>
-        {s.status === 'pending' && s.old && (
-          <button onClick={onJump} className="shrink-0 text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors">跳至</button>
-        )}
-      </div>
-      {diff && (
-        <div className="text-sm rounded-lg bg-gray-50 px-3 py-2.5 leading-relaxed break-all font-sans border border-gray-100">
-          {diff.map((p, i) =>
-            p.type === 'del' ? <span key={i} className="bg-red-100 text-red-600 line-through">{p.text}</span>
-            : p.type === 'add' ? <span key={i} className="bg-green-100 text-green-700">{p.text}</span>
-            : <span key={i}>{p.text}</span>
-          )}
-        </div>
-      )}
-      {s.status === 'pending' && (
-        <div className="flex gap-2">
-          <button onClick={onAccept} className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium">採用修改</button>
-          <button onClick={onReject} className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors">略過</button>
-        </div>
-      )}
-      {s.status === 'accepted' && <p className="text-xs text-emerald-600 font-medium">✓ 已採用</p>}
-      {s.status === 'rejected' && <p className="text-xs text-gray-400">已略過</p>}
-      {s.status === 'error' && <p className="text-xs text-red-500">找不到原文，請手動修改</p>}
-    </div>
-  );
-}
 
-function extractOverallEval(raw: string): string {
-  const idx = raw.indexOf('---SUGGESTION---');
-  return (idx >= 0 ? raw.slice(0, idx) : raw).trim();
-}
 
-function buildFinalScorePrompt(article: string, opts: {
-  title: string; keyword: string; initialEval: string;
-}): string {
-  return `文章標題：${opts.title}
-目標關鍵字：${opts.keyword}
-
-初稿審查結果（供比較參考）：
-${opts.initialEval}
-
-這篇文章已根據上述審查意見修改，請對修改後版本重新評分。評分必須反映改善程度：若問題已修正，分數應比初稿高；若改善有限，說明原因。
-
-修改後文章：
-${article}
-
-只輸出整體評分與改善說明，格式：整體評分：X/10 — 說明（具體說明哪些問題已改善、哪些仍需注意）。繁體中文。`;
-}
 
 // ── Stage 4 ───────────────────────────────────────────────────────────
 
-type ReviewMode = 'quality' | 'violation' | 'antiai';
+// 校稿改到「文案法規檢查」工具做：把文章轉成純文字存進 localStorage，開新分頁帶過去
+// （圖片整個拿掉、Markdown 標記去掉，法規檢查只看文字）
+const COMPLIANCE_PREFILL_KEY = 'compliance-check:prefill';
 
-// 送去給 AI 校稿前，把 base64 圖片抽成佔位符，避免超長 data URI 灌爆 prompt、
-// 干擾判讀；圖片本身仍完整留在編輯器與發布用的 articleText 裡，不受影響
-function stripImagesForAI(md: string): string {
-  return md.replace(/!\[([^\]]*)\]\(data:[^)]+\)/g, '![$1][圖片]');
+function markdownToPlainText(md: string): string {
+  return md
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')        // 圖片
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')      // 連結只留文字
+    .replace(/^#{1,6}\s+/gm, '')                  // 標題井字號
+    .replace(/^\s*[-*+]\s+/gm, '')               // 清單符號
+    .replace(/(\*\*|__|\*|_|`)/g, '');            // 粗體／斜體／程式碼標記
 }
 
-function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, brandDescription, bannedWords, sectionOverride, reviewOverride, violationOverride, antiaiOverride, onSaveReviewOverride, onSaveViolationOverride, onSaveAntiaiOverride, onBack }: {
-  title: string; keyword: string;
+function Stage4({ title, sections, onBack }: {
+  title: string;
   sections: Section[];
-  writingGuide: string; clientWritingRules: string;
-  brandDescription: string; bannedWords: string; sectionOverride: string;
-  reviewOverride: string; violationOverride: string; antiaiOverride: string;
-  onSaveReviewOverride: (text: string | null) => void;
-  onSaveViolationOverride: (text: string | null) => void;
-  onSaveAntiaiOverride: (text: string | null) => void;
   onBack: () => void;
 }) {
-  // 預設違規詞校驗（必要檢查）；AI 內容校稿屬選用功能，有需要的人再手動切換開啟
-  const [reviewMode, setReviewMode] = useState<ReviewMode>('violation');
-  const [reviewing, setReviewing] = useState(false);
-  const [overallEval, setOverallEval] = useState('');
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [error, setError] = useState('');
-  const [finalScore, setFinalScore] = useState('');
-  const [finalScoring, setFinalScoring] = useState(false);
-  const [showPromptModal, setShowPromptModal] = useState(false); // 校稿提示詞公開檢視
   const [showPublishModal, setShowPublishModal] = useState(false); // 發布到 WP
-  const runIdRef = useRef(0);
 
-  // 保留完整圖片（含 base64），這樣校稿頁看得到圖、發布到 WP 也帶得出圖；
-  // 只有在「送去給 AI 校稿」那一步才用 stripImagesForAI 臨時把 base64 抽掉
+  // 保留完整圖片（含 base64），這樣校稿頁看得到圖、發布到 WP 也帶得出圖
   const initArticle = sections
     .filter(s => s.content.trim())
     .map(s => s.content.trim())
     .join('\n\n');
   const [articleText, setArticleText] = useState(initArticle);
 
-  // 進入校稿頁自動執行的是違規詞校驗（完全依據客戶禁詞清單，沒設定就直接跳過不檢查）；
-  // AI 內容校稿要手動切換並點「開始校稿」才會跑
-  useEffect(() => { if (articleText.trim() && bannedWords.trim()) runReview(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 切換內容校稿／違規詞校驗模式時，上一個模式留下的總評跟建議要清掉，
-  // 否則畫面看起來毫無變化（只有 tab 跟按鈕文字換了），像是切換沒反應
-  function switchReviewMode(mode: ReviewMode) {
-    if (mode === reviewMode) return;
-    setReviewMode(mode);
-    setOverallEval(''); setSuggestions([]); setFinalScore(''); setError('');
+  function openComplianceCheck() {
+    try { localStorage.setItem(COMPLIANCE_PREFILL_KEY, markdownToPlainText(articleText)); } catch { /* 存不進去就只開頁面 */ }
+    window.open('/compliance-check?from=writer', '_blank');
   }
-
-  async function runReview() {
-    if (!articleText.trim()) return;
-    if (reviewMode === 'violation' && !bannedWords.trim()) return; // 沒有客戶禁詞就沒有檢查依據，直接跳過
-    const id = ++runIdRef.current;
-    setOverallEval(''); setSuggestions([]); setFinalScore(''); setError(''); setReviewing(true);
-    let buf = '';
-    try {
-      const sys = reviewMode === 'violation'
-        ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
-        : reviewMode === 'antiai'
-        ? buildAntiAiReviewSystemMessage({ antiaiOverride })
-        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
-      const forAI = stripImagesForAI(articleText);
-      const prompt = reviewMode === 'violation'
-        ? buildViolationReviewPrompt(forAI, { title, keyword })
-        : reviewMode === 'antiai'
-        ? buildAntiAiReviewPrompt(forAI, { title, keyword })
-        : buildReviewPrompt(forAI, { title, keyword });
-      await streamAPI([
-        { role: 'system', content: sys },
-        { role: 'user', content: prompt },
-      ], chunk => {
-        if (runIdRef.current !== id) return;
-        buf += chunk;
-        setOverallEval(extractOverallEval(buf));
-      });
-      if (runIdRef.current === id) {
-        setOverallEval(extractOverallEval(buf));
-        setSuggestions(parseSuggestions(buf));
-      }
-    } catch (e) { if (runIdRef.current === id) setError(e instanceof Error ? e.message : '校稿失敗'); }
-    finally { if (runIdRef.current === id) setReviewing(false); }
-  }
-
-  async function runFinalScore() {
-    if (!articleText.trim()) return;
-    const id = ++runIdRef.current;
-    setFinalScore(''); setFinalScoring(true);
-    let buf = '';
-    try {
-      const sys = reviewMode === 'violation'
-        ? buildViolationReviewSystemMessage({ bannedWords, violationOverride })
-        : reviewMode === 'antiai'
-        ? buildAntiAiReviewSystemMessage({ antiaiOverride })
-        : buildReviewSystemMessage({ writingGuide, clientWritingRules, sectionOverride, brandDescription, reviewOverride });
-      const prompt = buildFinalScorePrompt(stripImagesForAI(articleText), { title, keyword, initialEval: overallEval });
-      await streamAPI([
-        { role: 'system', content: sys },
-        { role: 'user', content: prompt },
-      ], chunk => {
-        if (runIdRef.current !== id) return;
-        buf += chunk;
-        setFinalScore(buf);
-      });
-    } catch (e) { if (runIdRef.current === id) setFinalScore('評分失敗，請重試'); }
-    finally { if (runIdRef.current === id) setFinalScoring(false); }
-  }
-
-  function applyChange(suggId: string) {
-    const s = suggestions.find(x => x.id === suggId);
-    if (!s) return;
-
-    if (s.old) {
-      // 1. 精確比對
-      if (articleText.includes(s.old)) {
-        setArticleText(prev => prev.replace(s.old, s.new));
-        setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
-        return;
-      }
-      // 2. 空白彈性比對（允許換行 / 多空格差異）
-      const escaped = s.old.trim()
-        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/\s+/g, '\\s+');
-      try {
-        const regex = new RegExp(escaped);
-        if (regex.test(articleText)) {
-          setArticleText(prev => prev.replace(regex, s.new));
-          setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
-          return;
-        }
-      } catch { /* 正則無效，直接失敗 */ }
-      // 3. 找不到
-      setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'error' } : x));
-      return;
-    }
-
-    // 無 OLD，直接附加 NEW
-    setArticleText(prev => prev + (s.new ? '\n\n' + s.new : ''));
-    setSuggestions(prev => prev.map(x => x.id === suggId ? { ...x, status: 'accepted' } : x));
-  }
-
-  // 一鍵採用全部待確認建議：逐條套用在同一份文字上（不能逐一呼叫 applyChange，
-  // 因為 articleText state 在同一輪事件裡不會更新，比對會讀到舊值）
-  function applyAllChanges() {
-    let text = articleText;
-    const updated: Suggestion[] = suggestions.map(s => {
-      if (s.status !== 'pending') return s;
-      if (!s.old) {
-        text += s.new ? '\n\n' + s.new : '';
-        return { ...s, status: 'accepted' as const };
-      }
-      if (text.includes(s.old)) {
-        text = text.replace(s.old, s.new);
-        return { ...s, status: 'accepted' as const };
-      }
-      const escaped = s.old.trim()
-        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/\s+/g, '\\s+');
-      try {
-        const regex = new RegExp(escaped);
-        if (regex.test(text)) {
-          text = text.replace(regex, s.new);
-          return { ...s, status: 'accepted' as const };
-        }
-      } catch { /* 正則無效，當作找不到 */ }
-      return { ...s, status: 'error' as const };
-    });
-    setArticleText(text);
-    setSuggestions(updated);
-  }
-
-  function jumpToText(text: string, section?: string) {
-    if (!text) return;
-    const panel = document.getElementById('article-panel');
-    if (!panel) return;
-    const search = text.slice(0, 15);
-
-    function searchFrom(startNode: Node | null): boolean {
-      const walker = document.createTreeWalker(panel as Node, NodeFilter.SHOW_TEXT);
-      if (startNode) walker.currentNode = startNode;
-      let node = walker.nextNode();
-      while (node) {
-        const content = node.textContent ?? '';
-        const idx = content.indexOf(search);
-        if (idx >= 0) {
-          const range = document.createRange();
-          range.setStart(node, idx);
-          range.setEnd(node, Math.min(idx + text.length, content.length));
-          window.getSelection()?.removeAllRanges();
-          window.getSelection()?.addRange(range);
-          (node.parentElement as HTMLElement)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          return true;
-        }
-        node = walker.nextNode();
-      }
-      return false;
-    }
-
-    // 違規詞通常很短，整篇文章可能重複出現多次；若知道所在的 H2 段落，
-    // 先定位到該標題之後才開始找，避免跳到不相關段落裡同樣的字詞
-    const sectionName = section?.trim();
-    if (sectionName) {
-      const heading = Array.from(panel.querySelectorAll('h2'))
-        .find(h => (h.textContent ?? '').trim() === sectionName);
-      if (heading && searchFrom(heading)) return;
-    }
-    searchFrom(null);
-  }
-
-  const pendingCount = suggestions.filter(s => s.status === 'pending').length;
-  const acceptedCount = suggestions.filter(s => s.status === 'accepted').length;
 
   return (
     <div className="flex flex-col h-full">
@@ -3315,36 +2791,11 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
-          <p className="text-xs text-gray-400">{reviewMode === 'violation' ? '違規詞校驗 · 檢查禁詞與品牌宣稱範圍' : reviewMode === 'antiai' ? '去AI味檢查 · 抓黑名單用字與句型' : 'AI 校稿 · 先看總評，再逐條處理'}</p>
+          <p className="text-xs text-gray-400">校稿 · 法規與 AI 味檢查請到文案法規檢查工具</p>
         </div>
-        <button onClick={() => setShowPromptModal(true)}
-          className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors shrink-0">
-          提示詞
-        </button>
-        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 text-xs shrink-0">
-          <button onClick={() => switchReviewMode('violation')} disabled={reviewing || finalScoring}
-            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'violation' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
-            違規詞校驗
-          </button>
-          <button onClick={() => switchReviewMode('quality')} disabled={reviewing || finalScoring}
-            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'quality' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
-            AI 內容校稿（選用）
-          </button>
-          <button onClick={() => switchReviewMode('antiai')} disabled={reviewing || finalScoring}
-            className={`px-2.5 py-1 rounded-md transition-colors disabled:opacity-50 ${reviewMode === 'antiai' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>
-            去AI味檢查（選用）
-          </button>
-        </div>
-        {suggestions.length > 0 && !reviewing && (
-          <span className="text-xs text-violet-500 font-medium shrink-0">
-            {pendingCount > 0 ? `${pendingCount} 條待確認` : '全部處理完畢 ✓'}
-          </span>
-        )}
-        <button onClick={runReview} disabled={reviewing || finalScoring || !articleText.trim() || (reviewMode === 'violation' && !bannedWords.trim())}
+        <button onClick={openComplianceCheck} disabled={!articleText.trim()}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 shrink-0">
-          {reviewing && <Spinner />}{reviewing
-            ? (reviewMode === 'violation' || reviewMode === 'antiai' ? '檢查中…' : '校稿中…')
-            : (reviewMode === 'violation' || reviewMode === 'antiai' ? '開始檢查' : (overallEval ? '重新校稿' : '開始校稿'))}
+          到文案法規檢查 ↗
         </button>
         <button onClick={() => setShowPublishModal(true)} disabled={!articleText.trim()}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 shrink-0">
@@ -3354,137 +2805,13 @@ function Stage4({ title, keyword, sections, writingGuide, clientWritingRules, br
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <div className="h-full px-4 py-4 grid grid-cols-2 gap-4">
-          {/* 左：可編輯原文 */}
-          <div className="flex flex-col overflow-hidden">
-            <p className="text-xs font-medium text-gray-500 mb-2 shrink-0">文章原文（可編輯）</p>
-            <div id="article-panel" className="flex-1 overflow-auto">
-              <RichEditor value={articleText} onChange={setArticleText} editable={true} minHeight="100%" />
-            </div>
-          </div>
-
-          {/* 右：建議流程 / 最終結果 */}
-          <div className="flex flex-col overflow-hidden gap-3">
-
-            {(finalScore || finalScoring) ? (
-              /* ── 最終評分獨立畫面 ── */
-              <div className="flex-1 overflow-auto space-y-3 pr-0.5">
-                {/* 初稿評分（縮小版） */}
-                <div className="border border-gray-200 rounded-2xl px-4 py-3 bg-gray-50/50">
-                  <p className="text-xs text-gray-400 mb-1">初稿評分</p>
-                  <ReviewMd text={overallEval} />
-                </div>
-                {/* 修改後評分 */}
-                {finalScoring ? (
-                  <div className="border border-violet-200 rounded-2xl px-5 py-5 flex items-center gap-2.5 bg-violet-50/30">
-                    <Spinner /><span className="text-sm text-gray-500">重新評分中…</span>
-                  </div>
-                ) : (
-                  <div className="border border-emerald-200 rounded-2xl px-5 py-4 bg-emerald-50/30 space-y-1">
-                    <p className="text-xs font-semibold text-emerald-600">修改後評分</p>
-                    <ReviewMd text={finalScore} />
-                    <p className="text-xs text-gray-400 pt-1">共採用 {acceptedCount} 條建議</p>
-                  </div>
-                )}
-                <button
-                  onClick={() => setFinalScore('')}
-                  className="w-full py-2 text-xs border border-gray-200 rounded-xl text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
-                >
-                  返回建議列表
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* ── 上：總評卡片 ── */}
-                <div className="shrink-0">
-                  {reviewMode === 'violation' && !bannedWords.trim() && !overallEval && !reviewing && (
-                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-2">
-                      這個客戶未設定禁詞清單，沒有檢查依據，已跳過違規詞校驗。若需要禁詞檢查，請先到客戶設定填寫禁詞。
-                    </p>
-                  )}
-                  {reviewing && !overallEval && (
-                    <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 flex items-center gap-2.5">
-                      <Spinner /><span className="text-sm text-gray-500">AI 正在審查，生成總評…</span>
-                    </div>
-                  )}
-                  {overallEval && (
-                    <div className="border border-violet-200 rounded-2xl bg-violet-50/30 px-5 py-4 space-y-2 max-h-56 overflow-y-auto">
-                      <ReviewMd text={overallEval} />
-                      {!reviewing && !finalScoring && acceptedCount > 0 && (
-                        <div className="border-t border-violet-100 pt-2">
-                          <button onClick={runFinalScore}
-                            className="w-full py-1.5 text-xs text-violet-600 border border-violet-200 rounded-lg hover:bg-violet-50 transition-colors font-medium">
-                            完成修改，取得最終評分
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {error && <Err msg={error} />}
-                </div>
-
-                {/* ── 下：修改建議卡片 ── */}
-                <div className="flex-1 overflow-auto space-y-2 pr-0.5">
-                  {reviewing && overallEval && (
-                    <div className="border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-2 text-xs text-gray-400">
-                      <Spinner /><span>繼續解析修改建議…</span>
-                    </div>
-                  )}
-                  {!reviewing && suggestions.length > 0 && (
-                    <>
-                      <div className="flex items-center justify-between px-1">
-                        <p className="text-xs font-medium text-gray-400">修改建議 · {suggestions.length} 條</p>
-                        {pendingCount > 0 && (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={applyAllChanges}
-                              className="text-xs px-2 py-1 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
-                              全部採用
-                            </button>
-                            <button
-                              onClick={() => setSuggestions(prev => prev.map(x => x.status === 'pending' ? { ...x, status: 'rejected' } : x))}
-                              className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors">
-                              全部跳過
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {suggestions.map(s => (
-                        <SuggestionCard
-                          key={s.id}
-                          s={s}
-                          onAccept={() => applyChange(s.id)}
-                          onReject={() => setSuggestions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'rejected' } : x))}
-                          onJump={() => jumpToText(s.old, s.section)}
-                        />
-                      ))}
-                    </>
-                  )}
-                  {!reviewing && suggestions.length === 0 && overallEval && (
-                    <p className="text-xs text-gray-400 text-center py-4">{reviewMode === 'violation' ? '未發現違規' : reviewMode === 'antiai' ? '未發現 AI 腔調痕跡' : '無具體修改建議'}</p>
-                  )}
-                  {!reviewing && !overallEval && !error && (
-                    <p className="text-sm text-gray-400 py-8 text-center">{reviewMode === 'violation'
-                      ? (bannedWords.trim() ? '點擊「開始檢查」開始' : '未設定禁詞，無需檢查，文章可直接使用')
-                      : reviewMode === 'antiai' ? '去AI味檢查為選用功能，需要時點擊「開始檢查」執行'
-                      : 'AI 內容校稿為選用功能，需要時點擊「開始校稿」執行'}</p>
-                  )}
-                </div>
-              </>
-            )}
-
+        <div className="h-full px-4 py-4 max-w-4xl mx-auto flex flex-col overflow-hidden">
+          <p className="text-xs font-medium text-gray-500 mb-2 shrink-0">文章原文（可編輯）</p>
+          <div id="article-panel" className="flex-1 overflow-auto">
+            <RichEditor value={articleText} onChange={setArticleText} editable={true} minHeight="100%" />
           </div>
         </div>
       </div>
-
-      {showPromptModal && (
-        <PromptEditModal
-          defaultText={reviewMode === 'violation' ? PROMPT_DEFAULTS.violation : reviewMode === 'antiai' ? PROMPT_DEFAULTS.antiai : PROMPT_DEFAULTS.review}
-          currentOverride={reviewMode === 'violation' ? violationOverride : reviewMode === 'antiai' ? antiaiOverride : reviewOverride}
-          onSave={reviewMode === 'violation' ? onSaveViolationOverride : reviewMode === 'antiai' ? onSaveAntiaiOverride : onSaveReviewOverride}
-          onClose={() => setShowPromptModal(false)}
-        />
-      )}
 
       {showPublishModal && (
         <WpPublishModal
@@ -3697,19 +3024,7 @@ function ComposeInner() {
         {stage === 'review' && (
           <Stage4
             title={selectedTitle}
-            keyword={keyword}
             sections={reviewSections}
-            writingGuide={writingGuide}
-            clientWritingRules={clientWritingRules}
-            brandDescription={brandDescription}
-            bannedWords={bannedWords}
-            sectionOverride={promptOverrides.section ?? ''}
-            reviewOverride={promptOverrides.review ?? ''}
-            violationOverride={promptOverrides.violation ?? ''}
-            antiaiOverride={promptOverrides.antiai ?? ''}
-            onSaveReviewOverride={text => savePromptOverride('review', text)}
-            onSaveViolationOverride={text => savePromptOverride('violation', text)}
-            onSaveAntiaiOverride={text => savePromptOverride('antiai', text)}
             onBack={() => setStage('write')}
           />
         )}

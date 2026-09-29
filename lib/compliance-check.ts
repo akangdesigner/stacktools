@@ -31,6 +31,7 @@ export interface ClientRuleSet {
   source: string; // 規則出處（Drive 文件名），方便日後回頭對
   banned: BannedWord[];
   required: RequiredItem[];
+  medical?: boolean; // 醫療機構客戶：才問「招攬／促銷」（食品／化粧品打折合法，不用問）
 }
 
 const words = (list: string[], note?: string, group?: string): BannedWord[] =>
@@ -144,6 +145,7 @@ export const CLIENT_RULES: ClientRuleSet[] = [
     id: 'bella',
     name: '貝拉整形外科',
     source: '文章素材／敏感詞（Google 文件）',
+    medical: true,
     banned: [
       ...words(['優惠', '推薦', '保證', '限期', '限量', '差價', '特價', '折扣'], '醫療機構不能招攬病人'),
     ],
@@ -483,6 +485,9 @@ export async function runComplianceCheck(opts: {
     allowed: [],
   }));
 
+  // 非醫療客戶不問「招攬／促銷」：打折、買一送一對食品／化粧品是合法的
+  const keys = MODE_KEYS[opts.mode].filter((k) => k !== 'solicitation' || opts.ruleSet.medical);
+
   // 併發呼叫 Jev：固定數量的 worker 輪流領下一句
   let cost = 0;
   let jevFailed = 0;
@@ -491,7 +496,7 @@ export async function runComplianceCheck(opts: {
     while (next < results.length) {
       const i = next++;
       try {
-        const r = await askJev(results[i].text, sentences[i].heading, MODE_KEYS[opts.mode], legal, apiKey);
+        const r = await askJev(results[i].text, sentences[i].heading, keys, legal, apiKey);
         results[i].jev = r.scores;
         results[i].category = r.category;
         results[i].allowed = ALLOWED_BY_CATEGORY[r.category].filter((w) => results[i].text.includes(w));

@@ -88,6 +88,19 @@ export default function ComplianceCheckPage() {
       .catch(() => setError("讀取客戶規則失敗"));
   }, []);
 
+  // 從寫手流程工具按「到文案法規檢查」過來：把它存的文章文字帶進「貼上文字」，用完就清掉
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("from") !== "writer") return;
+    try {
+      const prefill = localStorage.getItem("compliance-check:prefill");
+      if (prefill) {
+        setInputMode("text"); // eslint-disable-line react-hooks/set-state-in-effect
+        setText(prefill);
+        localStorage.removeItem("compliance-check:prefill");
+      }
+    } catch { /* 讀不到就維持空白 */ }
+  }, []);
+
   // 切換客戶時載入該客戶的自訂禁詞
   useEffect(() => {
     try {
