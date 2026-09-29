@@ -211,14 +211,77 @@ export const JEV_CHECKS = [
       criteria: { true: 'Contains absolute / exaggerated claims.', false: 'No absolute or exaggerated claims.' },
     },
   },
+  // ── AI 味題目：依小積木的去 AI 味規則（GitHub akangdesigner/qkangber docs/anti-ai-style.md）
+  //    只收「看單句就能判斷」的類別；節奏、EEAT 要看整篇，不在這裡。規則改了要回來同步
   {
     key: 'ai_contrast',
     label: 'AI 味反轉句',
     q: {
       type: 'noul',
       instructions:
-        "Does this sentence use a rhetorical contrast pattern like 'not A but B' (不是…而是…) or 'not only A but also B' (不僅…更是…/不只…更…)?",
-      criteria: { true: 'Uses the contrast / escalation pattern.', false: 'Does not use it.' },
+        "Does this sentence use a rhetorical contrast pattern: 'not A but B' (不是…而是…), 'not only A but also B' (不僅…更是…/不只…更…), or a positive statement ending with a tacked-on negation (…，不是…/…，而非…)?",
+      criteria: { true: 'Uses the contrast / escalation / negation-ending pattern.', false: 'Does not use it.' },
+    },
+  },
+  // A 類：報幕、教科書過渡詞、自我背書
+  {
+    key: 'ai_filler',
+    label: 'AI 味報幕／過渡詞',
+    q: {
+      type: 'noul',
+      instructions:
+        'Does this sentence contain an announcing or filler phrase that adds no information, such as textbook transitions (首先/其次/最後/然而/總而言之/值得注意的是/重要的是/深入探討), announcing what will be said (本文將/這篇會告訴你/帶你了解/接下來/舉例來說/簡單來說/一句話總結/說到底/說穿了/老實說/坦白說), or self-endorsement of credibility (以上資料皆經查證/都是我一家一家查的)?',
+      criteria: {
+        true: 'Contains an announcement, textbook transition or self-endorsement that could be deleted without losing information.',
+        false: 'Goes straight to content; no such filler.',
+      },
+    },
+  },
+  // B 類：浮誇強調詞、給抽象事物套感官形容詞
+  {
+    key: 'ai_hype',
+    label: 'AI 味浮誇詞',
+    q: {
+      type: 'noul',
+      instructions:
+        'Does this sentence use inflated emphasis words instead of concrete facts, such as 至關重要/關鍵的/顯著/凸顯了/不可磨滅/觸目驚心/發人深省/耐人尋味, or sensory/emotional adjectives forced onto abstract things (a finding is 刺眼, numbers are 血淋淋)?',
+      criteria: { true: 'Uses inflated emphasis words or forced sensory adjectives.', false: 'Plain, concrete wording.' },
+    },
+  },
+  // C 類：社群情緒假詞、簡中技術黑話
+  {
+    key: 'ai_slang',
+    label: 'AI 味社群假詞',
+    q: {
+      type: 'noul',
+      instructions:
+        'Does this sentence use hollow social-media buzzwords such as 穩/撐/懂的都懂/接住/不繞/很現實, filler adverbs 其實/很清楚/很簡單 used only for tone, or the pit metaphors 踩坑/踩雷/避坑/填坑/入坑?',
+      criteria: { true: 'Uses hollow buzzwords, tone-filler adverbs or pit metaphors.', false: 'No such words.' },
+    },
+  },
+  // D 類：標題的 AI 味（先搞懂、冒號＋斷言、懸念、殘句口號、做作比喻）
+  {
+    key: 'ai_heading',
+    label: 'AI 味標題',
+    q: {
+      type: 'noul',
+      instructions:
+        "If this line is a heading or title, does it use an AI-style formula: telling the reader to 先搞懂/先了解/先看懂 first; a colon followed by a sensational verdict (…：根本不在同一個賽道); a suspense title that hides the content (…長什麼樣); a clipped slogan without subject or verb; a question plus dramatic fragment; or forced personification/metaphor (幫 Token 續命)? Answer false for normal body sentences.",
+      criteria: {
+        true: 'A heading written with one of these AI formulas.',
+        false: 'Not a heading, or a plain complete heading that states its topic directly.',
+      },
+    },
+  },
+  // D 類：產品／成分／工具假擬人
+  {
+    key: 'ai_personify',
+    label: 'AI 味假擬人',
+    q: {
+      type: 'noul',
+      instructions:
+        'Does this sentence personify a product, ingredient, formula, machine or AI tool as if it had will or hands, using verbs like 對付/衝著/顧到/追不上/管不到/搞定/應付/照顧/守護/幫你/出手, or attributing motives to it (得利/故意/它的目標是)?',
+      criteria: { true: 'A product, ingredient or tool is personified or given motives.', false: 'Describes the thing and its effect plainly.' },
     },
   },
 ] as const satisfies readonly { key: string; label: string; q: JevQuestion }[];
@@ -229,7 +292,7 @@ export type JevKey = (typeof JEV_CHECKS)[number]['key'];
 export type CheckMode = 'legal' | 'ai';
 const MODE_KEYS: Record<CheckMode, JevKey[]> = {
   legal: ['medical_claim', 'body_change', 'solicitation', 'exaggeration'],
-  ai: ['ai_contrast'],
+  ai: ['ai_contrast', 'ai_filler', 'ai_hype', 'ai_slang', 'ai_heading', 'ai_personify'],
 };
 
 // ── 抓文章、拆句 ────────────────────────────────────

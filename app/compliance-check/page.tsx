@@ -17,7 +17,9 @@ interface ClientOption {
   banned: BannedWord[];
   required: string[];
 }
-type JevKey = "medical_claim" | "body_change" | "solicitation" | "exaggeration" | "ai_contrast";
+type JevKey =
+  | "medical_claim" | "body_change" | "solicitation" | "exaggeration"
+  | "ai_contrast" | "ai_filler" | "ai_hype" | "ai_slang" | "ai_heading" | "ai_personify";
 interface SentenceResult {
   text: string;
   banned: BannedWord[];
@@ -43,12 +45,18 @@ const JEV_LABELS: Record<JevKey, string> = {
   solicitation: "招攬／促銷",
   exaggeration: "誇大用語",
   ai_contrast: "AI 味反轉句",
+  ai_filler: "AI 味報幕／過渡詞",
+  ai_hype: "AI 味浮誇詞",
+  ai_slang: "AI 味社群假詞",
+  ai_heading: "AI 味標題",
+  ai_personify: "AI 味假擬人",
 };
 // 「是」的機率 ≥ 0.6 才算命中：She is 文章實測 0.5～0.6 幾乎都是誤判（一般衛教句被當成反轉句、誇大），真問題都在 0.6 以上
 const JEV_THRESHOLD = 0.6;
 // 法規風險和 AI 味分開判斷、分開列
 const LEGAL_KEYS: JevKey[] = ["medical_claim", "body_change", "solicitation", "exaggeration"];
-const AI_KEYS: JevKey[] = ["ai_contrast"];
+// 題目內容在 lib/compliance-check.ts，依小積木的去 AI 味規則
+const AI_KEYS: JevKey[] = ["ai_contrast", "ai_filler", "ai_hype", "ai_slang", "ai_heading", "ai_personify"];
 const CATEGORY_LABELS: Record<SentenceResult["category"], string> = {
   cosmetic: "化粧品",
   food: "食品",
@@ -180,7 +188,7 @@ export default function ComplianceCheckPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">文案法規檢查</h1>
         <p className="text-sm text-gray-500 mt-1">
-          先選要檢查法規還是 AI 味。法規＝客戶禁詞（程式比對）＋法規風險（Jev 判斷換句話說的療效宣稱或招攬）；AI 味＝Jev 抓反轉句。結果是高風險提示，最後仍要人確認。
+          先選要檢查法規還是 AI 味。法規＝客戶禁詞（程式比對）＋法規風險（Jev 判斷換句話說的療效宣稱或招攬）；AI 味＝Jev 依去 AI 味規則逐句抓（反轉句、報幕、浮誇詞、社群假詞、標題、假擬人）。結果是高風險提示，最後仍要人確認。
         </p>
       </div>
 

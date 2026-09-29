@@ -142,10 +142,10 @@ export default function RichEditor({ value, onChange, placeholder, minHeight = '
         <style>{`
           .tiptap-writer h2 { font-size: 1.5rem; font-weight: 700; margin: 1rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px solid #e5e7eb; }
           .tiptap-writer h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.15rem; }
-          .tiptap-writer p { font-size: 0.875rem; color: #374151; margin-bottom: 0.5rem; line-height: 1.6; }
+          .tiptap-writer p { font-size: 1rem; color: #374151; margin-bottom: 0.5rem; line-height: 1.6; }
           .tiptap-writer ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
           .tiptap-writer ol { list-style: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
-          .tiptap-writer li { font-size: 0.875rem; color: #374151; line-height: 1.6; }
+          .tiptap-writer li { font-size: 1rem; color: #374151; line-height: 1.6; }
           .tiptap-writer strong { font-weight: 600; color: #111827; }
           .tiptap-writer table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.75rem; }
           .tiptap-writer th, .tiptap-writer td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
