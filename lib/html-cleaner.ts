@@ -501,8 +501,22 @@ export function cleanHtml(rawHtml: string, client: ClientProfile, articleUrl?: s
 
   // ── 8. deduplicate <li> items
   if (client.deduplicateLi) {
-    const seen = new Set<string>();
+    // 只在「同一個最外層清單」裡去重：不同段落的清單本來就可能有一樣的內容
+    // （例如兩間店營業時間都是「星期二：休息」），全文共用一個 seen 會把後面那間的刪掉
+    const seenByList = new Map<NHTMLElement, Set<string>>();
     root.querySelectorAll("li").forEach((li) => {
+      let topList = li.parentNode as NHTMLElement;
+      let p = topList?.parentNode as NHTMLElement | null;
+      while (p && p !== root) {
+        const tag = p.tagName?.toLowerCase();
+        if (tag === "ul" || tag === "ol") topList = p;
+        p = p.parentNode as NHTMLElement | null;
+      }
+      let seen = seenByList.get(topList);
+      if (!seen) {
+        seen = new Set<string>();
+        seenByList.set(topList, seen);
+      }
       // 正規化：去除多餘空白、零寬字元，避免草稿裡巢狀清單跟攤平清單只差在
       // 排版空白／span 包裹，導致逐字比對抓不到重複
       const txt = li.innerText
