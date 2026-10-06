@@ -60,6 +60,13 @@ const LEGAL_KEYS: JevKey[] = ["medical_claim", "body_change", "solicitation", "e
 // 題目內容在 lib/compliance-check.ts，依小積木的去 AI 味規則
 const AI_KEYS: JevKey[] = ["ai_contrast", "ai_filler", "ai_hype", "ai_slang", "ai_heading", "ai_personify"];
 type Category = "cosmetic" | "food" | "device" | "textile" | "medical";
+// 整篇主要類別：段落裡出現最多次的類別
+const mainCategory = (sections: Report["sections"]): Category => {
+  const count = new Map<Category, number>();
+  for (const s of sections) count.set(s.category, (count.get(s.category) ?? 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1])[0][0];
+};
+
 const CATEGORY_LABELS: Record<Category, string> = {
   cosmetic: "化粧品",
   food: "食品",
@@ -360,9 +367,14 @@ export default function ComplianceCheckPage() {
             {mode === "legal" && report.sections.length > 0 && (
               <div className="mt-1 text-xs space-y-0.5">
                 <div>
-                  客戶：<span className="text-orange-600">{report.client}</span>{report.clientAuto && "（自動判斷）"}．每段依它在講的產品套規則：
+                  客戶：<span className="text-orange-600">{report.client}</span>{report.clientAuto && "（自動判斷）"}．文章類別：
+                  <span className="text-orange-600">{CATEGORY_LABELS[mainCategory(report.sections)]}</span>
+                  {report.sections.some((sec) => sec.products.length > 0 || sec.category !== mainCategory(report.sections)) && "，另外這幾段有講到產品："}
                 </div>
-                {report.sections.map((sec, i) => (
+                {/* 只列有講到客戶產品、或類別跟整篇不同的段落；FAQ、衛教這類一般段落不列 */}
+                {report.sections
+                  .filter((sec) => sec.products.length > 0 || sec.category !== mainCategory(report.sections))
+                  .map((sec, i) => (
                   <div key={i} className="pl-3">
                     {sec.heading || "（開頭）"} → <span className="text-orange-600">{CATEGORY_LABELS[sec.category]}</span>
                     {sec.products.length > 0 && <span className="text-orange-600">／{sec.products.join("、")}</span>}
