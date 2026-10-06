@@ -30,10 +30,12 @@ interface SentenceResult {
 interface Report {
   title: string;
   client: string;
+  clientAuto: boolean; // 客戶是自動認出來的
   sentenceCount: number;
   required: { label: string; hint: string; ok: boolean }[];
   sentences: SentenceResult[];
   category: Category | null; // 整篇文章的類別
+  products: string[]; // AI 判斷這篇在講客戶的哪幾個產品
   cost: number;
   jevFailed: number;
 }
@@ -77,7 +79,7 @@ function jevHits(s: SentenceResult, keys: JevKey[]): [JevKey, number][] {
 
 export default function ComplianceCheckPage() {
   const [clients, setClients] = useState<ClientOption[]>([]);
-  const [clientId, setClientId] = useState("general");
+  const [clientId, setClientId] = useState("auto"); // auto＝從網址和內文自動認客戶
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
@@ -259,6 +261,7 @@ export default function ComplianceCheckPage() {
             onChange={(e) => setClientId(e.target.value)}
             className="w-full sm:w-72 border border-gray-300 rounded-lg px-3 py-2 text-sm"
           >
+            <option value="auto">自動判斷</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -355,7 +358,10 @@ export default function ComplianceCheckPage() {
             {report.jevFailed > 0 && <span className="text-red-500">．{report.jevFailed} 句 Jev 判斷失敗</span>}
             {mode === "legal" && report.category && (
               <div className="mt-1 text-xs">
-                文章類別：<span className="text-orange-600">{CATEGORY_LABELS[report.category]}</span>，只套{CATEGORY_LABELS[report.category]}的規則
+                客戶：<span className="text-orange-600">{report.client}</span>{report.clientAuto && "（自動判斷）"}．文章類別：<span className="text-orange-600">{CATEGORY_LABELS[report.category]}</span>，只套{CATEGORY_LABELS[report.category]}的規則
+                {report.products.length > 0 && (
+                  <>．在講：<span className="text-orange-600">{report.products.join("、")}</span>，套這些產品的禁詞</>
+                )}
               </div>
             )}
           </div>

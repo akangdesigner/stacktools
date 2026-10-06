@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   CLIENT_RULES,
+  detectClient,
   fetchArticleText,
   type Block,
   parseExtraBanned,
@@ -73,8 +74,6 @@ export async function POST(req: NextRequest) {
       if (!body.sentence?.trim()) return NextResponse.json({ error: '沒有要改寫的句子' }, { status: 400 });
       return NextResponse.json({ rewritten: await rewriteSentence(body.sentence.trim(), body.issues ?? []) });
     }
-    const ruleSet = CLIENT_RULES.find((c) => c.id === body.clientId) ?? CLIENT_RULES[0];
-
     let title = '';
     let blocks: Block[];
     if (body.url?.trim()) {
@@ -89,6 +88,11 @@ export async function POST(req: NextRequest) {
     }
     if (blocks.length === 0) return NextResponse.json({ error: '抓不到文章內文' }, { status: 400 });
 
+    // 客戶：畫面上有指定就用指定的，沒指定（自動）就從網址和內文認
+    const picked = CLIENT_RULES.find((c) => c.id === body.clientId);
+    const ruleSet =
+      picked ?? detectClient(body.url ?? '', [title, ...blocks.map((b) => b.text)].join('\n'));
+
     const report = await runComplianceCheck({
       mode: body.mode === 'ai' ? 'ai' : 'legal',
       blocks,
@@ -96,7 +100,7 @@ export async function POST(req: NextRequest) {
       ruleSet,
       extraBanned: parseExtraBanned(body.extraBanned ?? ''),
     });
-    return NextResponse.json(report);
+    return NextResponse.json({ ...report, clientAuto: !picked });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

@@ -15,8 +15,7 @@ export interface BannedWord {
   replace?: string; // 建議替換詞（客戶規範有給才填）
   note?: string; // 為什麼不能用（例如「涉及身體結構」）
   except?: string[]; // 正常用法例外：命中處落在這些詞裡面就不算（例如「塑身」遇到「塑身衣」）
-  group?: string; // 出自哪個產品的規範（只做顯示）
-  category?: Category; // 只在這類文章套用；沒填＝每篇都套
+  group?: string; // 出自哪個產品的規範：對應客戶 products 的 name，AI 判斷文章在講該產品才套；沒填＝每篇都套
 }
 
 // 必備項目：文章裡至少要出現 anyOf 其中一個字串，否則報缺
@@ -33,10 +32,14 @@ export interface ClientRuleSet {
   banned: BannedWord[];
   required: RequiredItem[];
   medical?: boolean; // 醫療機構客戶：才問「招攬／促銷」（食品／化粧品打折合法，不用問）
+  // 客戶規範有依產品分的禁詞：AI 看文章判斷在講哪幾個產品，只套那幾個產品的禁詞
+  // 新客戶照填就好：name 對應禁詞的 group，hint 寫產品是什麼（給 AI 認）
+  products?: { name: string; hint: string }[];
+  match?: string[]; // 自動認客戶：文章網址或內文出現這些字（網域、品牌名）就是這個客戶
 }
 
-const words = (list: string[], note?: string, group?: string, category?: Category): BannedWord[] =>
-  list.map((word) => ({ word, note, group, category, except: COMMON_EXCEPTIONS[word] }));
+const words = (list: string[], note?: string, group?: string): BannedWord[] =>
+  list.map((word) => ({ word, note, group, except: COMMON_EXCEPTIONS[word] }));
 
 // 禁詞的常見正常用法（字面比對會誤抓）
 const COMMON_EXCEPTIONS: Record<string, string[]> = {
@@ -89,6 +92,15 @@ export const CLIENT_RULES: ClientRuleSet[] = [
     id: 'relove',
     name: 'Relove',
     source: 'Relove／文章素材／廣告文案字眼規範.docx',
+    match: ['foreverrelove.com.tw', 'Relove'],
+    products: [
+      { name: '纖纖飲', hint: '纖體／體態管理飲品' },
+      { name: '理毛霜', hint: '除毛膏' },
+      { name: '鎮定凝露', hint: '肌膚鎮定、舒緩泛紅的保養凝露' },
+      { name: '私密洗', hint: '私密處清潔液' },
+      { name: '緊依偎', hint: '私密處緊緻保養凝膠' },
+      { name: '腸道益生菌', hint: '益生菌保健食品' },
+    ],
     banned: [
       // 纖纖飲
       ...words(
@@ -97,27 +109,25 @@ export const CLIENT_RULES: ClientRuleSet[] = [
           '理想身材', '雕塑體型', '好身材'],
         '涉及影響生理機能或改變身體結構',
         '纖纖飲',
-        'food',
       ),
       // 理毛霜
-      ...words(['去除毛髮', '除毛', '脫毛', '溶毛', '把毛髮變不見'], undefined, '理毛霜', 'cosmetic'),
+      ...words(['去除毛髮', '除毛', '脫毛', '溶毛', '把毛髮變不見'], undefined, '理毛霜'),
       // 鎮定凝露
-      ...words(['不過敏', '零過敏', '抗過敏', '舒緩過敏', '修護過敏', '過敏測試', '鎮靜劑', '鎮定劑'], undefined, '鎮定凝露', 'cosmetic'),
-      // 私密洗、緊依偎
+      ...words(['不過敏', '零過敏', '抗過敏', '舒緩過敏', '修護過敏', '過敏測試', '鎮靜劑', '鎮定劑'], undefined, '鎮定凝露'),
+      // 私密洗
       ...words(
-        ['酸鹼平衡', '減少感染', '反覆發炎', '告別紅腫搔癢', '私密乾癢', '反覆不適', '私密健康', '內陰可使用',
-          '乾痛', '潤滑', '啟動酸防護', '澎潤'],
+        ['酸鹼平衡', '減少感染', '反覆發炎', '告別紅腫搔癢', '私密乾癢', '反覆不適', '私密健康'],
         undefined,
-        '私密洗／緊依偎',
-        'cosmetic',
+        '私密洗',
       ),
+      // 緊依偎
+      ...words(['內陰可使用', '私密乾癢', '乾痛', '反覆不適', '潤滑', '啟動酸防護', '澎潤'], undefined, '緊依偎'),
       // 腸道益生菌
       ...words(
         ['排便困難', '大腹便便', '小腹凸出', '清空便便', '清出壞菌', '增生好菌', '增加好菌', '促進好菌', '增強免疫',
           '免疫系統', '體內清道夫'],
         undefined,
         '腸道益生菌',
-        'food',
       ),
     ],
     required: [],
@@ -126,6 +136,8 @@ export const CLIENT_RULES: ClientRuleSet[] = [
     id: 'xinpuli',
     name: '新普利',
     source: '文章規範（Google 文件）',
+    match: ['新普利'],
+    products: [{ name: '隱眼', hint: '隱形眼鏡' }],
     banned: [
       ...words(['減肥', '減脂', '甩油', '體重', '體脂', '肥', '胖', '瘦', '身材'], '敏感字眼（身材類）'),
       { word: '體態', replace: '狀態／維持好狀態' },
@@ -143,8 +155,8 @@ export const CLIENT_RULES: ClientRuleSet[] = [
       { word: '失眠', note: '失眠是病症，不能提' },
       { word: '免疫系統', note: '不能提' },
       { word: '延緩衰老', replace: '抗氧化' },
-      { word: '水潤', note: '隱眼文章不能寫', category: 'device' },
-      { word: '戴比較久', note: '隱眼文章不能寫', category: 'device' },
+      { word: '水潤', note: '隱眼文章不能寫', group: '隱眼' },
+      { word: '戴比較久', note: '隱眼文章不能寫', group: '隱眼' },
     ],
     required: [],
   },
@@ -152,6 +164,7 @@ export const CLIENT_RULES: ClientRuleSet[] = [
     id: 'bella',
     name: '貝拉整形外科',
     source: '文章素材／敏感詞（Google 文件）',
+    match: ['貝拉整形', '貝拉診所'],
     medical: true,
     banned: [
       ...words(['優惠', '推薦', '保證', '限期', '限量', '差價', '特價', '折扣'], '醫療機構不能招攬病人'),
@@ -163,6 +176,13 @@ export const CLIENT_RULES: ClientRuleSet[] = [
     ],
   },
 ];
+
+// 自動認客戶：網址比網域、內文比品牌名，都沒中就回通用（只套官方準則）
+export function detectClient(url: string, text: string): ClientRuleSet {
+  return (
+    CLIENT_RULES.find((c) => c.match?.some((m) => url.includes(m) || text.includes(m))) ?? CLIENT_RULES[0]
+  );
+}
 
 // ── Jev 要問的題目（每句都問）─────────────────────────
 // 題目用英文寫：Jev 以英文訓練為主，說明用英文判斷較穩，句子本身維持中文
@@ -519,35 +539,47 @@ export interface ComplianceReport {
   required: { label: string; hint: string; ok: boolean }[];
   sentences: SentenceResult[];
   category: Category | null; // 這篇文章的類別（AI 味模式不判）
+  products: string[]; // AI 判斷這篇在講客戶的哪幾個產品（只套這些產品的禁詞）
   cost: number; // Jev 花費（美元）
   jevFailed: number; // Jev 判斷失敗的句數
 }
 
-// 判斷整篇文章是化粧品、食品還是醫療器材：看標題、小標和開頭內文，一篇只呼叫一次
-async function detectCategory(title: string, blocks: Block[], apiKey: string): Promise<Category> {
+// 一次判斷整篇文章：是化粧品／食品／醫療器材，以及在講客戶的哪幾個產品（客戶有分產品才問）
+async function detectArticle(
+  title: string,
+  blocks: Block[],
+  products: { name: string; hint: string }[],
+  apiKey: string,
+): Promise<{ category: Category; products: string[] }> {
   const headings = blocks.filter((b) => b.heading).map((b) => b.text).join('\n');
   const body = blocks.filter((b) => !b.heading).map((b) => b.text).join('\n').slice(0, 2000);
+  const productPart = products.length
+    ? `\n\n2. 這篇主要在介紹或推銷下面哪幾個產品？可以選多個，都不是就回空陣列；只是順帶提到的不算。\n${products.map((p) => `- ${p.name}：${p.hint}`).join('\n')}`
+    : '';
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'google/gemini-2.5-flash',
       temperature: 0,
-      max_tokens: 50,
+      max_tokens: 200,
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'user',
-          content: `下面這篇文章在推的產品屬於哪一類？\n- cosmetic：化粧品（保養品、洗面乳、面膜、洗髮精、私密清潔液、除毛膏…）\n- food：食品（保健食品、益生菌、飲品、膠囊…）\n- device：醫療器材（隱形眼鏡…）\n\n回傳 JSON：{"category": "cosmetic" | "food" | "device"}\n\n標題：${title}\n\n小標：\n${headings}\n\n內文開頭：\n${body}`,
+          content: `1. 下面這篇文章在推的產品屬於哪一類？\n- cosmetic：化粧品（保養品、洗面乳、面膜、洗髮精、私密清潔液、除毛膏…）\n- food：食品（保健食品、益生菌、飲品、膠囊…）\n- device：醫療器材（隱形眼鏡…）${productPart}\n\n回傳 JSON：{"category": "cosmetic" | "food" | "device", "products": ["產品名", ...]}\n\n標題：${title}\n\n小標：\n${headings}\n\n內文開頭：\n${body}`,
         },
       ],
     }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(`判斷文章類別失敗：${data?.error?.message || `HTTP ${res.status}`}，請再按一次`);
-  const cat = (JSON.parse(data.choices?.[0]?.message?.content ?? '{}') as { category?: string }).category;
+  const parsed = JSON.parse(data.choices?.[0]?.message?.content ?? '{}') as { category?: string; products?: unknown };
+  const cat = parsed.category;
   if (cat !== 'cosmetic' && cat !== 'food' && cat !== 'device') throw new Error('判斷文章類別失敗，請再按一次');
-  return cat;
+  const names = products.map((p) => p.name);
+  const picked = Array.isArray(parsed.products) ? parsed.products.filter((n): n is string => names.includes(n as string)) : [];
+  return { category: cat, products: picked };
 }
 
 const MAX_SENTENCES = 400; // 超過就截斷，避免一次跑太久撞到閘道逾時
@@ -564,14 +596,15 @@ export async function runComplianceCheck(opts: {
 
   const sentences = splitSentences(opts.blocks).slice(0, MAX_SENTENCES);
   const legal = opts.mode === 'legal';
-  // 法規模式先判整篇類別：醫療院所看客戶就知道，其他交給 AI
-  const category: Category | null = !legal
-    ? null
+  // 法規模式先判整篇類別和在講哪幾個產品：醫療院所看客戶就知道，其他交給 AI
+  const detected: { category: Category | null; products: string[] } = !legal
+    ? { category: null, products: [] }
     : opts.ruleSet.medical
-      ? 'medical'
-      : await detectCategory(opts.title, opts.blocks, apiKey);
-  // AI 味模式不比對禁詞；法規模式＝官方準則禁詞＋這類文章適用的客戶禁詞＋自訂禁詞
-  const clientBanned = opts.ruleSet.banned.filter((b) => !b.category || b.category === category);
+      ? { category: 'medical' as const, products: [] }
+      : await detectArticle(opts.title, opts.blocks, opts.ruleSet.products ?? [], apiKey);
+  const category: Category | null = detected.category;
+  // AI 味模式不比對禁詞；法規模式＝官方準則禁詞＋客戶通用禁詞＋這篇產品的禁詞＋自訂禁詞
+  const clientBanned = opts.ruleSet.banned.filter((b) => !b.group || detected.products.includes(b.group));
   const banned = legal ? [...OFFICIAL_BANNED, ...clientBanned, ...opts.extraBanned] : [];
   const allowedWords = category ? ALLOWED_BY_CATEGORY[category] : [];
 
@@ -613,6 +646,7 @@ export async function runComplianceCheck(opts: {
     required: legal ? checkRequired(opts.blocks.map((b) => b.text).join('\n'), opts.ruleSet.required) : [],
     sentences: results,
     category,
+    products: detected.products,
     cost,
     jevFailed,
   };
