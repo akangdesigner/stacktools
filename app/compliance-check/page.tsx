@@ -24,8 +24,7 @@ interface SentenceResult {
   text: string;
   banned: BannedWord[];
   jev: Partial<Record<JevKey, number>>;
-  category: "cosmetic" | "food" | "textile" | "laundry" | "none"; // Jev 判斷這句在講哪類產品
-  allowed: string[]; // 該類別官方明列可用的詞句
+  allowed: string[]; // 這篇類別官方明列可用的詞句
   jevError?: boolean;
 }
 interface Report {
@@ -34,6 +33,7 @@ interface Report {
   sentenceCount: number;
   required: { label: string; hint: string; ok: boolean }[];
   sentences: SentenceResult[];
+  category: Category | null; // 整篇文章的類別
   cost: number;
   jevFailed: number;
 }
@@ -57,18 +57,17 @@ const JEV_THRESHOLD = 0.6;
 const LEGAL_KEYS: JevKey[] = ["medical_claim", "body_change", "solicitation", "exaggeration"];
 // 題目內容在 lib/compliance-check.ts，依小積木的去 AI 味規則
 const AI_KEYS: JevKey[] = ["ai_contrast", "ai_filler", "ai_hype", "ai_slang", "ai_heading", "ai_personify"];
-const CATEGORY_LABELS: Record<SentenceResult["category"], string> = {
+type Category = "cosmetic" | "food" | "device" | "medical";
+const CATEGORY_LABELS: Record<Category, string> = {
   cosmetic: "化粧品",
   food: "食品",
-  textile: "紡織品",
-  laundry: "衣物清潔劑",
-  none: "",
+  device: "醫療器材",
+  medical: "醫療院所",
 };
 const STORAGE_KEY = "compliance-check:extra-banned"; // 自訂禁詞依客戶存在瀏覽器
 
 type Rewrite = { loading: boolean; text?: string; error?: string; applied?: boolean };
 type Mode = "legal" | "ai"; // 一開始選：檢查法規（禁詞＋法規風險）或檢查 AI 味
-type Filter = "banned" | "legal"; // 法規模式底下再分禁詞／法規風險兩頁
 
 function jevHits(s: SentenceResult, keys: JevKey[]): [JevKey, number][] {
   return (Object.entries(s.jev) as [JevKey, number][])
@@ -88,7 +87,6 @@ export default function ComplianceCheckPage() {
   const [error, setError] = useState("");
   const [report, setReport] = useState<Report | null>(null);
   const [mode, setMode] = useState<Mode>("legal");
-  const [filter, setFilter] = useState<Filter>("banned");
   // 每句的改寫結果（key＝原句）：按「改寫」才呼叫 AI，不按不花錢
   const [rewrites, setRewrites] = useState<Record<string, Rewrite>>({});
 
@@ -154,7 +152,6 @@ export default function ComplianceCheckPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "檢查失敗");
       setReport(data);
-      setFilter("banned");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -171,12 +168,11 @@ export default function ComplianceCheckPage() {
 
   const visible = useMemo(() => {
     if (!report) return [];
-    return report.sentences.filter((s) => {
-      if (mode === "ai") return jevHits(s, AI_KEYS).length > 0;
-      if (filter === "banned") return s.banned.length > 0;
-      return jevHits(s, LEGAL_KEYS).length > 0;
-    });
-  }, [report, filter, mode]);
+    if (mode === "ai") return report.sentences.filter((s) => jevHits(s, AI_KEYS).length > 0);
+    // 法規模式：禁詞和法規風險合成一個清單，有禁詞（一定要改）的句子排前面
+    const flagged = report.sentences.filter((s) => s.banned.length > 0 || jevHits(s, LEGAL_KEYS).length > 0);
+    return [...flagged.filter((s) => s.banned.length > 0), ...flagged.filter((s) => s.banned.length === 0)];
+  }, [report, mode]);
 
   // 換模式時清掉舊結果，避免法規結果留在 AI 味畫面上
   const switchMode = (m: Mode) => {
@@ -188,10 +184,10 @@ export default function ComplianceCheckPage() {
 
   // 這句被抓到的問題（畫面上看到的標籤），帶給 AI 當改寫方向
   const issuesOf = (s: SentenceResult) => [
-    ...(mode === "legal" && filter === "banned"
+    ...(mode === "legal"
       ? s.banned.map((b) => `禁詞「${b.word}」${b.replace ? `（建議改「${b.replace}」）` : ""}`)
       : []),
-    ...jevHits(s, mode === "ai" ? AI_KEYS : filter === "legal" ? LEGAL_KEYS : []).map(([k]) => JEV_LABELS[k]),
+    ...jevHits(s, mode === "ai" ? AI_KEYS : LEGAL_KEYS).map(([k]) => JEV_LABELS[k]),
   ];
 
   const rewrite = async (s: SentenceResult) => {
@@ -357,6 +353,11 @@ export default function ComplianceCheckPage() {
           <div className="text-sm text-gray-500">
             {report.title && <span className="font-medium text-gray-800">{report.title}</span>}
             {report.jevFailed > 0 && <span className="text-red-500">．{report.jevFailed} 句 Jev 判斷失敗</span>}
+            {mode === "legal" && report.category && (
+              <div className="mt-1 text-xs">
+                文章類別：<span className="text-orange-600">{CATEGORY_LABELS[report.category]}</span>，只套{CATEGORY_LABELS[report.category]}的規則
+              </div>
+            )}
           </div>
 
           {report.required.length > 0 && (
@@ -379,25 +380,9 @@ export default function ComplianceCheckPage() {
           )}
 
           {mode === "legal" && (
-          <div className="flex gap-2 flex-wrap">
-            {(
-              [
-                ["banned", `🔴 禁詞 ${counts.banned}`],
-                ["legal", `🟠 法規風險 ${counts.legal}`],
-              ] as [Filter, string][]
-            ).map(([f, label]) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`text-sm px-3 py-1 rounded-full border ${
-                  filter === f ? "bg-gray-900 text-white border-gray-900" : "text-gray-500 border-gray-300 hover:border-gray-400"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+            <p className="text-sm text-gray-600">
+              🔴 禁詞 {counts.banned} 句（一定要改）．🟠 法規風險 {counts.legal} 句（AI 判斷，要人看）
+            </p>
           )}
 
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
@@ -406,14 +391,14 @@ export default function ComplianceCheckPage() {
               <div key={i} className="p-4">
                 <p className="text-sm text-gray-800 leading-relaxed">{s.text}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {mode === "legal" && filter === "banned" && s.banned.map((b) => (
+                  {mode === "legal" && s.banned.map((b) => (
                     <span key={b.word} className="text-xs bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
                       禁詞「{b.word}」{b.replace && ` → 改「${b.replace}」`}
                       {b.group && `（${b.group}規範）`}
                       {b.note && !b.replace && !b.group && `（${b.note}）`}
                     </span>
                   ))}
-                  {jevHits(s, mode === "ai" ? AI_KEYS : filter === "legal" ? LEGAL_KEYS : []).map(([k, v]) => (
+                  {jevHits(s, mode === "ai" ? AI_KEYS : LEGAL_KEYS).map(([k, v]) => (
                     <span
                       key={k}
                       className={`text-xs border rounded px-2 py-0.5 ${
@@ -423,12 +408,10 @@ export default function ComplianceCheckPage() {
                       {JEV_LABELS[k]} {Math.round(v * 100)}%
                     </span>
                   ))}
-                  {mode === "legal" && s.category !== "none" && (
-                    <span className="text-xs bg-gray-100 text-gray-500 rounded px-2 py-0.5">產品類別：{CATEGORY_LABELS[s.category]}</span>
-                  )}
+
                   {mode === "legal" && s.allowed.length > 0 && (
                     <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5">
-                      {CATEGORY_LABELS[s.category]}可用：{s.allowed.join("、")}（有數據佐證的前提下）
+                      {report.category && CATEGORY_LABELS[report.category]}可用：{s.allowed.join("、")}（有數據佐證的前提下）
                     </span>
                   )}
                   {s.jevError && <span className="text-xs text-gray-400">Jev 判斷失敗</span>}
