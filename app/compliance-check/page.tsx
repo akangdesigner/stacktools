@@ -24,7 +24,8 @@ interface SentenceResult {
   text: string;
   banned: BannedWord[];
   jev: Partial<Record<JevKey, number>>;
-  allowed: string[]; // 這篇類別官方明列可用的詞句
+  category: Category | null; // 這句所在段落的產品類別
+  allowed: string[]; // 該類別官方明列可用的詞句
   jevError?: boolean;
 }
 interface Report {
@@ -34,8 +35,7 @@ interface Report {
   sentenceCount: number;
   required: { label: string; hint: string; ok: boolean }[];
   sentences: SentenceResult[];
-  category: Category | null; // 整篇文章的類別
-  products: string[]; // AI 判斷這篇在講客戶的哪幾個產品
+  sections: { heading: string; category: Category; products: string[] }[]; // 各段落判斷的產品類別與產品
   cost: number;
   jevFailed: number;
 }
@@ -59,11 +59,12 @@ const JEV_THRESHOLD = 0.6;
 const LEGAL_KEYS: JevKey[] = ["medical_claim", "body_change", "solicitation", "exaggeration"];
 // 題目內容在 lib/compliance-check.ts，依小積木的去 AI 味規則
 const AI_KEYS: JevKey[] = ["ai_contrast", "ai_filler", "ai_hype", "ai_slang", "ai_heading", "ai_personify"];
-type Category = "cosmetic" | "food" | "device" | "medical";
+type Category = "cosmetic" | "food" | "device" | "textile" | "medical";
 const CATEGORY_LABELS: Record<Category, string> = {
   cosmetic: "化粧品",
   food: "食品",
   device: "醫療器材",
+  textile: "紡織品",
   medical: "醫療院所",
 };
 const STORAGE_KEY = "compliance-check:extra-banned"; // 自訂禁詞依客戶存在瀏覽器
@@ -356,12 +357,17 @@ export default function ComplianceCheckPage() {
           <div className="text-sm text-gray-500">
             {report.title && <span className="font-medium text-gray-800">{report.title}</span>}
             {report.jevFailed > 0 && <span className="text-red-500">．{report.jevFailed} 句 Jev 判斷失敗</span>}
-            {mode === "legal" && report.category && (
-              <div className="mt-1 text-xs">
-                客戶：<span className="text-orange-600">{report.client}</span>{report.clientAuto && "（自動判斷）"}．文章類別：<span className="text-orange-600">{CATEGORY_LABELS[report.category]}</span>，只套{CATEGORY_LABELS[report.category]}的規則
-                {report.products.length > 0 && (
-                  <>．在講：<span className="text-orange-600">{report.products.join("、")}</span>，套這些產品的禁詞</>
-                )}
+            {mode === "legal" && report.sections.length > 0 && (
+              <div className="mt-1 text-xs space-y-0.5">
+                <div>
+                  客戶：<span className="text-orange-600">{report.client}</span>{report.clientAuto && "（自動判斷）"}．每段依它在講的產品套規則：
+                </div>
+                {report.sections.map((sec, i) => (
+                  <div key={i} className="pl-3">
+                    {sec.heading || "（開頭）"} → <span className="text-orange-600">{CATEGORY_LABELS[sec.category]}</span>
+                    {sec.products.length > 0 && <span className="text-orange-600">／{sec.products.join("、")}</span>}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -417,7 +423,7 @@ export default function ComplianceCheckPage() {
 
                   {mode === "legal" && s.allowed.length > 0 && (
                     <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5">
-                      {report.category && CATEGORY_LABELS[report.category]}可用：{s.allowed.join("、")}（有數據佐證的前提下）
+                      {s.category && CATEGORY_LABELS[s.category]}可用：{s.allowed.join("、")}（有數據佐證的前提下）
                     </span>
                   )}
                   {s.jevError && <span className="text-xs text-gray-400">Jev 判斷失敗</span>}
