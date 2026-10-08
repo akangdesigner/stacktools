@@ -144,6 +144,8 @@ export const CLIENT_RULES: ClientRuleSet[] = [
     banned: [
       ...words(['減肥', '減脂', '甩油', '體重', '體脂', '肥', '胖', '瘦', '身材'], '敏感字眼（身材類）'),
       { word: '體態', replace: '狀態／維持好狀態' },
+      { word: '身體', replace: '狀態' },
+      { word: '消化道不好', replace: '維持消化道健康' },
       { word: '腸道失衡', replace: '消化道' },
       { word: '腸道', replace: '消化道' },
       { word: '腸胃', replace: '消化道' },
@@ -157,6 +159,7 @@ export const CLIENT_RULES: ClientRuleSet[] = [
       { word: '睡眠品質差', replace: '睡眠品質不優' },
       { word: '失眠', note: '失眠是病症，不能提' },
       { word: '免疫系統', note: '不能提' },
+      { word: '良好思緒', note: '不能提' },
       { word: '延緩衰老', replace: '抗氧化' },
       { word: '水潤', note: '隱眼文章不能寫', group: '隱眼' },
       { word: '戴比較久', note: '隱眼文章不能寫', group: '隱眼' },
@@ -365,8 +368,12 @@ export interface Block {
 export async function fetchArticleText(url: string): Promise<{ title: string; blocks: Block[] }> {
   const res = await fetchWithTimeout(url, 15000);
   if (!res.ok) throw new Error(`抓取文章失敗：HTTP ${res.status}`);
-  const root = parse(await res.text());
-  const title = root.querySelector('h1')?.text.trim() || root.querySelector('title')?.text.trim() || '';
+  const html = await res.text();
+  const page = parse(html);
+  const title = page.querySelector('h1')?.text.trim() || page.querySelector('title')?.text.trim() || '';
+  // 91APP 文章頁是前端渲染，內文藏在 window.nineyi.ServerData 的 Introduction（HTML 被轉成 &lt; 這種實體）
+  const nineyi = html.match(/Introduction:"((?:[^"\\]|\\.)*)"/);
+  const root = nineyi && html.includes('nineyi.ServerData') ? parse(decodeEntities(nineyi[1])) : page;
 
   const container =
     root.querySelector('.entry-content') || // WordPress
@@ -392,6 +399,17 @@ export async function fetchArticleText(url: string): Promise<{ title: string; bl
     blocks.push({ text, heading: /^h[1-4]$/i.test(el.tagName) });
   }
   return { title, blocks };
+}
+
+// 把 &lt; &gt; &quot; &amp; 這類 HTML 實體還原成字元（&amp; 放最後，避免 &amp;lt; 被解兩次）
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
 }
 
 // 區塊文字幾乎都是連結文字（按鈕、延伸閱讀），當作非正文
