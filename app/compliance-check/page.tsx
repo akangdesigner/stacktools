@@ -195,7 +195,7 @@ export default function ComplianceCheckPage() {
   // 這句被抓到的問題（畫面上看到的標籤），帶給 AI 當改寫方向
   const issuesOf = (s: SentenceResult) => [
     ...(mode === "legal"
-      ? s.banned.map((b) => `禁詞「${b.word}」${b.replace ? `（建議改「${b.replace}」）` : ""}`)
+      ? s.banned.map((b) => `禁詞「${b.word}」${b.replace ? `（建議改「${b.replace}」）` : b.note ? `（${b.note}）` : ""}`)
       : []),
     ...jevHits(s, mode === "ai" ? AI_KEYS : LEGAL_KEYS).map(([k]) => JEV_LABELS[k]),
   ];
