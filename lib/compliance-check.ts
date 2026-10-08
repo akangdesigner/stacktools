@@ -73,7 +73,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 
 // 各類別「官方明列可用」的詞句：句子被 Jev 判高風險時，若含這些詞就標註可用讓人判斷
 // 出處：化粧品認定準則附件二「通常得使用之詞句例示」（需有數據佐證）、食品認定準則附件一／二；紡織品不歸化粧品法管
-const ALLOWED_BY_CATEGORY: Record<Category, string[]> = {
+export const ALLOWED_BY_CATEGORY: Record<Category, string[]> = {
   cosmetic: ['美白', '淨白', '改善暗沉', '保濕', '控油', '抗痘', '抗屑', '強健髮根', '弱酸',
     '緊緻毛孔', '收斂毛孔', '淨化毛孔', '通暢毛孔', '緊緻', '緊實', '彈性', '舒緩'],
   food: ['使排便順暢', '幫助維持消化道機能', '改變細菌叢生態', '調整體質', '養顏美容', '促進膠原蛋白形成', '營養補給'],

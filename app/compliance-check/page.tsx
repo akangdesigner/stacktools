@@ -206,7 +206,8 @@ export default function ComplianceCheckPage() {
       const res = await fetch("/api/compliance-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rewrite", sentence: s.text, issues: issuesOf(s) }),
+        // 帶客戶與類別：後端才知道這句不能用哪些禁詞、哪些法規允許的說法不用改
+        body: JSON.stringify({ action: "rewrite", sentence: s.text, issues: issuesOf(s), client: report?.client, category: s.category }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "改寫失敗");

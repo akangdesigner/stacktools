@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ALLOWED_BY_CATEGORY,
   CLIENT_RULES,
+  type Category,
   detectClient,
   fetchArticleText,
   type Block,
+  findBanned,
+  OFFICIAL_BANNED,
   parseExtraBanned,
   runComplianceCheck,
   textToBlocks,
@@ -40,26 +44,53 @@ const REWRITE_SYSTEM = `你是繁體中文文案編輯，負責改寫「單一�
 只輸出改寫後的那一句，不要解釋、不要加引號。`;
 
 // 改寫單句：前端按「改寫」時呼叫，帶這句被抓到的問題
-async function rewriteSentence(sentence: string, issues: string[]) {
+// 有帶客戶就把該客戶禁詞、該類別法規允許的說法一起給 AI；改完再比對一次禁詞，還有中就帶著問題重改（最多 3 次）
+async function rewriteSentence(sentence: string, issues: string[], clientName?: string, category?: Category | null) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('缺少 OPENROUTER_API_KEY 環境變數');
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'anthropic/claude-sonnet-5',
-      temperature: 0.4,
-      max_tokens: 800,
-      messages: [
-        { role: 'system', content: REWRITE_SYSTEM },
-        { role: 'user', content: `這句被抓到的問題：${issues.join('、') || '（未指定）'}\n\n原句：${sentence}` },
-      ],
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message || `改寫失敗：HTTP ${res.status}`);
-  const out = (data.choices?.[0]?.message?.content ?? '').trim().replace(/^[「"]|[」"]$/g, '');
-  if (!out) throw new Error('改寫結果是空的');
+  const ruleSet = CLIENT_RULES.find((c) => c.name === clientName);
+  const banned = [...OFFICIAL_BANNED, ...(ruleSet?.banned ?? [])];
+  const allowed = category ? ALLOWED_BY_CATEGORY[category] : [];
+  // 給 AI 的背景：不能出現的詞（附建議換法）、可以保留的法規允許說法
+  const context = [
+    ruleSet?.banned.length
+      ? `這個客戶（${ruleSet.name}）不能出現的詞：${ruleSet.banned
+          .map((b) => b.word + (b.replace ? `（改「${b.replace}」）` : ''))
+          .join('、')}`
+      : '',
+    allowed.length ? `以下是法規允許的說法，原句有用到就保留、不用為了它改寫：${allowed.join('、')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  let problems = issues;
+  let out = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'anthropic/claude-sonnet-5',
+        temperature: 0.4,
+        max_tokens: 800,
+        messages: [
+          { role: 'system', content: REWRITE_SYSTEM },
+          {
+            role: 'user',
+            content: `${context ? context + '\n\n' : ''}這句被抓到的問題：${problems.join('、') || '（未指定）'}\n\n原句：${sentence}`,
+          },
+        ],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || `改寫失敗：HTTP ${res.status}`);
+    out = (data.choices?.[0]?.message?.content ?? '').trim().replace(/^[「"]|[」"]$/g, '');
+    if (!out) throw new Error('改寫結果是空的');
+    // 改寫版再比對一次禁詞，沒中就收工；有中就把「改完還有禁詞」加進問題重改
+    const left = findBanned(out, banned);
+    if (left.length === 0) return out;
+    problems = [...issues, `上一版改寫「${out}」還是用到禁詞：${left.map((h) => h.word).join('、')}，這些詞一個都不能出現`];
+  }
   return out;
 }
 
@@ -67,12 +98,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
       url?: string; text?: string; clientId?: string; extraBanned?: string; mode?: 'legal' | 'ai';
-      action?: 'rewrite'; sentence?: string; issues?: string[];
+      action?: 'rewrite'; sentence?: string; issues?: string[]; client?: string; category?: Category | null;
     };
 
     if (body.action === 'rewrite') {
       if (!body.sentence?.trim()) return NextResponse.json({ error: '沒有要改寫的句子' }, { status: 400 });
-      return NextResponse.json({ rewritten: await rewriteSentence(body.sentence.trim(), body.issues ?? []) });
+      return NextResponse.json({ rewritten: await rewriteSentence(body.sentence.trim(), body.issues ?? [], body.client, body.category) });
     }
     let title = '';
     let blocks: Block[];
