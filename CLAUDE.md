@@ -23,7 +23,7 @@
 - **AI**：`@anthropic-ai/sdk`
 - **HTML 解析**：`node-html-parser`
 - **專案根目錄**：`C:\stacktools\app\`
-- **本機啟動**：`npm run dev`（port 3001）
+- **本機啟動**：`npm run dev`（port 3002；3001 會被 spaceA 的 dev 佔走）
 
 ---
 
